@@ -1,5 +1,17 @@
-.venv
-.vscode
-personal
-db
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+
+# IDE
+.vscode/
+
+# Environment files
 .env
+
+# Project-specific folders
+personal/
+db/
+logs/

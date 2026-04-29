@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
+from pathlib import Path
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import (
     HumanMessage,
@@ -109,7 +110,7 @@ class BaseAgent(ABC):
         """
         response = self.chat(message)
         return response.content
-    
+        
     
     def get_history_size(self) -> int:
         """Get current history message count"""
@@ -148,88 +149,3 @@ class BaseAgent(ABC):
         """Clear conversation history (keeps system prompt if exists)"""
         system_msgs = [msg for msg in self.conversation_history if isinstance(msg, SystemMessage)]
         self.conversation_history = system_msgs
-    
-    
-    def get_tool_calls(self) -> List[Dict]:
-        """
-        Extract tool calls from the last message
-        
-        Returns:
-            List of tool calls if any exist, empty list otherwise
-        """
-        if not self.conversation_history:
-            return []
-        
-        last_message = self.conversation_history[-1]
-        
-        # Check if message has tool calls
-        if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
-            return [
-                {
-                    "tool": call.get("name"),
-                    "args": call.get("args"),
-                    "id": call.get("id")
-                }
-                for call in last_message.tool_calls
-            ]
-        
-        return []
-    
-    
-    def process_tool_call(self, tool_call: Dict, tool_executor: callable) -> str:
-        """
-        Process a tool call and add result to history
-        
-        Args:
-            tool_call: Tool call info from get_tool_calls()
-            tool_executor: Function that executes the tool
-            
-        Returns:
-            Tool execution result
-        """
-        tool_name = tool_call["tool"]
-        tool_args = tool_call["args"]
-        
-        # Execute tool
-        result = tool_executor(tool_name, **tool_args)
-        
-        # Add tool result to history
-        tool_msg = ToolMessage(
-            content=str(result),
-            tool_call_id=tool_call["id"],
-            name=tool_name
-        )
-        self.conversation_history.append(tool_msg)
-        
-        return result
-    
-    
-    # ============ Abstract Methods for Subclasses ============
-    
-    @abstractmethod
-    def process_file(self, file_path: str, **kwargs) -> dict:
-        """
-        Process a file - must be implemented by subclasses
-        
-        Args:
-            file_path: Path to file
-            **kwargs: Additional arguments
-            
-        Returns:
-            dict with processing results
-        """
-        pass
-    
-    
-    @abstractmethod
-    def validate_input(self, input_data: any) -> bool:
-        """
-        Validate input data - must be implemented by subclasses
-        
-        Args:
-            input_data: Data to validate
-            
-        Returns:
-            bool: True if valid, False otherwise
-        """
-        pass

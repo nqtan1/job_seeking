@@ -1,71 +1,111 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Literal
 
+# ==========================================
+# PHASE 1: EXTRACTION SCHEMA (Raw Data)
+# Goal: Convert PDF/Docx text into structured JSON without judgment.
+# ==========================================
 
-# Personal Information schema 
 class PersonalInfo(BaseModel):
-    """
-    Personal information from CV
-    """
+    """Raw personal information extracted from CV"""
     name: str = Field(..., description="Full name")
     email: Optional[EmailStr] = Field(None, description="Email address")
     phone: str = Field(..., description="Phone number")
-    address: str = Field(..., description="Physical address")
+    address: Optional[str] = Field(None, description="Physical address")
     linkedin: Optional[str] = Field(None, description="LinkedIn profile url")
     github: Optional[str] = Field(None, description="Github profile url")
     website: Optional[str] = Field(None, description="Personal website/portfolio")
 
-
-# Formation/Education schema
 class Formation(BaseModel):
-    """
-    Education/Formation information
-    """
-    degree: str = Field(..., description="Degree type (e.g, Bachelor, Master, PhD)")
-    field: str = Field(..., description="Field of study (e.g, Computer Science, Communication, ...)")
+    """Raw educational history"""
+    degree: str = Field(..., description="Degree type (e.g., Bachelor, Master, PhD)")
+    field: str = Field(..., description="Field of study")
     institution: str = Field(..., description="University/School name")
-    gpa: Optional[float] = Field(None, description="GPA (0.0-4.0 or 0.0-10.0 or 0.0-20.0)")
-    subjects: Optional[List[str]] = Field(None, description="List of main subjects in the school/university")
-    description: Optional[str] = Field(None, description="Additional details")
-    
-# Experience Schema 
+    gpa: Optional[float] = Field(None, description="GPA score")
+    subjects: Optional[List[str]] = Field(None, description="Main subjects studied")
+    description: Optional[str] = Field(None, description="Additional context about education")
+
 class Experience(BaseModel):
-    """
-    Work Experience information
-    """
+    """Raw work history"""
     job_title: str = Field(..., description="Job position/title")
-    company: str = Field(..., description="Company/Laboratory name")
+    company: str = Field(..., description="Company or Laboratory name")
     start_date: Optional[str] = Field(None, description="Start date")
-    end_date: Optional[str] = Field(None, description="End date (or 'Present')")
+    end_date: Optional[str] = Field(None, description="End date or 'Present'")
     location: Optional[str] = Field(None, description="Work location")
-    description: Optional[str] = Field(None, description="Job responsibilities and achievements")
-    skills_used: Optional[List[str]] = Field(None, description="Technologies/skills used")
+    description: Optional[str] = Field(None, description="Responsibilities and achievements")
+    skills_used: Optional[List[str]] = Field(None, description="Technologies mentioned in this role")
 
-# Reference Schema
-class Reference(BaseModel):
-    """Professional reference"""
-    name: str = Field(..., description="Reference name")
-    position: Optional[str] = Field(None, description="Reference job title")
-    company: Optional[str] = Field(None, description="Reference company")
-    email: Optional[EmailStr] = Field(None, description="Reference email")
-    phone: Optional[str] = Field(None, description="Reference phone")
+class RawSkill(BaseModel):
+    """Raw skill mentioned by candidate"""
+    name: str = Field(..., description="Skill name")
+    category: Optional[str] = Field(None, description="Technical, Soft, etc.")
 
-
-# Skill Schema
-class Skill(BaseModel):
-    """Skill information"""
-    name: str = Field(..., description="Skill name (e.g., Python, Project Management)")
-    category: Optional[str] = Field(None, description="Category (Technical, Soft, Language, etc.)")
-    level: Optional[str] = Field(None, description="Proficiency level (Beginner, Intermediate, Advanced, Expert)")
-
-
-# Main CV Schema
 class CVInformation(BaseModel):
-    """Complete CV data extracted from document"""
-    personal_info: PersonalInfo = Field(..., description="Personal information")
-    formations: List[Formation] = Field(default_factory=list, description="Education history")
-    experiences: List[Experience] = Field(default_factory=list, description="Work experience")
-    skills: List[Skill] = Field(default_factory=list, description="Skills list")
-    references: Optional[List[Reference]] = Field(None, description="Professional references (optional)")
-    description: Optional[str] = Field(None, description="Professional summary or motivation letter (optional)")
+    """The final object for Phase 1: Structured Raw Data"""
+    personal_info: PersonalInfo
+    formations: List[Formation] = Field(default_factory=list)
+    experiences: List[Experience] = Field(default_factory=list)
+    skills: List[RawSkill] = Field(default_factory=list)
+    summary: Optional[str] = Field(None, description="Professional summary or cover letter text")
+
+# ==========================================
+# PHASE 2: ANALYSIS SCHEMA (Recruiter Intelligence)
+# Goal: Evaluate the raw data and generate strategic insights.
+# ==========================================
+
+class Competency(BaseModel):
+    """Evaluated skill: Recruiter's judgment on proficiency and relevance"""
+    name: str
+    level: Literal["Beginner", "Intermediate", "Advanced", "Expert"]
+    years_of_experience: float
+    is_core: bool = Field(False, description="Is this critical for the specific role?")
+
+class Achievement(BaseModel):
+    """Quantified impact found during analysis"""
+    description: str
+    metric: Optional[str] = Field(None, description="E.g., 20% increase, 50ms latency reduction")
+    context: str
+
+class Strength(BaseModel):
+    area: str
+    description: str
+    evidence: str = Field(..., description="Direct quote or fact from Phase 1 data")
+
+class Weakness(BaseModel):
+    area: str
+    description: str
+    severity: Literal["low", "medium", "high"]
+    mitigation: Optional[str]
+
+class BaseCandidateAnalysis(BaseModel):
+    """General evaluation framework for any role"""
+    candidate_id: str
+    strengths: List[Strength]
+    weaknesses: List[Weakness]
+    evaluated_competencies: List[Competency]
+    top_achievements: List[Achievement]
     
+    cultural_fit_score: int = Field(..., ge=0, le=10)
+    communication_style: str
+    hiring_risk_level: Literal["Low", "Medium", "High"]
+    career_trajectory: Literal[
+        "Jeune Diplômé",
+        "Early Career Growth", 
+        "Rising Star",
+        "Stable Performer",
+        "Mid-Career Plateau",
+        "Senior Plateau",
+        "Declining"
+    ]
+    recruiter_summary: str
+
+class AIEngineerAnalysis(BaseCandidateAnalysis):
+    """Specialized evaluation for AI roles in France/EU"""
+    math_and_logic_depth: int = Field(..., ge=0, le=10)
+    mlops_readiness: bool
+    sota_knowledge: List[str]
+    academic_prestige: bool = Field(False, description="Grande École or Top Research Lab")
+    gdpr_awareness: bool
+    
+    verdict: Literal["Fast-track", "Interview", "Waitlist", "Reject"]
+    hiring_manager_note: str
