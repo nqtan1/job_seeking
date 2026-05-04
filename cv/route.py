@@ -3,6 +3,8 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
 from typing import Optional
 from dotenv import load_dotenv
+import unicodedata
+import re
 
 from utils.logger import get_logger 
 from cv.agent import CVAnalysisAgent 
@@ -17,8 +19,60 @@ agent = CVAnalysisAgent()
 # Allowed file extensions 
 ALLOWED_EXTENSIONS = {".pdf", ".img", ".txt", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
-UPLOAD_DIR = Path(__file__).parent.parent / "db/cv/uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_BASE_DIR = Path(__file__).parent.parent / "db/cv/uploads"
+UPLOAD_BASE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Helper function to get upload folder with date structure
+def _get_upload_folder() -> Path:
+    """
+    Get or create upload folder with date structure:
+    db/cv/uploads/YYYY-MM-DD/
+    """
+    from datetime import datetime
+    date_folder = datetime.now().strftime("%Y-%m-%d")
+    upload_dir = UPLOAD_BASE_DIR / date_folder
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    return upload_dir
+
+# Helper function to create result folders with timestamp
+def _get_result_folders() -> tuple[Path, Path]:
+    """
+    Create and return both extraction and analysis result folders with structure:
+    db/cv/extract/YYYY-MM-DD_HHMMSS/
+    db/cv/analyze/YYYY-MM-DD_HHMMSS/
+    
+    Returns: (extraction_dir, analysis_dir)
+    """
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    
+    extraction_dir = Path(__file__).parent.parent / "db/cv/extract" / timestamp
+    analysis_dir = Path(__file__).parent.parent / "db/cv/analyze" / timestamp
+    
+    extraction_dir.mkdir(parents=True, exist_ok=True)
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    
+    return extraction_dir, analysis_dir
+
+# ==========================================
+# Helper function: Sanitize filename
+# ==========================================
+def _sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename by removing/replacing special characters.
+    Handles Unicode characters like accents (é, ê, ô, etc.)
+    """
+    # Normalize Unicode characters (decompose accents)
+    filename = unicodedata.normalize('NFKD', filename)
+    # Remove non-ASCII characters
+    filename = filename.encode('ascii', 'ignore').decode('ascii')
+    # Replace spaces and special chars with underscores
+    filename = re.sub(r'[^\w\s.-]', '_', filename)
+    # Replace multiple spaces/underscores with single underscore
+    filename = re.sub(r'[\s_]+', '_', filename)
+    # Remove trailing underscores
+    filename = filename.rstrip('_')
+    return filename
 
 # ==========================================
 # Helper function: Validate and get file path
@@ -61,12 +115,14 @@ async def _validate_and_get_file_path(
         
         await file.seek(0)
         
-        # Save file
-        saved_path = UPLOAD_DIR / file.filename
+        # Sanitize filename for API compatibility
+        sanitized_filename = _sanitize_filename(file.filename)
+        upload_dir = _get_upload_folder()
+        saved_path = upload_dir / sanitized_filename
         with open(saved_path, "wb") as f:
             f.write(file_content)
         
-        logger.debug(f"File saved: {saved_path}")
+        logger.debug(f"File saved: {saved_path} (original: {file.filename})")
         return str(saved_path), file.filename
     
     elif file_path:
@@ -107,35 +163,15 @@ async def extract_cv(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to CV file")
 ):
-    """
-    Extract CV information from file
-    
-    **Two options:**
-    - Upload file directly (multipart form-data)
-    - Provide existing file path (query parameter)
-    
-    **Returns:** CVInformation with personal info, formations, experiences, skills
-    
-    **Example usage:**
-    ```
-    # Option 1: Upload
-    curl -X POST "http://localhost:8000/cv/extract" \\
-      -F "file=@cv.pdf"
-    
-    # Option 2: File path
-    curl "http://localhost:8000/cv/extract?file_path=/path/to/cv.pdf"
-    ```
-    """
+    """Extract CV information from file."""
     
     logger.info("Starting CV extraction")
     
     try:
-        # Validate and get file path
         processed_file_path, filename = await _validate_and_get_file_path(
             file, file_path, "Extract"
         )
         
-        # Extract CV using agent
         logger.debug(f"Calling agent to extract CV from: {processed_file_path}")
         extraction_message = "Extract all information from this CV in structured format"
         extracted_data = agent.extract_cv(
@@ -144,12 +180,17 @@ async def extract_cv(
             output_schema=CVInformation
         )
         
-        logger.info(f"CV extraction successful for: {filename}")
+        logger.info(f"CV extraction successful for: {filename}")    
         
-        # Save extracted data
-        extract_dir = Path(__file__).parent.parent / "db/cv/extract"
-        extract_dir.mkdir(parents=True, exist_ok=True)
-        extract_path = extract_dir / f"{Path(filename).stem}.json"
+        # Save extracted data with timestamp folder and candidate+position filename
+        candidate_name = extracted_data.personal_info.name if extracted_data.personal_info.name else "Unknown"
+        position = extracted_data.experiences[0].job_title if extracted_data.experiences and len(extracted_data.experiences) > 0 else ""
+        
+        extraction_dir, _ = _get_result_folders()
+        file_identifier = f"{candidate_name}_{position}".replace(" ", "_").replace("/", "_")
+        if file_identifier.endswith("_"):
+            file_identifier = file_identifier.rstrip("_")
+        extract_path = extraction_dir / f"{file_identifier}_extraction.json"
         
         with open(extract_path, "w", encoding="utf-8") as f:
             f.write(extracted_data.model_dump_json(indent=2))
@@ -159,8 +200,10 @@ async def extract_cv(
         return {
             "message": "CV extraction successful",
             "filename": filename,
+            "upload_path": processed_file_path,
             "data": extracted_data.model_dump(),
-            "extract_path": str(extract_path)
+            "extract_path": str(extract_path),
+            "result_folder": str(extraction_dir)
         }
     
     except HTTPException:
@@ -178,14 +221,7 @@ async def analyze_cv(
     file_path: Optional[str] = Query(None, description="Path to CV file"),
     cv_data: Optional[str] = Form(None, description="CVInformation as JSON string")
 ):
-    """
-    Analyze CV and get recruiter insights
-    
-    **Three options:**
-    1. Upload CV file directly (extracts then analyzes)
-    2. Provide file path (extracts then analyzes)
-    3. Provide extracted CVInformation JSON (analyzes directly)
-    """
+    """Analyze CV and get recruiter insights."""
     
     logger.info("Starting CV analysis")
     
@@ -234,10 +270,13 @@ async def analyze_cv(
         
         logger.info(f"CV analysis successful for: {candidate_name}")
         
-        # Save analysis
-        analyze_dir = Path(__file__).parent.parent / "db/cv/analyze"
-        analyze_dir.mkdir(parents=True, exist_ok=True)
-        analyze_path = analyze_dir / f"{candidate_name.replace(' ', '_')}_analysis.json"
+        # Save analysis with timestamp folder and candidate+position filename
+        position = cv_data.experiences[0].job_title if cv_data.experiences and len(cv_data.experiences) > 0 else ""
+        _, analysis_dir = _get_result_folders()
+        file_identifier = f"{candidate_name}_{position}".replace(" ", "_").replace("/", "_")
+        if file_identifier.endswith("_"):
+            file_identifier = file_identifier.rstrip("_")
+        analyze_path = analysis_dir / f"{file_identifier}_analysis.json"
         
         with open(analyze_path, "w", encoding="utf-8") as f:
             f.write(analysis_result.model_dump_json(indent=2))
@@ -247,8 +286,10 @@ async def analyze_cv(
         return {
             "message": "CV analysis successful",
             "candidate": candidate_name,
+            "position": position,
             "analysis": analysis_result.model_dump(),
-            "analysis_path": str(analyze_path)
+            "analyze_path": str(analyze_path),
+            "result_folder": str(analysis_dir)
         }
     
     except HTTPException:
