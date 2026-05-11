@@ -15,3 +15,5 @@ __pycache__/
 personal/
 db/
 logs/
+
+.pytest_cache
