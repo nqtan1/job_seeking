@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from cv.route import router as cv_router
 from jobs.route import router as jobs_router
+from motivation_letter.route import router as motivation_letter_router
 
 app = FastAPI(
     title="Job Seeking CV API",
@@ -14,6 +15,9 @@ app.include_router(cv_router, prefix="/api/cv", tags=["CV"])
 
 # Include Jobs routes
 app.include_router(jobs_router, prefix="/api/jobs", tags=["Jobs"])
+
+# Include Motivation Letter routes
+app.include_router(motivation_letter_router, prefix="/api/motivation-letter", tags=["Motivation Letter"])  
 
 @app.get("/")
 def read_root():
