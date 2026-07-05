@@ -98,3 +98,27 @@ def test_analyze_cv_from_file(client, mock_extracted_cv):
         data = response.json()
         assert data["candidate"] == "Clement Suto"
         assert "analyze_path" in data
+
+
+def test_analyze_cv_prefers_file_when_cv_data_is_also_sent(client, mock_extracted_cv):
+    mock_analysis = Mock()
+    mock_analysis.model_dump.return_value = {"fit_score": 0.85}
+    mock_analysis.model_dump_json.return_value = '{"fit_score": 0.85}'
+
+    with patch("cv.route.agent.extract_cv") as mock_extract, patch("cv.route.agent.analyze_cv") as mock_analyze:
+        mock_extract.return_value = mock_extracted_cv
+        mock_analyze.return_value = mock_analysis
+
+        response = client.post(
+            "/api/cv/analyze",
+            files={
+                "file": ("test_analyze_cv.pdf", io.BytesIO(b"pdf content"), "application/pdf")
+            },
+            data={"cv_data": "not-a-valid-json-payload"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["candidate"] == "Clement Suto"
+        mock_extract.assert_called_once()
+        mock_analyze.assert_called_once()

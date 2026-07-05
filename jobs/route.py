@@ -10,12 +10,14 @@ import re
 from utils.logger import get_logger
 from jobs.agent import JobExtractionAgent
 from jobs.schema import JobPosition, CandidateAnalysis, RecruiterAnalysis
+from agents.agent_config import AgentConfig
 
 logger = get_logger(name="jobs.route", log_file="jobs_api.log", level="DEBUG")
 load_dotenv()
 
 router = APIRouter()
-agent = JobExtractionAgent()
+CONFIG_PATH = Path(__file__).parent.parent / "config/agent_config.yaml"
+agent = JobExtractionAgent(config=AgentConfig(config_path=CONFIG_PATH))
 
 # Allowed file extensions (PDF, TXT, IMG)
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".jpg", ".jpeg", ".png", ".img"}
@@ -32,6 +34,7 @@ def _get_upload_folder() -> Path:
     date_folder = datetime.now().strftime("%Y-%m-%d")
     upload_dir = UPLOAD_BASE_DIR / date_folder
     upload_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug("Using job upload folder: %s", upload_dir)
     return upload_dir
 
 # Helper function to create result folders with timestamp
@@ -51,6 +54,11 @@ def _get_result_folders(company: str, job_title: str) -> tuple[Path, Path]:
     
     extraction_dir.mkdir(parents=True, exist_ok=True)
     analysis_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug(
+        "Using job result folders: extraction=%s analysis=%s",
+        extraction_dir,
+        analysis_dir,
+    )
     
     return extraction_dir, analysis_dir
 
@@ -72,6 +80,7 @@ def _sanitize_filename(filename: str) -> str:
     filename = re.sub(r'[\s_]+', '_', filename)
     # Remove trailing underscores
     filename = filename.rstrip('_')
+    logger.debug("Sanitized job filename to: %s", filename)
     return filename
 
 # ==========================================
@@ -86,6 +95,12 @@ async def _validate_and_get_file_path(
     Validate file and return (file_path, filename).
     Supports PDF, TXT, JPG, PNG, IMG
     """
+    logger.debug(
+        "%s validation started with file_present=%s file_path_present=%s",
+        operation,
+        bool(file),
+        bool(file_path),
+    )
     if file and file_path:
         logger.warning(f"{operation}: Both file and file_path provided, using file upload")
     
@@ -115,6 +130,7 @@ async def _validate_and_get_file_path(
             f.write(file_content)
         
         logger.debug(f"File saved: {saved_path} (original: {file.filename})")
+        logger.debug("%s validation completed using uploaded file", operation)
         return str(saved_path), file.filename
     
     elif file_path:
@@ -137,6 +153,7 @@ async def _validate_and_get_file_path(
                 detail=f"File size exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"
             )
         
+        logger.debug("%s validation completed using file path", operation)
         return file_path, Path(file_path).name
     
     else:
@@ -158,6 +175,12 @@ async def extract_job(
     """Extract job information from French job description."""
     
     logger.info("Starting job extraction")
+    logger.debug(
+        "extract_job called with file_present=%s file_path_present=%s job_text_present=%s",
+        bool(file),
+        bool(file_path),
+        bool(job_text),
+    )
     
     try:
         if job_text:
@@ -168,12 +191,14 @@ async def extract_job(
                 output_schema=JobPosition
             )
             filename = "raw_text_input"
+            logger.debug("Job extraction branch: raw text input")
         
         elif file:
             logger.info("Processing uploaded file")
             processed_file_path, filename = await _validate_and_get_file_path(
                 file, None, "Extract"
             )
+            logger.debug("Job extraction branch: uploaded file")
             extracted_data = agent.extract_job(
                 file_path=processed_file_path,
                 message="Extract all information from this job description",
@@ -184,6 +209,7 @@ async def extract_job(
             processed_file_path, filename = await _validate_and_get_file_path(
                 None, file_path, "Extract"
             )
+            logger.debug("Job extraction branch: file path")
             extracted_data = agent.extract_job(
                 file_path=processed_file_path,
                 message="Extract all information from this job description",
@@ -206,6 +232,7 @@ async def extract_job(
             f.write(extracted_data.model_dump_json(indent=2))
         
         logger.debug(f"Extracted data saved: {extract_path}")
+        logger.info("Job extraction response prepared successfully")
         
         return {
             "message": "Job extraction successful",
@@ -238,6 +265,13 @@ async def analyze_job(
     """
     
     logger.info("Starting job analysis")
+    logger.debug(
+        "analyze_job called with file_present=%s file_path_present=%s job_text_present=%s job_data_present=%s",
+        bool(file),
+        bool(file_path),
+        bool(job_text),
+        bool(job_data),
+    )
     
     try:
         # ==========================================
@@ -249,15 +283,18 @@ async def analyze_job(
                     logger.debug("Parsing JobPosition JSON data")
                     job_information = JobPosition(**json.loads(job_data))
                     logger.info(f"Using provided JobPosition: {job_information.job_title}")
+                    logger.debug("Job analysis branch: provided JSON data")
                 else:
                     job_text = job_data
                     job_data = None
+                    logger.debug("Job analysis branch: treating job_data as raw text")
             except json.JSONDecodeError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
         
         if not job_data or not job_data.strip():
             if job_text:
                 logger.info("Extracting job information from raw text")
+                logger.debug("Job analysis extraction branch: raw text")
                 job_information = agent.extract_job(
                     job_text=job_text,
                     message="Extract all information from this job description",
@@ -265,6 +302,7 @@ async def analyze_job(
                 )
             elif file:
                 logger.info("Extracting job information from uploaded file")
+                logger.debug("Job analysis extraction branch: uploaded file")
                 processed_file_path, _ = await _validate_and_get_file_path(
                     file, None, "Analyze"
                 )
@@ -275,6 +313,7 @@ async def analyze_job(
                 )
             elif file_path:
                 logger.info("Extracting job information from file path")
+                logger.debug("Job analysis extraction branch: file path")
                 processed_file_path, _ = await _validate_and_get_file_path(
                     None, file_path, "Analyze"
                 )
@@ -317,6 +356,11 @@ async def analyze_job(
         # Step 4: Prepare results
         # ==========================================
         logger.info(f"Job analysis successful: {job_information.job_title}")
+        logger.debug(
+            "Job analysis outputs candidate_analysis=%s recruiter_analysis=%s",
+            type(candidate_analysis).__name__,
+            type(recruiter_analysis).__name__,
+        )
         
         # ==========================================
         # Step 5: Save results
@@ -340,6 +384,7 @@ async def analyze_job(
         with open(recruiter_analysis_path, "w", encoding="utf-8") as f:
             f.write(recruiter_analysis.model_dump_json(indent=2))
         logger.debug(f"Recruiter analysis saved: {recruiter_analysis_path}")
+        logger.info("Job analysis response prepared successfully")
         
         return {
             "message": "Job analysis successful",

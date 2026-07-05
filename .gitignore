@@ -17,3 +17,6 @@ db/
 logs/
 
 .pytest_cache
+
+summary/
+config/

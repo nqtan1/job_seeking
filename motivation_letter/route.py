@@ -6,6 +6,7 @@ import unicodedata
 import re
 
 from utils.logger import get_logger
+from agents.agent_config import AgentConfig
 from motivation_letter.agent import MotivationLetterAgent
 from motivation_letter.schema import (
     MotivationLetterRequest,
@@ -15,7 +16,8 @@ from motivation_letter.schema import (
 logger = get_logger(name="motivation_letter.route", log_file="motivation_letter_api.log", level="DEBUG")
 
 router = APIRouter()
-agent = MotivationLetterAgent()
+CONFIG_PATH = Path(__file__).parent.parent / "config/agent_config.yaml"
+agent = MotivationLetterAgent(config=AgentConfig(config_path=CONFIG_PATH))
 
 # Base folder structure
 RESULT_BASE_DIR = Path(__file__).parent.parent / "db/motivation_letter/generate"
