@@ -13,26 +13,33 @@ from motivation_letter.schema import (
 
 from agents import BaseAgent, AgentConfig
 from motivation_letter.prompt import get_system_prompt, CUSTOM_CONTEXT_INSTRUCTION
-from utils.logger import get_logger
-
-logger = get_logger(name="motivation_letter.agent", log_file="motivation_letter.log", level="DEBUG")
-
 
 class MotivationLetterAgent(BaseAgent):
     """
     Agent for generating motivation letters
     """
     
-    def __init__(self, config: Optional[AgentConfig] = None): 
-        super().__init__(config)
-        logger.debug("MotivationLetterAgent initialized")
+    def __init__(
+        self,
+        config: Optional[AgentConfig] = None,
+        logger_name: str = "motivation_letter.agent",
+        log_file: str = "motivation_api.log",
+        log_level: str = "INFO"
+        ): 
+        super().__init__(
+            config,
+            logger_name=logger_name,
+            log_file=log_file,
+            log_level=log_level
+            )
+        self.logger.info("MotivationLetterAgent initialized")
         
     # HELPER functions 
     def _build_user_message(self, request: MotivationLetterRequest) -> str:
         """
         Build the user message with all context for LLM
         """
-        logger.debug(f"Building user message for job type: {request.job_type}")
+        self.logger.info(f"Building user message for job type: {request.job_type}")
         
         cv_json = request.cv_info.model_dump_json(indent = 2)
         job_json = request.job_info.model_dump_json(indent=2)
@@ -48,23 +55,23 @@ TARGET JOB:
 """
         # Add analysis if available
         if request.candidate_analysis: 
-            logger.debug("Adding candidate analysis to user message")
+            self.logger.info("Adding candidate analysis to user message")
             analysis_json = request.candidate_analysis.model_dump_json(indent=2)
             message += f"\n\nCANDIDATE-JOB ANALYSIS:\n{analysis_json}"
 
         # Add custom context if provided
         if request.custom_context:
-            logger.debug("Adding custom context to user message")
+            self.logger.info("Adding custom context to user message")
             message += f"\n\n{CUSTOM_CONTEXT_INSTRUCTION.format(custom_context=request.custom_context)}"
             
-        logger.debug(f"User message built successfully (length: {len(message)} chars)")
+        self.logger.info(f"User message built successfully (length: {len(message)} chars)")
         return message
 
     def convert_to_latex(self, content: str) -> str:
         """
         Convert plain text to LaTeX document
         """
-        logger.debug("Converting content to LaTeX format")
+        self.logger.info("Converting content to LaTeX format")
         
         latex_template = r"""
 \documentclass[12pt]{letter}
@@ -79,19 +86,19 @@ TARGET JOB:
 \end{document}
 """ % content.replace("\n", "\n\n")
         
-        logger.debug("LaTeX conversion completed")
+        self.logger.info("LaTeX conversion completed")
         return latex_template
     
     def _post_process(self, content: str, format: str) -> str:
         """
         Post-process letter content
         """
-        logger.debug(f"Post-processing letter content with format: {format}")
+        self.logger.info(f"Post-processing letter content with format: {format}")
         
         if format == "latex": 
             return self._convert_to_latex(content)
         
-        logger.debug("No post-processing needed for txt format")
+        self.logger.info("No post-processing needed for txt format")
         return content
     
     def _get_startup_attitudes(self) -> List[str]:
@@ -103,7 +110,7 @@ TARGET JOB:
             "Innovation: Willing to challenge status quo and experiment",
             "Collaboration: Values lean team dynamics over hierarchy"
         ]
-        logger.debug(f"Generated {len(attitudes)} startup attitudes")
+        self.logger.info(f"Generated {len(attitudes)} startup attitudes")
         return attitudes
 
     def _get_phd_attitudes(self) -> List[str]:
@@ -115,7 +122,7 @@ TARGET JOB:
             "Academic Rigor: Values methodology and scientific integrity",
             "Curiosity-Driven: Motivated by understanding, not just application"
         ]
-        logger.debug(f"Generated {len(attitudes)} PhD attitudes")
+        self.logger.info(f"Generated {len(attitudes)} PhD attitudes")
         return attitudes
 
     def _get_corporation_attitudes(self) -> List[str]:
@@ -127,14 +134,14 @@ TARGET JOB:
             "Team Player: Values stability and collaborative structure",
             "Professional Standards: Respects compliance and governance"
         ]
-        logger.debug(f"Generated {len(attitudes)} corporation attitudes")
+        self.logger.info(f"Generated {len(attitudes)} corporation attitudes")
         return attitudes
         
     def _generate_suggestions(self, request: MotivationLetterRequest) -> Optional[List]:
         """
         Generate attitude recommendations based on job type
         """
-        logger.debug(f"Generating suggestions for job type: {request.job_type}")
+        self.logger.info(f"Generating suggestions for job type: {request.job_type}")
         
         if request.job_type == "startup":
             return self._get_startup_attitudes()
@@ -162,7 +169,7 @@ TARGET JOB:
 
         try:
             # Step 1: Build system prompt 
-            logger.debug("Building system prompt")
+            self.logger.info("Building system prompt")
             system_prompt = get_system_prompt(
                 job_type=request.job_type,
                 tone=request.tone,
@@ -170,7 +177,7 @@ TARGET JOB:
             )
             
             # Step 2: Generate and inject attitudes
-            logger.debug("Injecting attitudes into system prompt")
+            self.logger.info("Injecting attitudes into system prompt")
             attitudes = self._generate_suggestions(request)
 
             attitudes_context = ""
@@ -183,10 +190,10 @@ CANDIDATE KEY ATTITUDES TO EMPHASIZE:
 Use these attitudes naturally in the letter to highlight candidate's mindset alignment with this {request.job_type} role.
 """
                 system_prompt += "\n" + attitudes_context
-                logger.debug(f"Attitudes injected: {len(attitudes)} items")
+                self.logger.info(f"Attitudes injected: {len(attitudes)} items")
             
             # Step 3: Build user message
-            logger.debug("Building user message")
+            self.logger.info("Building user message")
             user_message = self._build_user_message(request=request)
             
             # Step 4: Call LLM
@@ -195,14 +202,14 @@ Use these attitudes naturally in the letter to highlight candidate's mindset ali
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_message)
             ])
-            logger.debug("LLM response received successfully")
+            self.logger.info("LLM response received successfully")
             
             # Step 5: Post-process 
-            logger.debug("Post-processing response")
+            self.logger.info("Post-processing response")
             letter_content = self._post_process(content=response.content, format=request.return_format)
             
             # Step 6: Create metadata
-            logger.debug("Creating metadata")
+            self.logger.info("Creating metadata")
             metadata = MotivationLetterMetadata(
                 generated_at=datetime.now(),
                 job_type=request.job_type,

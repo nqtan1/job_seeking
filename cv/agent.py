@@ -19,7 +19,7 @@ class CVAnalysisAgent(BaseAgent):
         config: Optional[AgentConfig] = None,
         logger_name: str = "cv.agent",
         log_file: str = "cv_api.log",
-        log_level: str = "DEBUG",
+        log_level: str = "INFO",
     ):
         super().__init__(
             config,
@@ -27,7 +27,7 @@ class CVAnalysisAgent(BaseAgent):
             log_file=log_file,
             log_level=log_level,
         )
-        self.logger.debug(
+        self.logger.info(
             "CVAnalysisAgent initialized with provider=%s api_key_set=%s",
             self.config.provider,
             bool(self.config.api_key),
@@ -45,12 +45,12 @@ class CVAnalysisAgent(BaseAgent):
             ".img": "application/octet-stream",
         }
         mime_type = mime_types.get(ext, "application/octet-stream")
-        self.logger.debug("Detected mime_type=%s for file_path=%s", mime_type, file_path)
+        self.logger.info("Detected mime_type=%s for file_path=%s", mime_type, file_path)
         return mime_type
 
     def _wait_for_uploaded_file(self, file):
         while file.state.name == "PROCESSING":
-            self.logger.debug("CV file still processing: %s", file.name)
+            self.logger.info("CV file still processing: %s", file.name)
             time.sleep(2)
             file = self.client.files.get(name=file.name)
         return file
@@ -59,11 +59,11 @@ class CVAnalysisAgent(BaseAgent):
         if not self.client:
             raise RuntimeError("Gemini API client is not initialized for api_key mode")
 
-        self.logger.debug("CV extraction using Gemini file upload mode")
+        self.logger.info("CV extraction using Gemini file upload mode")
         file = self.client.files.upload(file=str(file_path))
-        self.logger.debug("Uploaded CV file uri=%s", getattr(file, "uri", None))
+        self.logger.info("Uploaded CV file uri=%s", getattr(file, "uri", None))
         file = self._wait_for_uploaded_file(file)
-        self.logger.debug("CV file processing complete: %s", file.name)
+        self.logger.info("CV file processing complete: %s", file.name)
 
         return HumanMessage(
             content=[
@@ -73,7 +73,7 @@ class CVAnalysisAgent(BaseAgent):
         )
 
     def _build_vertex_file_message(self, file_path: Union[str, Path], message: str) -> HumanMessage:
-        self.logger.debug("CV extraction using Vertex base64 mode")
+        self.logger.info("CV extraction using Vertex base64 mode")
         file_data = base64.b64encode(Path(file_path).read_bytes()).decode("utf-8")
 
         return HumanMessage(
@@ -100,17 +100,17 @@ class CVAnalysisAgent(BaseAgent):
         Extract information from CV
         """
         self.logger.info("Starting CV extraction")
-        self.logger.debug(
+        self.logger.info(
             "extract_cv called with file_path=%s output_schema=%s",
             file_path,
             getattr(output_schema, "__name__", str(output_schema)),
         )
         if system_prompt is None:
             system_prompt = SYSTEM_PROMPT_EXTRACTION or "You are a virtual assistant designed to extract information from CVs"
-            self.logger.debug("No system prompt provided, using the CV prompt file default")
+            self.logger.info("No system prompt provided, using the CV prompt file default")
         
         model = self.model.with_structured_output(output_schema) if output_schema else self.model
-        self.logger.debug("Using structured output=%s", bool(output_schema))
+        self.logger.info("Using structured output=%s", bool(output_schema))
         
         if self.config.provider == "api_key":
             message_obj = self._build_gemini_file_message(file_path, message)
@@ -122,7 +122,7 @@ class CVAnalysisAgent(BaseAgent):
             message_obj
         ])
         self.logger.info("CV extraction completed")
-        self.logger.debug("CV extraction response type=%s", type(response).__name__)
+        self.logger.info("CV extraction response type=%s", type(response).__name__)
         return response
 
     def analyze_cv(
@@ -136,20 +136,20 @@ class CVAnalysisAgent(BaseAgent):
         Analyze candidate information.
         """
         self.logger.info("Starting CV analysis")
-        self.logger.debug(
+        self.logger.info(
             "analyze_cv called with candidate=%s output_schema=%s",
             cv_information.personal_info.name,
             getattr(output_schema, "__name__", str(output_schema)),
         )
         if system_prompt is None:
             system_prompt = SYSTEM_PROMPT_ANALYSIS or "You are a virtual assistant designed to analyze CV information."
-            self.logger.debug("No system prompt provided, using the CV prompt file default")
+            self.logger.info("No system prompt provided, using the CV prompt file default")
         
         model = self.model.with_structured_output(output_schema)
-        self.logger.debug("Using structured output for CV analysis")
+        self.logger.info("Using structured output for CV analysis")
         
         cv_json = cv_information.model_dump_json(indent=2)
-        self.logger.debug("Built CV JSON payload length=%s", len(cv_json))
+        self.logger.info("Built CV JSON payload length=%s", len(cv_json))
         
         full_prompt = f"""
 USER REQUEST: 
@@ -163,5 +163,5 @@ CV INFORMATION:
             HumanMessage(content=full_prompt)
         ])
         self.logger.info("CV analysis completed")
-        self.logger.debug("CV analysis response type=%s", type(response).__name__)
+        self.logger.info("CV analysis response type=%s", type(response).__name__)
         return response

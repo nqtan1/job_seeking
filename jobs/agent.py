@@ -18,7 +18,7 @@ class JobExtractionAgent(BaseAgent):
         config: Optional[AgentConfig] = None,
         logger_name: str = "jobs.agent",
         log_file: str = "jobs_api.log",
-        log_level: str = "DEBUG",
+        log_level: str = "INFO",
     ):
         super().__init__(
             config,
@@ -26,7 +26,7 @@ class JobExtractionAgent(BaseAgent):
             log_file=log_file,
             log_level=log_level,
         )
-        self.logger.debug(
+        self.logger.info(
             "JobExtractionAgent initialized with provider=%s api_key_set=%s",
             self.config.provider,
             bool(self.config.api_key),
@@ -44,7 +44,7 @@ class JobExtractionAgent(BaseAgent):
             ".img": "application/octet-stream",
         }
         mime_type = mime_types.get(ext, "application/octet-stream")
-        self.logger.debug("Detected mime_type=%s for file_path=%s", mime_type, file_path)
+        self.logger.info("Detected mime_type=%s for file_path=%s", mime_type, file_path)
         return mime_type
 
     def _normalize_file_paths(
@@ -56,7 +56,7 @@ class JobExtractionAgent(BaseAgent):
         return [Path(path) for path in file_path]
 
     def _build_text_message(self, message: str, job_text: str) -> HumanMessage:
-        self.logger.debug("Job extraction using raw text input")
+        self.logger.info("Job extraction using raw text input")
         return HumanMessage(
             content=[
                 {"type": "text", "text": message},
@@ -66,7 +66,7 @@ class JobExtractionAgent(BaseAgent):
 
     def _wait_for_uploaded_file(self, file):
         while file.state.name == "PROCESSING":
-            self.logger.debug("Job file still processing: %s", file.name)
+            self.logger.info("Job file still processing: %s", file.name)
             time.sleep(2)
             file = self.client.files.get(name=file.name)
         return file
@@ -79,16 +79,16 @@ class JobExtractionAgent(BaseAgent):
         if not self.client:
             raise RuntimeError("Gemini API client is not initialized for api_key mode")
 
-        self.logger.debug("Job extraction using Gemini file upload mode")
+        self.logger.info("Job extraction using Gemini file upload mode")
         content = [{"type": "text", "text": message}]
 
         for fpath in file_paths:
-            self.logger.debug("Uploading job file: %s", fpath)
+            self.logger.info("Uploading job file: %s", fpath)
             file = self.client.files.upload(file=str(fpath))
             file = self._wait_for_uploaded_file(file)
 
             mime_type = self._get_mime_type(fpath)
-            self.logger.debug("Job file ready uri=%s mime_type=%s", file.uri, mime_type)
+            self.logger.info("Job file ready uri=%s mime_type=%s", file.uri, mime_type)
             content.append(
                 {
                     "type": "file",
@@ -97,7 +97,7 @@ class JobExtractionAgent(BaseAgent):
                 }
             )
 
-        self.logger.debug("Job extraction message assembled with %s file blocks", len(content) - 1)
+        self.logger.info("Job extraction message assembled with %s file blocks", len(content) - 1)
         return HumanMessage(content=content)
 
     def _build_vertex_file_message(
@@ -105,13 +105,13 @@ class JobExtractionAgent(BaseAgent):
         file_paths: Sequence[Path],
         message: str,
     ) -> HumanMessage:
-        self.logger.debug("Job extraction using Vertex base64 mode")
+        self.logger.info("Job extraction using Vertex base64 mode")
         content = [{"type": "text", "text": message}]
 
         for fpath in file_paths:
             mime_type = self._get_mime_type(fpath)
             file_data = base64.b64encode(fpath.read_bytes()).decode("utf-8")
-            self.logger.debug(
+            self.logger.info(
                 "Encoded job file for vertex path=%s mime_type=%s bytes=%s",
                 fpath,
                 mime_type,
@@ -126,7 +126,7 @@ class JobExtractionAgent(BaseAgent):
                 }
             )
 
-        self.logger.debug("Job extraction message assembled with %s file blocks", len(content) - 1)
+        self.logger.info("Job extraction message assembled with %s file blocks", len(content) - 1)
         return HumanMessage(content=content)
 
     def _build_file_message(
@@ -170,7 +170,7 @@ class JobExtractionAgent(BaseAgent):
 
         model = self.model.with_structured_output(output_schema) if output_schema else self.model
         self.logger.info("Starting job extraction")
-        self.logger.debug(
+        self.logger.info(
             "extract_job called with file_path=%s job_text_present=%s output_schema=%s",
             file_path,
             bool(job_text),
@@ -181,7 +181,7 @@ class JobExtractionAgent(BaseAgent):
             message_obj = self._build_text_message(message, job_text)
         elif file_path:
             file_paths = self._normalize_file_paths(file_path)
-            self.logger.debug(
+            self.logger.info(
                 "Job extraction using file input count=%s provider=%s",
                 len(file_paths),
                 self.config.provider,
@@ -197,7 +197,7 @@ class JobExtractionAgent(BaseAgent):
             ]
         )
         self.logger.info("Job extraction completed")
-        self.logger.debug("Job extraction response type=%s", type(response).__name__)
+        self.logger.info("Job extraction response type=%s", type(response).__name__)
         return response
 
     def analyze_job(
@@ -211,7 +211,7 @@ class JobExtractionAgent(BaseAgent):
         Analyze job posting for insights and requirements.
         """
         self.logger.info("Starting job analysis")
-        self.logger.debug(
+        self.logger.info(
             "analyze_job called with job_title=%s company=%s output_schema=%s",
             job_information.job_title,
             job_information.company,
@@ -245,7 +245,7 @@ JOB INFORMATION:
             ]
         )
         self.logger.info("Job analysis completed")
-        self.logger.debug("Job analysis response type=%s", type(response).__name__)
+        self.logger.info("Job analysis response type=%s", type(response).__name__)
         return response
 
     def analyze_job_for_candidate(
@@ -260,7 +260,7 @@ JOB INFORMATION:
         Focuses on career growth, compensation, work-life balance, and role fit.
         """
         self.logger.info("Starting candidate-perspective job analysis")
-        self.logger.debug(
+        self.logger.info(
             "analyze_job_for_candidate called with job_title=%s company=%s output_schema=%s",
             job_information.job_title,
             job_information.company,
@@ -299,7 +299,7 @@ JOB INFORMATION:
             ]
         )
         self.logger.info("Candidate-perspective job analysis completed")
-        self.logger.debug("Candidate-perspective analysis response type=%s", type(response).__name__)
+        self.logger.info("Candidate-perspective analysis response type=%s", type(response).__name__)
         return response
 
     def analyze_job_for_recruiter(
@@ -314,7 +314,7 @@ JOB INFORMATION:
         Focuses on market position, hiring difficulty, candidate profile, and strategic insights.
         """
         self.logger.info("Starting recruiter-perspective job analysis")
-        self.logger.debug(
+        self.logger.info(
             "analyze_job_for_recruiter called with job_title=%s company=%s output_schema=%s",
             job_information.job_title,
             job_information.company,
@@ -353,5 +353,5 @@ JOB INFORMATION:
             ]
         )
         self.logger.info("Recruiter-perspective job analysis completed")
-        self.logger.debug("Recruiter-perspective analysis response type=%s", type(response).__name__)
+        self.logger.info("Recruiter-perspective analysis response type=%s", type(response).__name__)
         return response

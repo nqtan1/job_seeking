@@ -32,7 +32,7 @@ class BaseAgent(ABC):
             level=log_level,
         )
 
-        self.logger.debug(
+        self.logger.info(
             "Initializing agent with provider=%s model=%s temperature=%s",
             self.config.provider,
             self.config.model_name,
@@ -44,7 +44,7 @@ class BaseAgent(ABC):
 
         if system_prompt:
             self.conversation_history.append(SystemMessage(content=system_prompt))
-            self.logger.debug("System prompt added to conversation history")
+            self.logger.info("System prompt added to conversation history")
 
     def _build_model_kwargs(self) -> Dict:
         model_kwargs = {
@@ -61,35 +61,35 @@ class BaseAgent(ABC):
                     "location": self.config.location,
                 }
             )
-            self.logger.debug(
+            self.logger.info(
                 "Configured Vertex AI model kwargs for project=%s location=%s",
                 self.config.project_id,
                 self.config.location,
             )
         else:
             model_kwargs["api_key"] = self.config.api_key
-            self.logger.debug("Configured Gemini API-key model kwargs")
+            self.logger.info("Configured Gemini API-key model kwargs")
 
         return model_kwargs
 
     def _create_model(self) -> ChatGoogleGenerativeAI:
-        self.logger.debug("Creating model for provider=%s", self.config.provider)
+        self.logger.info("Creating model for provider=%s", self.config.provider)
         if self.config.provider == "vertex":
             return self._init_gemini_by_vertex_ai()
         return self._init_gemini_by_api_key()
 
     def _init_gemini_by_api_key(self) -> ChatGoogleGenerativeAI:
-        self.logger.debug("Initializing ChatGoogleGenerativeAI in api_key mode")
+        self.logger.info("Initializing ChatGoogleGenerativeAI in api_key mode")
         return ChatGoogleGenerativeAI(**self._build_model_kwargs())
 
     def _init_gemini_by_vertex_ai(self) -> ChatGoogleGenerativeAI:
-        self.logger.debug("Initializing ChatGoogleGenerativeAI in vertex mode")
+        self.logger.info("Initializing ChatGoogleGenerativeAI in vertex mode")
         return ChatGoogleGenerativeAI(**self._build_model_kwargs())
 
     def chat(self, message: str) -> BaseMessage:
         """Send a new message and get the model response."""
         self.logger.info("chat called")
-        self.logger.debug(
+        self.logger.info(
             "Incoming message length=%s current_history_size=%s",
             len(message),
             len(self.conversation_history),
@@ -102,7 +102,7 @@ class BaseAgent(ABC):
         self.conversation_history.append(response)
         self._truncate_history_smart()
 
-        self.logger.debug(
+        self.logger.info(
             "chat completed; history_size=%s",
             len(self.conversation_history),
         )
@@ -111,7 +111,7 @@ class BaseAgent(ABC):
     def _truncate_history(self):
         """Keep only the most recent messages."""
         if len(self.conversation_history) > self.config.max_history:
-            self.logger.debug(
+            self.logger.info(
                 "Basic truncation from %s to %s",
                 len(self.conversation_history),
                 self.config.max_history,
@@ -134,7 +134,7 @@ class BaseAgent(ABC):
         trimmed_conversation = conversation_msgs[-space_for_conversation:]
         self.conversation_history = system_msgs + trimmed_conversation
 
-        self.logger.debug(
+        self.logger.info(
             "History truncated from %s to %s messages",
             original_size,
             len(self.conversation_history),
@@ -170,6 +170,6 @@ class BaseAgent(ABC):
         ]
 
     def clear_history(self):
-        self.logger.debug("Clearing conversation history")
+        self.logger.info("Clearing conversation history")
         system_msgs = [msg for msg in self.conversation_history if isinstance(msg, SystemMessage)]
         self.conversation_history = system_msgs
