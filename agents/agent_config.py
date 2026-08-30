@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Literal, Optional
 import json
@@ -128,6 +129,7 @@ class AgentConfig:
         self._validate()
 
     @staticmethod
+    @lru_cache(maxsize=16)
     def _load_config_file(config_path: str | Path) -> Dict[str, Any]:
         """Load configuration from JSON or YAML file."""
         path = Path(config_path)

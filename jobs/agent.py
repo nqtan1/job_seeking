@@ -169,7 +169,7 @@ class JobExtractionAgent(BaseAgent):
             message = "Extract all job information in structured format"
 
         model = self.model.with_structured_output(output_schema) if output_schema else self.model
-        self.logger.info("Starting job extraction")
+        # self.logger.info("Starting job extraction")
         self.logger.info(
             "extract_job called with file_path=%s job_text_present=%s output_schema=%s",
             file_path,
@@ -196,8 +196,7 @@ class JobExtractionAgent(BaseAgent):
                 message_obj,
             ]
         )
-        self.logger.info("Job extraction completed")
-        self.logger.info("Job extraction response type=%s", type(response).__name__)
+        self.logger.info("Job extraction completed and response type=%s", type(response).__name__)
         return response
 
     def analyze_job(
@@ -298,8 +297,7 @@ JOB INFORMATION:
                 HumanMessage(content=full_prompt),
             ]
         )
-        self.logger.info("Candidate-perspective job analysis completed")
-        self.logger.info("Candidate-perspective analysis response type=%s", type(response).__name__)
+        self.logger.info("Candidate-perspective analysis completed and response type=%s", type(response).__name__)
         return response
 
     def analyze_job_for_recruiter(
@@ -313,7 +311,7 @@ JOB INFORMATION:
         Analyze job posting from recruiter perspective.
         Focuses on market position, hiring difficulty, candidate profile, and strategic insights.
         """
-        self.logger.info("Starting recruiter-perspective job analysis")
+        # self.logger.info("Starting recruiter-perspective job analysis")
         self.logger.info(
             "analyze_job_for_recruiter called with job_title=%s company=%s output_schema=%s",
             job_information.job_title,
@@ -352,6 +350,5 @@ JOB INFORMATION:
                 HumanMessage(content=full_prompt),
             ]
         )
-        self.logger.info("Recruiter-perspective job analysis completed")
-        self.logger.info("Recruiter-perspective analysis response type=%s", type(response).__name__)
+        self.logger.info("Recruiter-perspective analysis completed and response type=%s", type(response).__name__)
         return response

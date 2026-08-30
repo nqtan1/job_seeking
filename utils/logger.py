@@ -41,7 +41,7 @@ def get_logger(
             backupCount=5,
             encoding='utf-8'
         )
-        file_handler.setLevel(logging.DEBUG)
+        file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except Exception as e:

@@ -11,12 +11,19 @@ from cv.agent import CVAnalysisAgent
 from cv.schema import CVInformation, BaseCandidateAnalysis
 from agents.agent_config import AgentConfig
 
-logger = get_logger(name="cv.route", log_file="cv_api.log", level="DEBUG")
+logger = get_logger(name="cv.route", log_file="cv_api.log", level="INFO")
 load_dotenv()
 
 router = APIRouter()
 CONFIG_PATH = Path(__file__).parent.parent / "config/agent_config.yaml"
-agent = CVAnalysisAgent(config=AgentConfig(config_path=CONFIG_PATH))
+agent = None
+
+
+def _get_agent() -> CVAnalysisAgent:
+    global agent
+    if agent is not None:
+        return agent
+    return CVAnalysisAgent(config=AgentConfig(config_path=CONFIG_PATH))
 
 # Allowed file extensions 
 ALLOWED_EXTENSIONS = {".pdf", ".img", ".txt", ".jpg", ".jpeg"}
@@ -34,7 +41,7 @@ def _get_upload_folder() -> Path:
     date_folder = datetime.now().strftime("%Y-%m-%d")
     upload_dir = UPLOAD_BASE_DIR / date_folder
     upload_dir.mkdir(parents=True, exist_ok=True)
-    logger.debug("Using CV upload folder: %s", upload_dir)
+    logger.info("Using CV upload folder: %s", upload_dir)
     return upload_dir
 
 # Helper function to create result folders with timestamp
@@ -54,7 +61,7 @@ def _get_result_folders() -> tuple[Path, Path]:
     
     extraction_dir.mkdir(parents=True, exist_ok=True)
     analysis_dir.mkdir(parents=True, exist_ok=True)
-    logger.debug("Using CV result folders: extraction=%s analysis=%s", extraction_dir, analysis_dir)
+    logger.info("Using CV result folders: extraction=%s analysis=%s", extraction_dir, analysis_dir)
     
     return extraction_dir, analysis_dir
 
@@ -76,7 +83,7 @@ def _sanitize_filename(filename: str) -> str:
     filename = re.sub(r'[\s_]+', '_', filename)
     # Remove trailing underscores
     filename = filename.rstrip('_')
-    logger.debug("Sanitized CV filename to: %s", filename)
+    logger.info("Sanitized CV filename to: %s", filename)
     return filename
 
 # ==========================================
@@ -98,7 +105,7 @@ async def _validate_and_get_file_path(
     Returns:
         Tuple of (file_path, filename)
     """
-    logger.debug(
+    logger.info(
         "%s validation started with file_present=%s file_path_present=%s",
         operation,
         bool(file),
@@ -133,8 +140,8 @@ async def _validate_and_get_file_path(
         with open(saved_path, "wb") as f:
             f.write(file_content)
         
-        logger.debug(f"File saved: {saved_path} (original: {file.filename})")
-        logger.debug("%s validation completed using uploaded file", operation)
+        logger.info(f"File saved: {saved_path} (original: {file.filename})")
+        logger.info("%s validation completed using uploaded file", operation)
         return str(saved_path), file.filename
     
     elif file_path:
@@ -158,7 +165,7 @@ async def _validate_and_get_file_path(
                 detail=f"File size exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"
             )
         
-        logger.debug("%s validation completed using file path", operation)
+        logger.info("%s validation completed using file path", operation)
         return file_path, Path(file_path).name
     
     else:
@@ -179,7 +186,7 @@ async def extract_cv(
     """Extract CV information from file."""
     
     logger.info("Starting CV extraction")
-    logger.debug(
+    logger.info(
         "extract_cv called with file_present=%s file_path_present=%s",
         bool(file),
         bool(file_path),
@@ -190,9 +197,9 @@ async def extract_cv(
             file, file_path, "Extract"
         )
         
-        logger.debug(f"Calling agent to extract CV from: {processed_file_path}")
+        logger.info(f"Calling agent to extract CV from: {processed_file_path}")
         extraction_message = "Extract all information from this CV in structured format"
-        extracted_data = agent.extract_cv(
+        extracted_data = _get_agent().extract_cv(
             file_path=processed_file_path,
             message=extraction_message,
             output_schema=CVInformation
@@ -213,7 +220,7 @@ async def extract_cv(
         with open(extract_path, "w", encoding="utf-8") as f:
             f.write(extracted_data.model_dump_json(indent=2))
         
-        logger.debug(f"Extracted data saved: {extract_path}")
+        logger.info(f"Extracted data saved: {extract_path}")
         logger.info("CV extraction response prepared successfully")
         
         return {
@@ -243,7 +250,7 @@ async def analyze_cv(
     """Analyze CV and get recruiter insights."""
     
     logger.info("Starting CV analysis")
-    logger.debug(
+    logger.info(
         "analyze_cv called with file_present=%s file_path_present=%s cv_data_present=%s",
         bool(file),
         bool(file_path),
@@ -254,7 +261,7 @@ async def analyze_cv(
         # Prefer file input when a file is provided.
         # This avoids accidental 400s when a form also submits a stale or malformed cv_data field.
         if file or file_path:
-            logger.debug("Extracting CV before analysis")
+            logger.info("Extracting CV before analysis")
             
             # Validate and get file path
             processed_file_path, filename = await _validate_and_get_file_path(
@@ -263,14 +270,14 @@ async def analyze_cv(
             
             # Extract CV
             extraction_message = "Extract all information from this CV in structured format"
-            cv_data = agent.extract_cv(
+            cv_data = _get_agent().extract_cv(
                 file_path=processed_file_path,
                 message=extraction_message,
                 output_schema=CVInformation
             )
             
             candidate_name = cv_data.personal_info.name
-            logger.debug("Extraction completed for analysis using file input")
+            logger.info("Extraction completed for analysis using file input")
 
         # Otherwise, use provided CV JSON payload
         elif cv_data:
@@ -279,7 +286,7 @@ async def analyze_cv(
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Invalid CV JSON: {str(e)}")
             logger.info(f"Analyzing provided CVInformation for: {cv_data.personal_info.name}")
-            logger.debug("Using provided CVInformation payload")
+            logger.info("Using provided CVInformation payload")
             candidate_name = cv_data.personal_info.name
         
         else:
@@ -290,9 +297,9 @@ async def analyze_cv(
             )
         
         # Analyze CV
-        logger.debug(f"Calling agent to analyze CV for: {candidate_name}")
+        logger.info(f"Calling agent to analyze CV for: {candidate_name}")
         analysis_message = "Analyze this CV and provide recruiter insights"
-        analysis_result = agent.analyze_cv(
+        analysis_result = _get_agent().analyze_cv(
             cv_information=cv_data,
             output_schema=BaseCandidateAnalysis,
             message=analysis_message
@@ -311,7 +318,7 @@ async def analyze_cv(
         with open(analyze_path, "w", encoding="utf-8") as f:
             f.write(analysis_result.model_dump_json(indent=2))
         
-        logger.debug(f"Analysis saved: {analyze_path}")
+        logger.info(f"Analysis saved: {analyze_path}")
         logger.info("CV analysis response prepared successfully")
         
         return {

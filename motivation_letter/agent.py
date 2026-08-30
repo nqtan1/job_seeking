@@ -23,7 +23,7 @@ class MotivationLetterAgent(BaseAgent):
         self,
         config: Optional[AgentConfig] = None,
         logger_name: str = "motivation_letter.agent",
-        log_file: str = "motivation_api.log",
+        log_file: str = "motivation_letter_api.log",
         log_level: str = "INFO"
         ): 
         super().__init__(
@@ -67,7 +67,7 @@ TARGET JOB:
         self.logger.info(f"User message built successfully (length: {len(message)} chars)")
         return message
 
-    def convert_to_latex(self, content: str) -> str:
+    def _convert_to_latex(self, content: str) -> str:
         """
         Convert plain text to LaTeX document
         """
@@ -150,7 +150,7 @@ TARGET JOB:
         elif request.job_type == "corporation":
             return self._get_corporation_attitudes()
         
-        logger.warning(f"Unknown job type: {request.job_type}")
+        self.logger.warning(f"Unknown job type: {request.job_type}")
         return None
 
     
@@ -165,7 +165,7 @@ TARGET JOB:
         Returns: 
             MotivationLetter with content and metadata
         """
-        logger.info(f"Starting letter generation - job_type: {request.job_type}, language: {request.language}")
+        self.logger.info(f"Starting letter generation - job_type: {request.job_type}, language: {request.language}")
 
         try:
             # Step 1: Build system prompt 
@@ -197,7 +197,7 @@ Use these attitudes naturally in the letter to highlight candidate's mindset ali
             user_message = self._build_user_message(request=request)
             
             # Step 4: Call LLM
-            logger.info(f"Calling LLM model: {self.config.model_name}")
+            self.logger.info(f"Calling LLM model: {self.config.model_name}")
             response = self.model.invoke([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_message)
@@ -221,7 +221,7 @@ Use these attitudes naturally in the letter to highlight candidate's mindset ali
             )
             
             # Step 7: Return structured output
-            logger.info(f"Letter generation completed successfully")
+            self.logger.info(f"Letter generation completed successfully")
             return MotivationLetter(
                 content=letter_content,
                 metadata=metadata,
@@ -229,5 +229,5 @@ Use these attitudes naturally in the letter to highlight candidate's mindset ali
             )
             
         except Exception as e:
-            logger.error(f"Error generating motivation letter: {str(e)}", exc_info=True)
+            self.logger.error(f"Error generating motivation letter: {str(e)}", exc_info=True)
             raise

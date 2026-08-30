@@ -61,29 +61,29 @@ class BaseAgent(ABC):
                     "location": self.config.location,
                 }
             )
-            self.logger.info(
-                "Configured Vertex AI model kwargs for project=%s location=%s",
-                self.config.project_id,
-                self.config.location,
-            )
+            # self.logger.info(
+            #     "Configured Vertex AI model kwargs for project=%s location=%s",
+            #     self.config.project_id,
+            #     self.config.location,
+            # )
         else:
             model_kwargs["api_key"] = self.config.api_key
-            self.logger.info("Configured Gemini API-key model kwargs")
+            # self.logger.info("Configured Gemini API-key model kwargs")
 
         return model_kwargs
 
     def _create_model(self) -> ChatGoogleGenerativeAI:
-        self.logger.info("Creating model for provider=%s", self.config.provider)
+        # self.logger.info("Creating model for provider=%s", self.config.provider)
         if self.config.provider == "vertex":
             return self._init_gemini_by_vertex_ai()
         return self._init_gemini_by_api_key()
 
     def _init_gemini_by_api_key(self) -> ChatGoogleGenerativeAI:
-        self.logger.info("Initializing ChatGoogleGenerativeAI in api_key mode")
+        # self.logger.info("Initializing ChatGoogleGenerativeAI in api_key mode")
         return ChatGoogleGenerativeAI(**self._build_model_kwargs())
 
     def _init_gemini_by_vertex_ai(self) -> ChatGoogleGenerativeAI:
-        self.logger.info("Initializing ChatGoogleGenerativeAI in vertex mode")
+        # self.logger.info("Initializing ChatGoogleGenerativeAI in vertex mode")
         return ChatGoogleGenerativeAI(**self._build_model_kwargs())
 
     def chat(self, message: str) -> BaseMessage:
