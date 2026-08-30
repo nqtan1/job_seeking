@@ -1,5 +1,5 @@
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
 from typing import Optional
 from dotenv import load_dotenv
 
@@ -7,6 +7,7 @@ from utils.logger import get_logger
 from jobs.agent import JobExtractionAgent
 from agents.agent_config import AgentConfig
 from jobs.service import JobService
+from core.auth import TenantContext, get_tenant_context
 
 logger = get_logger(name="jobs.route", log_file="jobs_api.log", level="INFO")
 load_dotenv()
@@ -31,7 +32,8 @@ def _get_service() -> JobService:
 async def extract_job(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to job description file"),
-    job_text: Optional[str] = Form(None, description="Raw job description text")
+    job_text: Optional[str] = Form(None, description="Raw job description text"),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Extract job information from French job description."""
     
@@ -44,7 +46,7 @@ async def extract_job(
     )
     
     try:
-        response = await _get_service().extract_job_from_input(file, file_path, job_text)
+        response = await _get_service().extract_job_from_input(file, file_path, job_text, tenant_id=tenant.tenant_id)
         logger.info("Job extraction response prepared successfully")
         return response
     
@@ -54,6 +56,7 @@ async def extract_job(
         logger.error(f"Job extraction failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
 
+
 # ==========================================
 # API 2a: ANALYZE JOB - CANDIDATE PERSPECTIVE
 # ==========================================
@@ -62,7 +65,8 @@ async def analyze_job_candidate(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to job description file"),
     job_text: Optional[str] = Form(None, description="Raw job description text"),
-    job_data: Optional[str] = Form(None, description="JobPosition as JSON string")
+    job_data: Optional[str] = Form(None, description="JobPosition as JSON string"),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """
     Analyze job posting from a candidate's perspective only.
@@ -79,7 +83,7 @@ async def analyze_job_candidate(
     )
     
     try:
-        response = await _get_service().analyze_job_candidate(file, file_path, job_text, job_data)
+        response = await _get_service().analyze_job_candidate(file, file_path, job_text, job_data, tenant_id=tenant.tenant_id)
         logger.info("Candidate analysis successful")
         return response
     
@@ -89,6 +93,7 @@ async def analyze_job_candidate(
         logger.error(f"Candidate analysis failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
+
 # ==========================================
 # API 2b: ANALYZE JOB - RECRUITER PERSPECTIVE
 # ==========================================
@@ -97,7 +102,8 @@ async def analyze_job_recruiter(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to job description file"),
     job_text: Optional[str] = Form(None, description="Raw job description text"),
-    job_data: Optional[str] = Form(None, description="JobPosition as JSON string")
+    job_data: Optional[str] = Form(None, description="JobPosition as JSON string"),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """
     Analyze job posting from a recruiter's perspective only.
@@ -114,7 +120,7 @@ async def analyze_job_recruiter(
     )
     
     try:
-        response = await _get_service().analyze_job_recruiter(file, file_path, job_text, job_data)
+        response = await _get_service().analyze_job_recruiter(file, file_path, job_text, job_data, tenant_id=tenant.tenant_id)
         logger.info("Recruiter analysis successful")
         return response
     
@@ -133,7 +139,8 @@ async def analyze_job(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to job description file"),
     job_text: Optional[str] = Form(None, description="Raw job description text"),
-    job_data: Optional[str] = Form(None, description="JobPosition as JSON string")
+    job_data: Optional[str] = Form(None, description="JobPosition as JSON string"),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """
     Legacy compatibility endpoint that returns both candidate and recruiter analysis.
@@ -147,7 +154,7 @@ async def analyze_job(
     )
 
     try:
-        response = await _get_service().analyze_job(file, file_path, job_text, job_data)
+        response = await _get_service().analyze_job(file, file_path, job_text, job_data, tenant_id=tenant.tenant_id)
         return response
 
     except HTTPException:

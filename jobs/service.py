@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi import HTTPException, UploadFile
 from jobs.agent import JobExtractionAgent
 from jobs.schema import CandidateAnalysis, JobPosition, RecruiterAnalysis
 from utils.logger import get_logger
+from workers.background import get_background_job_manager
 
 
 class JobService:
@@ -20,7 +22,7 @@ class JobService:
         self.logger = get_logger(name=logger_name, log_file="jobs_api.log", level="INFO")
         self.allowed_extensions = {".pdf", ".txt", ".jpg", ".jpeg", ".png", ".img"}
         self.max_file_size = 10 * 1024 * 1024
-        self.upload_base_dir = Path(__file__).resolve().parent.parent / "db/jobs/uploads"
+        self.upload_base_dir = Path(tempfile.gettempdir()) / "job_seeking_db/jobs/uploads"
         self.upload_base_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_upload_folder(self) -> Path:
@@ -33,8 +35,8 @@ class JobService:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         folder_name = f"{timestamp}_{company}_{job_title}".replace(" ", "_").replace("/", "_")
 
-        extraction_dir = Path(__file__).resolve().parent.parent / "db/jobs/extract" / folder_name
-        analysis_dir = Path(__file__).resolve().parent.parent / "db/jobs/analyze" / folder_name
+        extraction_dir = Path(tempfile.gettempdir()) / "job_seeking_db/jobs/extract" / folder_name
+        analysis_dir = Path(tempfile.gettempdir()) / "job_seeking_db/jobs/analyze" / folder_name
 
         extraction_dir.mkdir(parents=True, exist_ok=True)
         analysis_dir.mkdir(parents=True, exist_ok=True)
@@ -155,6 +157,7 @@ class JobService:
         file: Optional[UploadFile] = None,
         file_path: Optional[str] = None,
         job_text: Optional[str] = None,
+        tenant_id: str = "default-tenant",
     ) -> dict:
         if job_text:
             extracted_data = self.agent.extract_job(
@@ -178,8 +181,18 @@ class JobService:
         with open(extract_path, "w", encoding="utf-8") as handle:
             handle.write(extracted_data.model_dump_json(indent=2))
 
+        # Save to SQLite multi-tenant jobs table
+        job_id = get_background_job_manager().save_job(
+            tenant_id=tenant_id,
+            job_title=extracted_data.job_title,
+            company=extracted_data.company,
+            extracted_data_json=extracted_data.model_dump_json(),
+        )
+        self.logger.info(f"Job description persisted in database with job_id={job_id}")
+
         return {
             "message": "Job extraction successful",
+            "job_id": job_id,
             "job_title": extracted_data.job_title,
             "company": extracted_data.company,
             "data": extracted_data.model_dump(),
@@ -192,17 +205,18 @@ class JobService:
         file: Optional[UploadFile],
         file_path: Optional[str],
         job_text: Optional[str],
+        tenant_id: str = "default-tenant",
     ) -> dict:
         if job_text:
-            return self.extract_job(job_text=job_text)
+            return self.extract_job(job_text=job_text, tenant_id=tenant_id)
 
         if file:
             processed_file_path, _ = await self._validate_and_get_file_path(file, None, "Extract")
-            return self.extract_job(file_path=processed_file_path)
+            return self.extract_job(file_path=processed_file_path, tenant_id=tenant_id)
 
         if file_path:
             processed_file_path, _ = await self._validate_and_get_file_path(None, file_path, "Extract")
-            return self.extract_job(file_path=processed_file_path)
+            return self.extract_job(file_path=processed_file_path, tenant_id=tenant_id)
 
         raise HTTPException(status_code=400, detail="Provide either 'file', 'file_path', or 'job_text'")
 
@@ -212,6 +226,7 @@ class JobService:
         file_path: Optional[str],
         job_text: Optional[str],
         job_data: Optional[str],
+        tenant_id: str = "default-tenant",
     ) -> dict:
         job_information = await self._get_job_information(file, file_path, job_text, job_data)
         candidate_analysis = self.agent.analyze_job_for_candidate(
@@ -229,8 +244,17 @@ class JobService:
         with open(candidate_analysis_path, "w", encoding="utf-8") as handle:
             handle.write(candidate_analysis.model_dump_json(indent=2))
 
+        # Save Job in database
+        job_id = get_background_job_manager().save_job(
+            tenant_id=tenant_id,
+            job_title=job_information.job_title,
+            company=job_information.company,
+            extracted_data_json=job_information.model_dump_json(),
+        )
+
         return {
             "message": "Candidate analysis successful",
+            "job_id": job_id,
             "job_title": job_information.job_title,
             "company": job_information.company,
             "job_information": job_information.model_dump(),
@@ -247,6 +271,7 @@ class JobService:
         file_path: Optional[str],
         job_text: Optional[str],
         job_data: Optional[str],
+        tenant_id: str = "default-tenant",
     ) -> dict:
         job_information = await self._get_job_information(file, file_path, job_text, job_data)
         recruiter_analysis = self.agent.analyze_job_for_recruiter(
@@ -264,8 +289,17 @@ class JobService:
         with open(recruiter_analysis_path, "w", encoding="utf-8") as handle:
             handle.write(recruiter_analysis.model_dump_json(indent=2))
 
+        # Save Job in database
+        job_id = get_background_job_manager().save_job(
+            tenant_id=tenant_id,
+            job_title=job_information.job_title,
+            company=job_information.company,
+            extracted_data_json=job_information.model_dump_json(),
+        )
+
         return {
             "message": "Recruiter analysis successful",
+            "job_id": job_id,
             "job_title": job_information.job_title,
             "company": job_information.company,
             "job_information": job_information.model_dump(),
@@ -276,7 +310,7 @@ class JobService:
             "recruiter_analysis_path": str(recruiter_analysis_path),
         }
 
-    async def analyze_job(self, file: Optional[UploadFile], file_path: Optional[str], job_text: Optional[str], job_data: Optional[str]) -> dict:
+    async def analyze_job(self, file: Optional[UploadFile], file_path: Optional[str], job_text: Optional[str], job_data: Optional[str], tenant_id: str = "default-tenant") -> dict:
         job_information = await self._get_job_information(file, file_path, job_text, job_data)
         candidate_analysis = self.agent.analyze_job_for_candidate(
             job_information=job_information,
@@ -302,8 +336,17 @@ class JobService:
         with open(recruiter_analysis_path, "w", encoding="utf-8") as handle:
             handle.write(recruiter_analysis.model_dump_json(indent=2))
 
+        # Save Job in database
+        job_id = get_background_job_manager().save_job(
+            tenant_id=tenant_id,
+            job_title=job_information.job_title,
+            company=job_information.company,
+            extracted_data_json=job_information.model_dump_json(),
+        )
+
         return {
             "message": "Job analysis successful",
+            "job_id": job_id,
             "job_title": job_information.job_title,
             "company": job_information.company,
             "job_information": job_information.model_dump(),

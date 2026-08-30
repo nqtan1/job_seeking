@@ -1,12 +1,13 @@
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from agents.agent_config import AgentConfig
 from fit.agent import FitAgent
 from fit.schema import FitAnalysisRequest, FitAnalysisResponse, FitCheck
 from fit.service import FitService
 from utils.logger import get_logger
+from core.auth import TenantContext, get_tenant_context
 
 logger = get_logger(name="fit.route", log_file="fit_api.log", level="INFO")
 
@@ -24,7 +25,7 @@ def _get_service() -> FitService:
 
 
 @router.post("/analyze", response_model=FitAnalysisResponse)
-async def analyze_fit(request: FitAnalysisRequest) -> FitAnalysisResponse:
+async def analyze_fit(request: FitAnalysisRequest, tenant: TenantContext = Depends(get_tenant_context)) -> FitAnalysisResponse:
 	logger.info(
 		"analyze_fit called candidate=%s company=%s company_type=%s",
 		request.candidate_cv.personal_info.name,
@@ -33,7 +34,7 @@ async def analyze_fit(request: FitAnalysisRequest) -> FitAnalysisResponse:
 	)
 
 	try:
-		return await _get_service().analyze_fit(request)
+		return await _get_service().analyze_fit(request, tenant_id=tenant.tenant_id)
 	except HTTPException:
 		raise
 	except Exception as exc:

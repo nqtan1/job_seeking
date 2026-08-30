@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -11,13 +12,14 @@ from fastapi import HTTPException
 from fit.agent import FitAgent
 from fit.schema import FitAnalysisRequest, FitAnalysisResponse, FitCheck
 from utils.logger import get_logger
+from workers.background import get_background_job_manager
 
 
 class FitService:
     def __init__(self, agent: FitAgent, logger_name: str = "fit.service"):
         self.agent = agent
         self.logger = get_logger(name=logger_name, log_file="fit_api.log", level="INFO")
-        self.result_base_dir = Path(__file__).resolve().parent.parent / "db/fit/analyze"
+        self.result_base_dir = Path(tempfile.gettempdir()) / "job_seeking_db/fit/analyze"
         self.result_base_dir.mkdir(parents=True, exist_ok=True)
 
     def _sanitize_filename(self, text: str) -> str:
@@ -36,7 +38,7 @@ class FitService:
         result_dir.mkdir(parents=True, exist_ok=True)
         return result_dir
 
-    async def analyze_fit(self, request: FitAnalysisRequest) -> FitAnalysisResponse:
+    async def analyze_fit(self, request: FitAnalysisRequest, tenant_id: str = "default-tenant") -> FitAnalysisResponse:
         self.logger.info(
             "Persisting fit analysis candidate=%s company=%s company_type=%s",
             request.candidate_cv.personal_info.name,
@@ -61,6 +63,35 @@ class FitService:
         request_path = result_folder / "request.json"
         with open(request_path, "w", encoding="utf-8") as file:
             json.dump(request.model_dump(), file, indent=2, ensure_ascii=False, default=str)
+
+        # 1. Save Candidate structured profile to SQLite
+        email = str(request.candidate_cv.personal_info.email) if request.candidate_cv.personal_info.email else None
+        phone = request.candidate_cv.personal_info.phone if request.candidate_cv.personal_info.phone else None
+        candidate_id = get_background_job_manager().save_candidate(
+            tenant_id=tenant_id,
+            name=request.candidate_cv.personal_info.name or "Unknown",
+            email=email,
+            phone=phone,
+            extracted_data_json=request.candidate_cv.model_dump_json(),
+        )
+
+        # 2. Save Job structured description to SQLite
+        job_id = get_background_job_manager().save_job(
+            tenant_id=tenant_id,
+            job_title=request.job_information.job_title or "Unknown",
+            company=request.job_information.company or "Unknown",
+            extracted_data_json=request.job_information.model_dump_json(),
+        )
+
+        # 3. Save Fit Analysis results to SQLite
+        analysis_id = get_background_job_manager().save_fit_analysis(
+            tenant_id=tenant_id,
+            candidate_id=candidate_id,
+            job_id=job_id,
+            fit_score=int(fit_check.fit_score),
+            fit_data_json=fit_check.model_dump_json(),
+        )
+        self.logger.info(f"Fit analysis persisted in SQLite with analysis_id={analysis_id}")
 
         return FitAnalysisResponse(
             message="Fit analysis successful",

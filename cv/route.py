@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form
+import tempfile
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
 from typing import Optional
 from dotenv import load_dotenv
 import unicodedata
@@ -10,6 +11,8 @@ from utils.logger import get_logger
 from cv.agent import CVAnalysisAgent 
 from cv.schema import CVInformation, BaseCandidateAnalysis
 from agents.agent_config import AgentConfig
+from core.auth import TenantContext, get_tenant_context
+from workers.background import get_background_job_manager
 
 logger = get_logger(name="cv.route", log_file="cv_api.log", level="INFO")
 load_dotenv()
@@ -28,7 +31,7 @@ def _get_agent() -> CVAnalysisAgent:
 # Allowed file extensions 
 ALLOWED_EXTENSIONS = {".pdf", ".img", ".txt", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
-UPLOAD_BASE_DIR = Path(__file__).parent.parent / "db/cv/uploads"
+UPLOAD_BASE_DIR = Path(tempfile.gettempdir()) / "job_seeking_db/cv/uploads"
 UPLOAD_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Helper function to get upload folder with date structure
@@ -56,8 +59,8 @@ def _get_result_folders() -> tuple[Path, Path]:
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     
-    extraction_dir = Path(__file__).parent.parent / "db/cv/extract" / timestamp
-    analysis_dir = Path(__file__).parent.parent / "db/cv/analyze" / timestamp
+    extraction_dir = Path(tempfile.gettempdir()) / "job_seeking_db/cv/extract" / timestamp
+    analysis_dir = Path(tempfile.gettempdir()) / "job_seeking_db/cv/analyze" / timestamp
     
     extraction_dir.mkdir(parents=True, exist_ok=True)
     analysis_dir.mkdir(parents=True, exist_ok=True)
@@ -181,7 +184,8 @@ async def _validate_and_get_file_path(
 @router.post("/extract")
 async def extract_cv(
     file: Optional[UploadFile] = File(None),
-    file_path: Optional[str] = Query(None, description="Path to CV file")
+    file_path: Optional[str] = Query(None, description="Path to CV file"),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Extract CV information from file."""
     
@@ -223,8 +227,21 @@ async def extract_cv(
         logger.info(f"Extracted data saved: {extract_path}")
         logger.info("CV extraction response prepared successfully")
         
+        # Save structured candidate profile into the SQLite database
+        email = str(extracted_data.personal_info.email) if extracted_data.personal_info.email else None
+        phone = extracted_data.personal_info.phone if extracted_data.personal_info.phone else None
+        candidate_id = get_background_job_manager().save_candidate(
+            tenant_id=tenant.tenant_id,
+            name=candidate_name,
+            email=email,
+            phone=phone,
+            extracted_data_json=extracted_data.model_dump_json(),
+        )
+        logger.info(f"Candidate profile saved in database with candidate_id={candidate_id}")
+        
         return {
             "message": "CV extraction successful",
+            "candidate_id": candidate_id,
             "filename": filename,
             "upload_path": processed_file_path,
             "data": extracted_data.model_dump(),
@@ -245,7 +262,8 @@ async def extract_cv(
 async def analyze_cv(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to CV file"),
-    cv_data: Optional[str] = Form(None, description="CVInformation as JSON string")
+    cv_data: Optional[str] = Form(None, description="CVInformation as JSON string"),
+    tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Analyze CV and get recruiter insights."""
     
@@ -296,6 +314,17 @@ async def analyze_cv(
                 detail="Provide either 'file', 'file_path', or CVInformation JSON"
             )
         
+        # Save or update candidate details in SQL
+        email = str(cv_data.personal_info.email) if cv_data.personal_info.email else None
+        phone = cv_data.personal_info.phone if cv_data.personal_info.phone else None
+        candidate_id = get_background_job_manager().save_candidate(
+            tenant_id=tenant.tenant_id,
+            name=candidate_name,
+            email=email,
+            phone=phone,
+            extracted_data_json=cv_data.model_dump_json(),
+        )
+        
         # Analyze CV
         logger.info(f"Calling agent to analyze CV for: {candidate_name}")
         analysis_message = "Analyze this CV and provide recruiter insights"
@@ -323,6 +352,7 @@ async def analyze_cv(
         
         return {
             "message": "CV analysis successful",
+            "candidate_id": candidate_id,
             "candidate": candidate_name,
             "position": position,
             "analysis": analysis_result.model_dump(),

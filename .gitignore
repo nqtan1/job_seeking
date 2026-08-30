@@ -23,3 +23,4 @@ config/
 
 .SYSTEM_DESIGN.md
 .gemini/.env
+ARCHITECTURE_DESIGN.md
