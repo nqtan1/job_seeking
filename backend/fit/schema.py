@@ -67,6 +67,44 @@ class FitCheck(BaseModel):
         description="1-3 sentence executive summary of the fit assessment, written in the persona's voice."
     )
 
+    constructive_feedback: Optional[str] = Field(
+        default=None,
+        description="Truly helpful, deep, and highly actionable professional advice on how the candidate can optimize their CV, highlight missing stacks, or self-study/obtain certifications to match this role in the future."
+    )
+
+
+class InterviewQuestion(BaseModel):
+    question: str = Field(
+        ..., 
+        description="The interview question text."
+    )
+    expected_answer: str = Field(
+        ..., 
+        description="The model or expected answer, showing what a high-quality candidate would say."
+    )
+    reasoning: str = Field(
+        ..., 
+        description="The rationale explaining why this question is being asked based on the candidate's background and target job."
+    )
+
+
+class InterviewPreparationKit(BaseModel):
+    """
+    Mock Interview Preparation Kit for GO or MAYBE candidates.
+    """
+    technical_questions: List[InterviewQuestion] = Field(
+        ..., 
+        description="A list of 3-5 technical or role-specific questions tailored to the candidate's profile and the job requirements."
+    )
+    behavioral_questions: List[InterviewQuestion] = Field(
+        ..., 
+        description="A list of 2-3 behavioral or situational questions matching the target company environment (startup/phd/corporation)."
+    )
+    simulation_prompt: str = Field(
+        ..., 
+        description="A detailed, comprehensive system prompt that the candidate can copy and paste into Gemini or another LLM to conduct a realistic, back-and-forth interactive mock interview."
+    )
+
 
 class FitAnalysisRequest(BaseModel):
     candidate_cv: CVInformation
@@ -83,3 +121,4 @@ class FitAnalysisResponse(BaseModel):
     result_folder: str
     analysis_path: str
     request_path: str
+    interview_kit: Optional[InterviewPreparationKit] = None

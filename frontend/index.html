@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecruitAI Multi-Tenant Console</title>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .shimmer {
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-850 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="h-10 w-10 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-950/40">
+                    <i class="fa-solid fa-briefcase text-slate-950 text-xl font-bold"></i>
+                </div>
+                <div>
+                    <h1 class="text-md font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">RecruitAI Console</h1>
+                    <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Multi-Tenant Screening Suite</p>
+                </div>
+            </div>
+
+            <!-- Global Tenant Selector -->
+            <div class="flex items-center gap-2.5 bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 shadow-inner">
+                <i class="fa-solid fa-network-wired text-emerald-400 text-xs"></i>
+                <label for="tenant-id" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tenant ID:</label>
+                <input type="text" id="tenant-id" value="default-tenant" 
+                       class="bg-transparent border-0 focus:outline-none focus:ring-0 text-xs font-mono font-medium text-emerald-300 w-28 text-center"
+                       placeholder="tenant-id" title="Enter tenant ID to simulate isolated workspace state.">
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
+        
+        <!-- Tab Navigation Controller -->
+        <div class="flex border-b border-slate-850 gap-2 p-1 bg-slate-900/40 rounded-xl max-w-md w-full">
+            <button id="tab-candidate" class="flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-100 bg-slate-800 shadow shadow-slate-950" onclick="switchTab('candidate')">
+                <i class="fa-solid fa-user-tie text-xs"></i>
+                Candidate Sandbox
+            </button>
+            <button id="tab-recruiter" class="flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100" onclick="switchTab('recruiter')">
+                <i class="fa-solid fa-building-user text-xs"></i>
+                Recruiter Hub
+            </button>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- VIEW 1: CANDIDATE HUB -->
+        <!-- ========================================================== -->
+        <div id="view-candidate" class="flex flex-col gap-6">
+            
+            <!-- SECTION 1: Document Inputs (CV vs JD side by side) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                
+                <!-- COLUMN A: Candidate Resume (CV) -->
+                <div class="flex flex-col gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex flex-col gap-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-850">
+                            <h2 class="font-bold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <span class="h-5 w-5 rounded bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[10px]">A</span>
+                                Candidate Resume
+                            </h2>
+                            <span id="cv-status" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-850 text-slate-500 uppercase tracking-wider">Empty</span>
+                        </div>
+
+                        <!-- Dropzone -->
+                        <div id="cv-dropzone" class="border-2 border-dashed border-slate-800 hover:border-emerald-500/50 rounded-lg p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-100 group bg-slate-950/20">
+                            <input type="file" id="cv-file" class="hidden" accept=".pdf,.txt,.docx,.png,.jpg,.jpeg">
+                            <div class="h-10 w-10 rounded-full bg-slate-900 text-slate-500 group-hover:text-emerald-400 flex items-center justify-center mb-2.5 transition-colors shadow-inner">
+                                <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                            </div>
+                            <p class="text-xs font-semibold text-slate-200 group-hover:text-emerald-300">Click to upload or drag & drop</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5 font-medium">PDF, TXT, DOCX, PNG, or JPG (Max 10MB)</p>
+                        </div>
+
+                        <!-- Uploaded File Info -->
+                        <div id="cv-upload-info" class="hidden bg-slate-950/80 border border-slate-850 rounded-lg p-2.5 flex items-center justify-between">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <i class="fa-solid fa-file-pdf text-emerald-400 shrink-0"></i>
+                                <span id="cv-filename" class="text-xs font-mono text-slate-300 truncate font-semibold">resume.pdf</span>
+                            </div>
+                            <button onclick="clearCV()" class="text-slate-500 hover:text-rose-400 transition-colors px-1.5 py-0.5 text-xs">
+                                <i class="fa-solid fa-trash-can"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Local CV Live Preview Panel -->
+                    <div id="cv-preview-card" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md flex flex-col gap-2.5">
+                        <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-eye text-emerald-400"></i>
+                            CV Document Preview
+                        </h4>
+                        <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[280px] flex items-center justify-center relative">
+                            <iframe id="cv-preview-iframe" class="w-full h-full border-0 hidden" src=""></iframe>
+                            <img id="cv-preview-img" class="max-w-full max-h-full object-contain p-2 hidden" src="">
+                            <pre id="cv-preview-txt" class="w-full h-full p-3 text-[10px] font-mono text-slate-300 overflow-y-auto whitespace-pre-wrap hidden"></pre>
+                            <div id="cv-preview-fallback" class="text-center p-6 flex flex-col items-center justify-center text-slate-500 hidden">
+                                <i class="fa-solid fa-file-invoice text-2xl mb-2 text-slate-600"></i>
+                                <p class="text-xs font-semibold text-slate-400">Native preview unavailable</p>
+                                <p class="text-[10px] text-slate-500 mt-0.5">The document's text will still be fully parsed by AI.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- COLUMN B: Job Description (JD) -->
+                <div class="flex flex-col gap-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex flex-col gap-3.5">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-850">
+                            <h2 class="font-bold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                                <span class="h-5 w-5 rounded bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-[10px]">B</span>
+                                Job Posting Requirements
+                            </h2>
+                            <span id="jd-status" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-850 text-slate-500 uppercase tracking-wider">Empty</span>
+                        </div>
+
+                        <!-- Job Input Toggle -->
+                        <div class="flex gap-1.5 p-0.5 bg-slate-950 rounded-lg border border-slate-850/80">
+                            <button id="btn-jd-type-text" class="flex-1 py-1.5 px-3 rounded-md font-bold text-[10px] tracking-wider uppercase transition-colors bg-slate-800 text-slate-100 shadow" onclick="switchJDInputType('text')">
+                                Paste JD Text
+                            </button>
+                            <button id="btn-jd-type-file" class="flex-1 py-1.5 px-3 rounded-md font-bold text-[10px] tracking-wider uppercase transition-colors text-slate-400 hover:text-slate-100" onclick="switchJDInputType('file')">
+                                Upload Document
+                            </button>
+                        </div>
+
+                        <!-- Option 1: Paste Text -->
+                        <div id="jd-text-container" class="flex flex-col">
+                            <textarea id="jd-text" rows="4" oninput="updateJDTextStatus()"
+                                      class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-sans leading-relaxed" 
+                                      placeholder="Paste responsibilities, target requirements, preferred stack here..."></textarea>
+                        </div>
+
+                        <!-- Option 2: Upload File -->
+                        <div id="jd-file-container" class="hidden flex flex-col gap-2">
+                            <!-- Mini Dropzone -->
+                            <div id="jd-dropzone" class="border border-dashed border-slate-800 hover:border-emerald-500/50 rounded-lg p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-100 group bg-slate-950/20">
+                                <input type="file" id="jd-file" class="hidden" accept=".pdf,.txt,.docx,.png,.jpg,.jpeg">
+                                <div class="h-8 w-8 rounded-full bg-slate-900 text-slate-500 group-hover:text-emerald-400 flex items-center justify-center mb-1.5 transition-colors shadow-inner">
+                                    <i class="fa-solid fa-file-arrow-up text-xs"></i>
+                                </div>
+                                <p class="text-[11px] font-semibold text-slate-200 group-hover:text-emerald-300">Click to upload or drag & drop</p>
+                                <p class="text-[9px] text-slate-500">PDF, TXT, DOCX, or Images (Max 10MB)</p>
+                            </div>
+
+                            <!-- Uploaded File Info -->
+                            <div id="jd-upload-info" class="hidden bg-slate-950/80 border border-slate-850 rounded-lg p-2 flex items-center justify-between">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <i class="fa-solid fa-file-contract text-emerald-400 shrink-0"></i>
+                                    <span id="jd-filename" class="text-xs font-mono text-slate-300 truncate font-semibold">job_desc.pdf</span>
+                                </div>
+                                <button onclick="clearJDFile()" class="text-slate-500 hover:text-rose-400 transition-colors px-1.5 py-0.5 text-xs">
+                                    <i class="fa-solid fa-trash-can"></i> Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Local JD Live Preview Panel -->
+                    <div id="jd-preview-card" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-md flex flex-col gap-2.5">
+                        <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-eye text-emerald-400"></i>
+                            JD Document Preview
+                        </h4>
+                        <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[280px] flex items-center justify-center relative">
+                            <iframe id="jd-preview-iframe" class="w-full h-full border-0 hidden" src=""></iframe>
+                            <img id="jd-preview-img" class="max-w-full max-h-full object-contain p-2 hidden" src="">
+                            <pre id="jd-preview-txt" class="w-full h-full p-3 text-[10px] font-mono text-slate-300 overflow-y-auto whitespace-pre-wrap hidden"></pre>
+                            <div id="jd-preview-fallback" class="text-center p-6 flex flex-col items-center justify-center text-slate-500 hidden">
+                                <i class="fa-solid fa-file-contract text-2xl mb-2 text-slate-600"></i>
+                                <p class="text-xs font-semibold text-slate-400">Native preview unavailable</p>
+                                <p class="text-[10px] text-slate-500 mt-0.5">The document's text will still be fully parsed by AI.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Control Board (Contextual sliders & action trigger) -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col lg:flex-row lg:items-center gap-5">
+                <!-- Company context selection -->
+                <div class="flex-1 flex flex-col gap-2">
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Target Hiring Context:</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button id="btn-comp-startup" class="py-2 px-3 border border-slate-850 rounded-lg text-xs font-semibold bg-slate-950 text-slate-400 transition-colors" onclick="setCompanyType('startup')">
+                            Startup
+                        </button>
+                        <button id="btn-comp-phd" class="py-2 px-3 border border-slate-850 rounded-lg text-xs font-semibold bg-slate-950 text-slate-400 transition-colors" onclick="setCompanyType('phd')">
+                            PhD/Academia
+                        </button>
+                        <button id="btn-comp-corporation" class="py-2 px-3 border border-emerald-500/20 rounded-lg text-xs font-semibold bg-slate-950 text-emerald-400 shadow shadow-emerald-950/20" onclick="setCompanyType('corporation')">
+                            Corporation
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Guidelines input -->
+                <div class="flex-1 flex flex-col gap-2">
+                    <label for="fit-custom-context" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Custom scoring rules or preferences:</label>
+                    <input type="text" id="fit-custom-context" 
+                           class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-medium"
+                           placeholder="e.g. Prioritize Docker, Cloud Architecture, microservices expertise...">
+                </div>
+
+                <!-- CTA Action trigger -->
+                <div class="lg:w-72 flex flex-col justify-end pt-1 md:pt-0">
+                    <button id="btn-run-analysis" class="w-full py-4 px-6 rounded-xl font-bold text-xs bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:opacity-95 transition-all duration-150 shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-2 uppercase tracking-widest h-[52px]" onclick="runCandidateAnalysis()">
+                        <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                        Analyze Fit
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Analysis Results (Hidden initially, shown once populated) -->
+            
+            <!-- Default Placeholder -->
+            <div id="candidate-placeholder" class="bg-slate-900 border border-slate-850 rounded-2xl p-16 text-center flex flex-col items-center justify-center min-h-[300px] shadow-sm">
+                <div class="h-14 w-14 rounded-full bg-slate-800 border border-slate-700/50 flex items-center justify-center text-slate-500 mb-4 animate-bounce">
+                    <i class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <h3 class="text-sm font-bold text-slate-200 uppercase tracking-widest">Awaiting Document Extraction</h3>
+                <p class="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">Provide your Resume and Job requirements in the slots above, select hiring configurations, and click **Analyze Fit** to launch full-resolution matching runs.</p>
+            </div>
+
+            <!-- Skeletons Loader -->
+            <div id="candidate-loader" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-6 min-h-[300px]">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-850">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-lg shimmer"></div>
+                        <div class="flex flex-col gap-1.5">
+                            <div class="h-4 w-32 shimmer rounded"></div>
+                            <div class="h-3 w-20 shimmer rounded"></div>
+                        </div>
+                    </div>
+                    <div class="h-8 w-24 shimmer rounded-full"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex flex-col gap-3">
+                        <div class="h-4 w-28 shimmer rounded"></div>
+                        <div class="h-3 w-full shimmer rounded"></div>
+                        <div class="h-3 w-5/6 shimmer rounded"></div>
+                    </div>
+                    <div class="flex flex-col gap-3">
+                        <div class="h-4 w-28 shimmer rounded"></div>
+                        <div class="h-3 w-full shimmer rounded"></div>
+                        <div class="h-3 w-5/6 shimmer rounded"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actual Result Content Grid -->
+            <div id="candidate-output" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                
+                <!-- Output Col 1: Scores and Breakdown -->
+                <div class="lg:col-span-5 flex flex-col gap-6">
+                    
+                    <!-- Scoring Header -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex items-center gap-4">
+                        <div class="relative h-16 w-16 flex items-center justify-center shrink-0">
+                            <svg class="h-full w-full transform -rotate-90">
+                                <circle cx="32" cy="32" r="28" stroke="#1e293b" stroke-width="5" fill="transparent"/>
+                                <circle id="score-ring" cx="32" cy="32" r="28" stroke="#10b981" stroke-width="5" fill="transparent"
+                                        stroke-dasharray="175.9" stroke-dashoffset="40" stroke-linecap="round" class="transition-all duration-1000"/>
+                            </svg>
+                            <span id="score-text" class="absolute font-mono font-bold text-sm text-slate-100">85%</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <h3 id="profile-name" class="font-bold text-sm text-slate-100 truncate">Jane Doe</h3>
+                                <span id="recommendation-badge" class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">GO</span>
+                            </div>
+                            <p id="profile-email-phone" class="text-[10px] text-slate-500 font-mono mt-0.5 truncate">jane@example.com | +1-555-0100</p>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="text-[9px] font-bold uppercase tracking-wider text-slate-500">Confidence:</span>
+                            <p id="analysis-confidence" class="text-xs font-mono font-bold text-emerald-400">95%</p>
+                        </div>
+                    </div>
+
+                    <!-- Strengths and Gaps Lists -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex flex-col gap-4">
+                        <!-- Strengths block -->
+                        <div>
+                            <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-2">
+                                <i class="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+                                Semantic Strengths
+                            </h4>
+                            <ul id="strengths-list" class="flex flex-col gap-2 text-xs text-slate-300 pl-1">
+                                <!-- list -->
+                            </ul>
+                        </div>
+                        <!-- Divider -->
+                        <div class="border-t border-slate-850"></div>
+                        <!-- Gaps block -->
+                        <div>
+                            <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-2.5 flex items-center gap-2">
+                                <i class="fa-solid fa-circle-minus text-rose-400 text-xs"></i>
+                                Identified Gaps & Risks
+                            </h4>
+                            <ul id="gaps-list" class="flex flex-col gap-2 text-xs text-slate-300 pl-1">
+                                <!-- list -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Col 2: Optimizer, Suggestions & Cover Letter -->
+                <div class="lg:col-span-7 flex flex-col gap-6">
+                    
+                    <!-- Executive summary & improvement -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex flex-col gap-3">
+                        <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                            <i class="fa-solid fa-id-card-clip text-emerald-400"></i>
+                            Executive Verdict Summary
+                        </h4>
+                        <p id="score-voice-summary" class="text-xs text-slate-300 font-medium italic bg-slate-950/40 p-3 rounded-lg border border-slate-850/50 leading-relaxed">Verdict summary...</p>
+                        
+                        <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-2 mt-2">
+                            <i class="fa-solid fa-lightbulb text-amber-400"></i>
+                            Actionable Resume Improvements
+                        </h4>
+                        <div id="constructive-feedback" class="text-xs text-slate-300 leading-relaxed bg-slate-950 p-4 border border-slate-850 rounded-lg">
+                            Constructive feedback...
+                        </div>
+                    </div>
+
+                    <!-- Motivation Letter Generation Console -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex flex-col gap-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-850">
+                            <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                <i class="fa-solid fa-envelope-open-text text-teal-400"></i>
+                                Tailored Motivation Letter Drafts
+                            </h4>
+                            <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">AUTO WRITER</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div>
+                                <label for="ml-language" class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Language:</label>
+                                <select id="ml-language" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-medium">
+                                    <option value="en">English</option>
+                                    <option value="fr">French</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="ml-tone" class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tone:</label>
+                                <select id="ml-tone" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-medium">
+                                    <option value="professional">Professional</option>
+                                    <option value="academic">Academic</option>
+                                    <option value="formal">Formal</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="ml-format" class="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Format:</label>
+                                <select id="ml-format" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-medium">
+                                    <option value="txt">Plain Text</option>
+                                    <option value="latex">LaTeX Code</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2 sm:col-span-1 flex items-end">
+                                <button id="btn-generate-ml" class="w-full py-2 px-3 rounded-lg font-bold text-[10px] bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5 h-[34px]" onclick="generateMotivationLetter()">
+                                    <i class="fa-solid fa-feather-pointed"></i>
+                                    Draft
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Motivation Letter Output -->
+                        <div id="ml-output-container" class="hidden flex flex-col gap-2.5">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">AI Drafted Motivation Letter:</label>
+                                <button id="btn-copy-ml" class="text-xs font-semibold px-2.5 py-1 rounded bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/60 flex items-center gap-1.5 transition-colors" onclick="copyMotivationLetter()">
+                                    <i class="fa-regular fa-copy"></i>
+                                    Copy Letter
+                                </button>
+                            </div>
+                            <textarea id="ml-text-output" rows="12" readonly
+                                      class="w-full bg-slate-950 border border-slate-850 rounded-lg p-3.5 text-xs text-slate-300 focus:outline-none font-mono leading-relaxed resize-none"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- AI Mock Interview Preparation Kit -->
+                    <div id="interview-kit-card" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-md flex flex-col gap-4">
+                        <div class="flex items-center justify-between pb-2 border-b border-slate-850">
+                            <h4 class="font-bold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                <i class="fa-solid fa-comments text-emerald-400"></i>
+                                AI Mock Interview Preparation Kit
+                            </h4>
+                            <span class="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">Simulation Ready</span>
+                        </div>
+
+                        <!-- Inner Tabs to select between Tech Questions, Behavioral, and Simulation Copypasta -->
+                        <div class="flex gap-1 p-0.5 bg-slate-950 rounded border border-slate-850">
+                            <button id="btn-kit-tech" class="flex-1 py-1 rounded text-[10px] font-bold bg-slate-800 text-slate-100 transition-colors uppercase tracking-wider" onclick="switchKitTab('tech')">Technical</button>
+                            <button id="btn-kit-beh" class="flex-1 py-1 rounded text-[10px] font-bold text-slate-400 hover:text-slate-100 transition-colors uppercase tracking-wider" onclick="switchKitTab('beh')">Behavioral</button>
+                            <button id="btn-kit-sim" class="flex-1 py-1 rounded text-[10px] font-bold text-slate-400 hover:text-slate-100 transition-colors uppercase tracking-wider" onclick="switchKitTab('sim')">Simulation Prompt</button>
+                        </div>
+
+                        <!-- Panel 1: Technical Questions -->
+                        <div id="kit-panel-tech" class="flex flex-col gap-3">
+                            <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Tailored Technical Questions & Expectation Answers:</p>
+                            <div id="tech-questions-container" class="flex flex-col gap-3.5 max-h-[350px] overflow-y-auto bg-slate-950/40 p-3 rounded-lg border border-slate-850/50">
+                                <!-- list -->
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Behavioral Questions -->
+                        <div id="kit-panel-beh" class="hidden flex flex-col gap-3">
+                            <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Environment-Specific Situational Questions:</p>
+                            <div id="beh-questions-container" class="flex flex-col gap-3.5 max-h-[350px] overflow-y-auto bg-slate-950/40 p-3 rounded-lg border border-slate-850/50">
+                                <!-- list -->
+                            </div>
+                        </div>
+
+                        <!-- Panel 3: Simulation Prompt -->
+                        <div id="kit-panel-sim" class="hidden flex flex-col gap-3">
+                            <div class="flex items-center justify-between">
+                                <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Copy System Prompt to feed into ChatGPT/Gemini:</p>
+                                <button id="btn-copy-sim" class="text-[10px] font-bold px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/60 flex items-center gap-1.5 transition-colors" onclick="copySimulationPrompt()">
+                                    <i class="fa-regular fa-copy"></i> Copy Prompt
+                                </button>
+                            </div>
+                            <textarea id="sim-prompt-text" rows="8" readonly
+                                      class="w-full bg-slate-950 border border-slate-850 rounded-lg p-3 text-xs text-slate-300 focus:outline-none font-mono leading-relaxed resize-none"
+                                      placeholder="Simulation prompt..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- ========================================================== -->
+        <!-- VIEW 2: RECRUITER HUB -->
+        <!-- ========================================================== -->
+        <div id="view-recruiter" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            <!-- Left Pane: Bulk Configuration -->
+            <div class="lg:col-span-5 flex flex-col gap-6">
+                
+                <!-- Requisition Definition -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col gap-4">
+                    <h2 class="font-bold text-sm text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                        <span class="h-6 w-6 rounded bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-xs">1</span>
+                        Requisition Target
+                    </h2>
+
+                    <div>
+                        <label for="req-title" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Job Title:</label>
+                        <input type="text" id="req-title" value="Senior Backend Engineer"
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-semibold">
+                    </div>
+                    <div>
+                        <label for="req-company" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Company Name:</label>
+                        <input type="text" id="req-company" value="RecruitAI Inc."
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-200 font-semibold">
+                    </div>
+                    <div>
+                        <label for="req-requirements" class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Primary Requirements (Line by Line):</label>
+                        <textarea id="req-requirements" rows="4" 
+                                  class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-mono" 
+                                  placeholder="Python 3.10+&#10;FastAPI framework&#10;Relational DB / SQLite / Postgres&#10;Docker and CI/CD"></textarea>
+                    </div>
+                </div>
+
+                <!-- Resumes Group -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col gap-3">
+                    <h2 class="font-bold text-sm text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                        <span class="h-6 w-6 rounded bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-mono text-xs">2</span>
+                        Screening Group Pool
+                    </h2>
+
+                    <!-- Bulk dropzone wrapper -->
+                    <div id="bulk-dropzone" class="border border-dashed border-slate-800 hover:border-emerald-500/60 rounded-lg p-4 flex flex-col items-center justify-center text-center cursor-pointer transition-colors group">
+                        <input type="file" id="bulk-file-input" class="hidden" accept=".pdf,.txt,.docx,.png,.jpg,.jpeg" multiple>
+                        <i class="fa-solid fa-users-rectangle text-slate-500 group-hover:text-emerald-400 text-lg mb-1.5 transition-colors"></i>
+                        <p class="text-xs font-bold text-slate-200">Drag & Drop Batch Resumes</p>
+                        <p class="text-[10px] text-slate-400">PDF, TXT, DOCX files can be screened together</p>
+                    </div>
+
+                    <!-- Added Candidates List -->
+                    <div class="flex items-center justify-between mt-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Group Members:</span>
+                        <button onclick="clearBulkGroup()" class="text-[10px] font-bold text-rose-400 hover:text-rose-300 transition-colors uppercase tracking-wider">
+                            Clear Group
+                        </button>
+                    </div>
+
+                    <div id="bulk-list" class="flex flex-col gap-2 max-h-[200px] overflow-y-auto bg-slate-950/60 p-2 rounded-lg border border-slate-850">
+                        <div class="bg-slate-900 border border-slate-800 p-2.5 rounded flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <i class="fa-solid fa-user-check text-emerald-400 shrink-0"></i>
+                                <span class="font-semibold text-slate-200 truncate">Jane_Doe_CV.pdf</span>
+                            </div>
+                            <span class="font-mono text-[10px] font-semibold text-emerald-300 bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10">Loaded</span>
+                        </div>
+                        <div class="bg-slate-900 border border-slate-800 p-2.5 rounded flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <i class="fa-solid fa-user-check text-emerald-400 shrink-0"></i>
+                                <span class="font-semibold text-slate-200 truncate">John_Smith_Java.pdf</span>
+                            </div>
+                            <span class="font-mono text-[10px] font-semibold text-emerald-300 bg-emerald-500/5 px-1.5 py-0.5 rounded border border-emerald-500/10">Loaded</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Run screening trigger -->
+                <button id="btn-run-screening" class="w-full py-4 px-6 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:opacity-95 transition-all duration-150 shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-2 uppercase tracking-wider" onclick="runBatchScreening()">
+                    <i class="fa-solid fa-network-wired"></i>
+                    Initialize Batch Screening
+                </button>
+
+            </div>
+
+            <!-- Right Pane: Recruiter Outputs -->
+            <div class="lg:col-span-7 flex flex-col gap-6">
+                
+                <!-- Placeholder Frame -->
+                <div id="recruiter-placeholder" class="bg-slate-900 border border-slate-855 rounded-2xl p-12 text-center flex flex-col items-center justify-center h-full min-h-[450px]">
+                    <div class="h-20 w-20 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center text-slate-500 mb-4 animate-bounce">
+                        <i class="fa-solid fa-users text-3xl"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-slate-200 uppercase tracking-widest">Recruiter Screening Panel Ready</h3>
+                    <p class="text-sm text-slate-400 max-w-sm mt-1 leading-relaxed">Configure your requisition, add candidate profiles to the screening pool, and initialize ranking models to generate a dynamic comparison shortlist.</p>
+                </div>
+
+                <!-- Recruiter Loader -->
+                <div id="recruiter-loader" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-6 min-h-[450px]">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-850">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-lg shimmer"></div>
+                            <div class="flex flex-col gap-1.5">
+                                <div class="h-4 w-36 shimmer rounded"></div>
+                                <div class="h-3 w-24 shimmer rounded"></div>
+                            </div>
+                        </div>
+                        <div class="h-8 w-24 shimmer rounded-full"></div>
+                    </div>
+                    <div class="flex flex-col gap-3.5">
+                        <div class="h-12 w-full shimmer rounded-lg"></div>
+                        <div class="h-12 w-full shimmer rounded-lg"></div>
+                        <div class="h-12 w-full shimmer rounded-lg"></div>
+                    </div>
+                </div>
+
+                <!-- Recruiter Shortlist Screen -->
+                <div id="recruiter-output" class="hidden flex flex-col gap-6">
+                    
+                    <!-- Shortlist Table Header -->
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div>
+                            <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+                                <i class="fa-solid fa-ranking-star text-emerald-400"></i>
+                                Candidate Match & Ranking Shortlist
+                            </h3>
+                            <p class="text-xs text-slate-400 font-medium mt-0.5" id="requisition-label">Senior Backend Engineer | RecruitAI Inc.</p>
+                        </div>
+                        <span id="shortlist-count-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">2 Candidates Ranked</span>
+                    </div>
+
+                    <!-- Rankings List Card -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="border-b border-slate-800 bg-slate-950 text-slate-400 uppercase font-bold tracking-wider">
+                                        <th class="py-3 px-4 w-12 text-center">Rank</th>
+                                        <th class="py-3 px-4">Candidate Details</th>
+                                        <th class="py-3 px-4 text-center">Match Score</th>
+                                        <th class="py-3 px-4">Verdict Decision</th>
+                                        <th class="py-3 px-4 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rankings-table-body" class="divide-y divide-slate-850">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Outreach Email Panel -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col gap-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <h4 class="font-bold text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                <i class="fa-solid fa-reply-all text-teal-400 text-sm"></i>
+                                Automated Personalized Recruiter Outreach
+                            </h4>
+                            <span id="email-mode-badge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Invitation to Interview</span>
+                        </div>
+
+                        <div id="outreach-container" class="flex flex-col gap-3">
+                            <div class="flex items-center justify-between">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider" id="outreach-recipient-label">Email Draft for Jane Doe:</label>
+                                <button id="btn-copy-outreach" class="text-xs font-semibold px-2.5 py-1 rounded bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/60 flex items-center gap-1.5 transition-colors" onclick="copyOutreachEmail()">
+                                    <i class="fa-regular fa-copy"></i>
+                                    Copy Outreach
+                                </button>
+                            </div>
+                            <textarea id="outreach-text-output" rows="8" readonly
+                                      class="w-full bg-slate-950 border border-slate-850 rounded-lg p-3.5 text-xs text-slate-300 focus:outline-none font-mono leading-relaxed resize-none"></textarea>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-900 bg-slate-950 py-4 text-center">
+        <p class="text-[10px] font-medium text-slate-500 tracking-wider">Enterprise Recruitment AI Platform • Clean Multi-Tenant Architecture • Python 3.13</p>
+    </footer>
+
+    <!-- App JavaScript -->
+    <script src="/app.js" type="module"></script>
+</body>
+</html>

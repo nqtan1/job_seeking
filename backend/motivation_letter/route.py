@@ -54,7 +54,8 @@ async def generate_motivation_letter(request: MotivationLetterRequest) -> Motiva
             request.return_format,
         )
 
-        letter = _get_agent().generate_letter(request)
+        from starlette.concurrency import run_in_threadpool
+        letter = await run_in_threadpool(_get_agent().generate_letter, request)
         letter = service.persist(request, letter)
         logger.info("Motivation letter generation completed successfully")
         return letter

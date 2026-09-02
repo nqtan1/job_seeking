@@ -55,7 +55,8 @@ async def rank_candidates(
             tenant_id=tenant.tenant_id,
         ).model_dump()
 
-    result = service.rank_candidates(request, tenant)
+    from starlette.concurrency import run_in_threadpool
+    result = await run_in_threadpool(service.rank_candidates, request, tenant)
     return result.model_dump()
 
 

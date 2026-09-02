@@ -1,26 +1,68 @@
-# Python
+# ==============================================================================
+# Python Compilation & Bytecode Caches
+# ==============================================================================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
 
-# Virtual environments
+# ==============================================================================
+# Virtual Environments
+# ==============================================================================
 .venv/
+venv/
+env/
+ENV/
 
-# IDE
-.vscode/
+# ==============================================================================
+# Testing & Code Quality Engine Caches
+# ==============================================================================
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# Environment files
+# ==============================================================================
+# Environment Secrets & Private Credentials
+# ==============================================================================
 .env
+.env.local
+.env.shared
+.env.*
+!.env.example
+.gemini/.env
 
-# Project-specific folders
-personal/
+# ==============================================================================
+# Local Databases & File-System Cache Folders
+# ==============================================================================
 db/
 logs/
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.log
 
-.pytest_cache
+# ==============================================================================
+# IDE Configs & Operating System Files
+# ==============================================================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 
+# ==============================================================================
+# Personal & Workspace Specific Temporary Folders
+# ==============================================================================
+personal/
 summary/
 config/
-
 .SYSTEM_DESIGN.md
-.gemini/.env
 ARCHITECTURE_DESIGN.md
+
+# Local-only playbooks & modular documentation (strictly untracked)
+docs/
+GEMINI.md

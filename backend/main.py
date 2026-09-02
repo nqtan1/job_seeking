@@ -1,5 +1,7 @@
+from pathlib import Path
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from cv.route import router as cv_router
 from fit.route import router as fit_router
 from hr.route import router as hr_router
@@ -27,9 +29,19 @@ app.include_router(hr_router, prefix="/api/hr", tags=["HR"])
 # Include Motivation Letter routes
 app.include_router(motivation_letter_router, prefix="/api/motivation-letter", tags=["Motivation Letter"])  
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def read_root():
-    return {"message": "Welcome to Job Seeking CV API"}
+    html_path = Path(__file__).parent.parent / "frontend" / "index.html"
+    if html_path.exists():
+        return html_path.read_text(encoding="utf-8")
+    return "<h1>RecruitAI Console: frontend/index.html not found</h1>"
+
+@app.get("/{filename}.js", response_class=PlainTextResponse)
+def get_js_file(filename: str):
+    js_path = Path(__file__).parent.parent / "frontend" / f"{filename}.js"
+    if js_path.exists():
+        return PlainTextResponse(content=js_path.read_text(encoding="utf-8"), media_type="application/javascript")
+    return PlainTextResponse(content=f"console.error('frontend/{filename}.js not found')", media_type="application/javascript", status_code=404)
 
 @app.get("/health")
 def health_check():

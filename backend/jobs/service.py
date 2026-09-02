@@ -127,8 +127,11 @@ class JobService:
             except json.JSONDecodeError as exc:
                 raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(exc)}") from exc
 
+        from starlette.concurrency import run_in_threadpool
+
         if job_text:
-            return self.agent.extract_job(
+            return await run_in_threadpool(
+                self.agent.extract_job,
                 job_text=job_text,
                 message="Extract all information from this job description",
                 output_schema=JobPosition,
@@ -136,7 +139,8 @@ class JobService:
 
         if file:
             processed_file_path, _ = await self._validate_and_get_file_path(file, None, "Analyze")
-            return self.agent.extract_job(
+            return await run_in_threadpool(
+                self.agent.extract_job,
                 file_path=processed_file_path,
                 message="Extract all information from this job description",
                 output_schema=JobPosition,
@@ -144,7 +148,8 @@ class JobService:
 
         if file_path:
             processed_file_path, _ = await self._validate_and_get_file_path(None, file_path, "Analyze")
-            return self.agent.extract_job(
+            return await run_in_threadpool(
+                self.agent.extract_job,
                 file_path=processed_file_path,
                 message="Extract all information from this job description",
                 output_schema=JobPosition,
@@ -207,16 +212,18 @@ class JobService:
         job_text: Optional[str],
         tenant_id: str = "default-tenant",
     ) -> dict:
+        from starlette.concurrency import run_in_threadpool
+
         if job_text:
-            return self.extract_job(job_text=job_text, tenant_id=tenant_id)
+            return await run_in_threadpool(self.extract_job, job_text=job_text, tenant_id=tenant_id)
 
         if file:
             processed_file_path, _ = await self._validate_and_get_file_path(file, None, "Extract")
-            return self.extract_job(file_path=processed_file_path, tenant_id=tenant_id)
+            return await run_in_threadpool(self.extract_job, file_path=processed_file_path, tenant_id=tenant_id)
 
         if file_path:
             processed_file_path, _ = await self._validate_and_get_file_path(None, file_path, "Extract")
-            return self.extract_job(file_path=processed_file_path, tenant_id=tenant_id)
+            return await run_in_threadpool(self.extract_job, file_path=processed_file_path, tenant_id=tenant_id)
 
         raise HTTPException(status_code=400, detail="Provide either 'file', 'file_path', or 'job_text'")
 
@@ -229,7 +236,9 @@ class JobService:
         tenant_id: str = "default-tenant",
     ) -> dict:
         job_information = await self._get_job_information(file, file_path, job_text, job_data)
-        candidate_analysis = self.agent.analyze_job_for_candidate(
+        from starlette.concurrency import run_in_threadpool
+        candidate_analysis = await run_in_threadpool(
+            self.agent.analyze_job_for_candidate,
             job_information=job_information,
             output_schema=CandidateAnalysis,
             message="Analyze this job posting from a candidate's perspective",
@@ -274,7 +283,9 @@ class JobService:
         tenant_id: str = "default-tenant",
     ) -> dict:
         job_information = await self._get_job_information(file, file_path, job_text, job_data)
-        recruiter_analysis = self.agent.analyze_job_for_recruiter(
+        from starlette.concurrency import run_in_threadpool
+        recruiter_analysis = await run_in_threadpool(
+            self.agent.analyze_job_for_recruiter,
             job_information=job_information,
             output_schema=RecruiterAnalysis,
             message="Analyze this job posting from a recruiter's perspective",
@@ -312,12 +323,15 @@ class JobService:
 
     async def analyze_job(self, file: Optional[UploadFile], file_path: Optional[str], job_text: Optional[str], job_data: Optional[str], tenant_id: str = "default-tenant") -> dict:
         job_information = await self._get_job_information(file, file_path, job_text, job_data)
-        candidate_analysis = self.agent.analyze_job_for_candidate(
+        from starlette.concurrency import run_in_threadpool
+        candidate_analysis = await run_in_threadpool(
+            self.agent.analyze_job_for_candidate,
             job_information=job_information,
             output_schema=CandidateAnalysis,
             message="Analyze this job posting from a candidate's perspective",
         )
-        recruiter_analysis = self.agent.analyze_job_for_recruiter(
+        recruiter_analysis = await run_in_threadpool(
+            self.agent.analyze_job_for_recruiter,
             job_information=job_information,
             output_schema=RecruiterAnalysis,
             message="Analyze this job posting from a recruiter's perspective",

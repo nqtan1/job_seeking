@@ -203,7 +203,10 @@ async def extract_cv(
         
         logger.info(f"Calling agent to extract CV from: {processed_file_path}")
         extraction_message = "Extract all information from this CV in structured format"
-        extracted_data = _get_agent().extract_cv(
+        
+        from starlette.concurrency import run_in_threadpool
+        extracted_data = await run_in_threadpool(
+            _get_agent().extract_cv,
             file_path=processed_file_path,
             message=extraction_message,
             output_schema=CVInformation
@@ -288,7 +291,9 @@ async def analyze_cv(
             
             # Extract CV
             extraction_message = "Extract all information from this CV in structured format"
-            cv_data = _get_agent().extract_cv(
+            from starlette.concurrency import run_in_threadpool
+            cv_data = await run_in_threadpool(
+                _get_agent().extract_cv,
                 file_path=processed_file_path,
                 message=extraction_message,
                 output_schema=CVInformation
@@ -328,7 +333,9 @@ async def analyze_cv(
         # Analyze CV
         logger.info(f"Calling agent to analyze CV for: {candidate_name}")
         analysis_message = "Analyze this CV and provide recruiter insights"
-        analysis_result = _get_agent().analyze_cv(
+        from starlette.concurrency import run_in_threadpool
+        analysis_result = await run_in_threadpool(
+            _get_agent().analyze_cv,
             cv_information=cv_data,
             output_schema=BaseCandidateAnalysis,
             message=analysis_message

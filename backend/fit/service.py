@@ -46,7 +46,10 @@ class FitService:
             request.company_type,
         )
 
-        fit_check = self.agent.analyze_fit(
+        from starlette.concurrency import run_in_threadpool
+
+        fit_check = await run_in_threadpool(
+            self.agent.analyze_fit,
             candidate_cv=request.candidate_cv,
             job_information=request.job_information,
             company_type=request.company_type,
@@ -93,6 +96,22 @@ class FitService:
         )
         self.logger.info(f"Fit analysis persisted in SQLite with analysis_id={analysis_id}")
 
+        # 4. Generate Interview Kit if fit is GO or MAYBE
+        interview_kit = None
+        if fit_check.recommendation.value in {"go", "maybe"}:
+            self.logger.info("Recommendation is %s. Generating Mock Interview Preparation Kit.", fit_check.recommendation.value)
+            try:
+                from starlette.concurrency import run_in_threadpool
+                interview_kit = await run_in_threadpool(
+                    self.agent.generate_interview_kit,
+                    candidate_cv=request.candidate_cv,
+                    job_information=request.job_information,
+                    company_type=request.company_type,
+                    custom_context=request.custom_context,
+                )
+            except Exception as e:
+                self.logger.error("Failed to generate interview kit: %s", str(e), exc_info=True)
+
         return FitAnalysisResponse(
             message="Fit analysis successful",
             company_type=request.company_type,
@@ -100,4 +119,5 @@ class FitService:
             result_folder=str(result_folder),
             analysis_path=str(analysis_path),
             request_path=str(request_path),
+            interview_kit=interview_kit,
         )
