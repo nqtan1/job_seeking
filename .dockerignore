@@ -1,0 +1,43 @@
+# ==============================================================================
+# Docker Build Ignore List
+# ==============================================================================
+
+# Virtual Environments
+.venv/
+backend/.venv/
+**/venv/
+**/env/
+
+# Python Compilation & Caches
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
+
+# Local Testing Databases & State
+backend/db/
+backend/logs/
+backend/personal/
+backend/summary/
+*.db
+*.sqlite
+*.log
+
+# IDEs & System Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets & Environment Variables
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Git Metadata
+.git/
+.gitignore
