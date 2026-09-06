@@ -1,0 +1,18 @@
+# ==============================================================================
+# Local-Testing Docker Compose Workspace Configuration
+# ==============================================================================
+
+services:
+  recruitai-app:
+    build: .
+    container_name: recruitai-container
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-us-central1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp-key.json
+    volumes:
+      # Mounts your local GCP Service Account Key dynamically into the container
+      - ${LOCAL_GCP_KEY_PATH:-./gcp-key.json}:/tmp/gcp-key.json
+    restart: always
