@@ -22,7 +22,8 @@ class JobService:
         self.logger = get_logger(name=logger_name, log_file="jobs_api.log", level="INFO")
         self.allowed_extensions = {".pdf", ".txt", ".jpg", ".jpeg", ".png", ".img"}
         self.max_file_size = 10 * 1024 * 1024
-        self.upload_base_dir = Path(tempfile.gettempdir()) / "job_seeking_db/jobs/uploads"
+        self.db_base_dir = Path(__file__).parent.parent / "db"
+        self.upload_base_dir = self.db_base_dir / "jobs" / "uploads"
         self.upload_base_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_upload_folder(self) -> Path:
@@ -35,8 +36,8 @@ class JobService:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         folder_name = f"{timestamp}_{company}_{job_title}".replace(" ", "_").replace("/", "_")
 
-        extraction_dir = Path(tempfile.gettempdir()) / "job_seeking_db/jobs/extract" / folder_name
-        analysis_dir = Path(tempfile.gettempdir()) / "job_seeking_db/jobs/analyze" / folder_name
+        extraction_dir = self.db_base_dir / "jobs" / "extract" / folder_name
+        analysis_dir = self.db_base_dir / "jobs" / "analyze" / folder_name
 
         extraction_dir.mkdir(parents=True, exist_ok=True)
         analysis_dir.mkdir(parents=True, exist_ok=True)

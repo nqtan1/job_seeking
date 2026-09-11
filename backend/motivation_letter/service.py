@@ -14,7 +14,8 @@ from utils.logger import get_logger
 class MotivationLetterService:
     def __init__(self, logger_name: str = "motivation_letter.service"):
         self.logger = get_logger(name=logger_name, log_file="motivation_letter_api.log", level="INFO")
-        self.result_base_dir = Path(tempfile.gettempdir()) / "job_seeking_db/motivation_letter/generate"
+        self.db_base_dir = Path(__file__).parent.parent / "db"
+        self.result_base_dir = self.db_base_dir / "motivation_letter" / "generate"
         self.result_base_dir.mkdir(parents=True, exist_ok=True)
 
     def _sanitize_filename(self, text: str) -> str:

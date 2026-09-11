@@ -66,3 +66,4 @@ ARCHITECTURE_DESIGN.md
 # Local-only playbooks & modular documentation (strictly untracked)
 docs/
 GEMINI.md
+.gcloudignore

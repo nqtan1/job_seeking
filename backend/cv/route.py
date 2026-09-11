@@ -31,7 +31,8 @@ def _get_agent() -> CVAnalysisAgent:
 # Allowed file extensions 
 ALLOWED_EXTENSIONS = {".pdf", ".img", ".txt", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
-UPLOAD_BASE_DIR = Path(tempfile.gettempdir()) / "job_seeking_db/cv/uploads"
+DB_BASE_DIR = Path(__file__).parent.parent / "db"
+UPLOAD_BASE_DIR = DB_BASE_DIR / "cv" / "uploads"
 UPLOAD_BASE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Helper function to get upload folder with date structure
@@ -59,8 +60,8 @@ def _get_result_folders() -> tuple[Path, Path]:
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     
-    extraction_dir = Path(tempfile.gettempdir()) / "job_seeking_db/cv/extract" / timestamp
-    analysis_dir = Path(tempfile.gettempdir()) / "job_seeking_db/cv/analyze" / timestamp
+    extraction_dir = DB_BASE_DIR / "cv" / "extract" / timestamp
+    analysis_dir = DB_BASE_DIR / "cv" / "analyze" / timestamp
     
     extraction_dir.mkdir(parents=True, exist_ok=True)
     analysis_dir.mkdir(parents=True, exist_ok=True)
