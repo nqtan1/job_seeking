@@ -1,0 +1,43 @@
+# .gcloudignore — Tells Cloud Build what to exclude
+# This overrides the local .gitignore so we can safely include the backend config folder.
+
+# Exclude git directory
+.git/
+.gitignore
+
+# Exclude local virtual environments
+.venv/
+backend/.venv/
+**/venv/
+**/env/
+
+# Exclude python bytecode and caches    
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
+
+# Exclude local databases, logs, and personal testing folders
+backend/db/
+backend/logs/
+backend/personal/
+backend/summary/
+summary/
+*.db
+*.sqlite
+*.log
+
+# Exclude IDE settings and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Exclude local env files (credentials should be handled via GCP, not image)
+.env
+.env.*
+backend/.env
+.gcloudignore
