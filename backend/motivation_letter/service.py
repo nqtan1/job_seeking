@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import tempfile
 import unicodedata
@@ -14,7 +15,15 @@ from utils.logger import get_logger
 class MotivationLetterService:
     def __init__(self, logger_name: str = "motivation_letter.service"):
         self.logger = get_logger(name=logger_name, log_file="motivation_letter_api.log", level="INFO")
-        self.result_base_dir = Path(tempfile.gettempdir()) / "job_seeking_db/motivation_letter/generate"
+        
+        # Set up clean data directory path supporting GCS FUSE
+        data_dir_env = os.getenv("DATA_DIR")
+        if data_dir_env:
+            self.db_base_dir = Path(data_dir_env)
+        else:
+            self.db_base_dir = Path(__file__).parent.parent / "db"
+            
+        self.result_base_dir = self.db_base_dir / "motivation_letter" / "generate"
         self.result_base_dir.mkdir(parents=True, exist_ok=True)
 
     def _sanitize_filename(self, text: str) -> str:
