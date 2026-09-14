@@ -1,19 +1,14 @@
 from jobs.analysis.agent import JobExtractionAgent
 from jobs.analysis.schema import (
     JobPosition,
+    JobAnalysis,
     JobRequirements,
     CompensationInfo,
-    JobAnalysis,
     SkillDemand,
     RoleComplexity,
     MarketPosition,
 )
-from jobs.search.schema import (
-    UnifiedJobSearchResult,
-    UnifiedJobSearchResponse,
-)
-from jobs.search.agent import JobSearchAgent
-from jobs.route import router
+from jobs.analysis.service import JobService
 
 __all__ = [
     "JobExtractionAgent",
@@ -24,8 +19,5 @@ __all__ = [
     "SkillDemand",
     "RoleComplexity",
     "MarketPosition",
-    "UnifiedJobSearchResult",
-    "UnifiedJobSearchResponse",
-    "JobSearchAgent",
-    "router",
+    "JobService",
 ]
