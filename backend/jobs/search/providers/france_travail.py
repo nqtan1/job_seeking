@@ -62,7 +62,7 @@ class FranceTravailProvider(BaseJobProvider):
         client_id = os.getenv("FRANCE_TRAVAIL_CLIENT_ID")
         client_secret = os.getenv("FRANCE_TRAVAIL_CLIENT_SECRET")
         if not client_id or not client_secret:
-            self.logger.error("Missing France Travail client credentials in environment.")
+            self.logger.error("Missing France Travail client credentials in environment variables")
             raise ValueError(
                 "Missing FRANCE_TRAVAIL_CLIENT_ID or FRANCE_TRAVAIL_CLIENT_SECRET in environment variables"
             )
@@ -80,11 +80,15 @@ class FranceTravailProvider(BaseJobProvider):
                 if cache_data.get("expires_at", 0) > time.time() + 60:
                     return cache_data["access_token"]
             except Exception as e:
-                self.logger.warning(f"Failed to read token cache: {str(e)}")
+                self.logger.warning(
+                    "Failed to read token cache from temporary directory",
+                    exc_info=True
+                )
 
         # Fetch new token
         client_id, client_secret = self._get_credentials()
-        self.logger.info("Requesting new OAuth2 token from France Travail")
+        # High value network-blocking event boundary - INFO level
+        self.logger.info("OAuth2 token cache miss. Requesting new token from France Travail.")
         try:
             response = requests.post(
                 TOKEN_URL,
@@ -99,7 +103,11 @@ class FranceTravailProvider(BaseJobProvider):
             response.raise_for_status()
             data = response.json()
         except Exception as e:
-            self.logger.error(f"Failed to authenticate with France Travail: {str(e)}")
+            # Critical authentication boundary failure - ERROR level
+            self.logger.error(
+                "Authentication with France Travail failed",
+                exc_info=True
+            )
             raise RuntimeError(f"Authentication failed: {str(e)}")
 
         access_token = data["access_token"]
@@ -114,7 +122,10 @@ class FranceTravailProvider(BaseJobProvider):
                 encoding="utf-8",
             )
         except Exception as e:
-            self.logger.warning(f"Failed to write token cache: {str(e)}")
+            self.logger.warning(
+                "Failed to write token cache to temporary directory",
+                exc_info=True
+            )
 
         return access_token
 
@@ -134,7 +145,12 @@ class FranceTravailProvider(BaseJobProvider):
                 res = requests.get(url, headers=headers, params=params, timeout=15)
             except Exception as e:
                 if attempt == max_retries:
-                    self.logger.error(f"Network error during France Travail API GET: {str(e)}")
+                    # Critical network boundary failure - ERROR level
+                    self.logger.error(
+                        "Network error during France Travail API GET",
+                        exc_info=True,
+                        extra={"endpoint": endpoint, "params": params}
+                    )
                     raise ConnectionError(f"Connection failed: {str(e)}")
                 time.sleep(delay)
                 delay *= 2
@@ -142,7 +158,15 @@ class FranceTravailProvider(BaseJobProvider):
 
             if res.status_code == 429 or res.status_code >= 500:
                 if attempt == max_retries:
-                    self.logger.error(f"France Travail API failed with status {res.status_code}: {res.text}")
+                    # Remote API server error - ERROR level
+                    self.logger.error(
+                        "France Travail API server failed",
+                        extra={
+                            "endpoint": endpoint,
+                            "status_code": res.status_code,
+                            "response_excerpt": res.text[:200]
+                        }
+                    )
                     raise RuntimeError(f"API request failed with status {res.status_code}")
                 time.sleep(delay)
                 delay *= 2
@@ -155,7 +179,12 @@ class FranceTravailProvider(BaseJobProvider):
             try:
                 return res, res.json() if res.content else {}
             except Exception as e:
-                self.logger.error(f"Failed to parse JSON response: {str(e)}")
+                # Malformed JSON payload - ERROR level
+                self.logger.error(
+                    "Failed to parse JSON response from France Travail API",
+                    exc_info=True,
+                    extra={"endpoint": endpoint, "status_code": res.status_code}
+                )
                 raise ValueError(f"Invalid JSON response: {str(e)}")
 
         raise RuntimeError("API request failed after retries")
@@ -215,7 +244,10 @@ class FranceTravailProvider(BaseJobProvider):
             if norm_code:
                 valid_codes.append(norm_code)
             else:
-                self.logger.error(f"Unrecognized French department or city name: '{part}'")
+                self.logger.error(
+                    "Unrecognized French department or city name",
+                    extra={"raw_part": part, "full_input": dept}
+                )
                 raise ValueError(
                     f"Unrecognized French department or city name: '{part}'. "
                     f"Please provide a valid French city name (e.g. 'Paris', 'Lyon') or standard numeric department code (e.g. '75', '69')."
@@ -238,8 +270,19 @@ class FranceTravailProvider(BaseJobProvider):
         Searches job listings and returns a standardized result list.
         """
         normalized_dept = self._normalize_department(department)
+        
+        # Standard Transaction Entry - INFO level
         self.logger.info(
-            f"Searching jobs: query={query}, department={department} (normalized={normalized_dept}), contract_type={contract_type}, page={page}, limit={limit}"
+            "Initiating external job search",
+            extra={
+                "provider": "france_travail",
+                "query": query,
+                "department": department,
+                "normalized_department": normalized_dept,
+                "contract_type": contract_type,
+                "page": page,
+                "limit": limit
+            }
         )
         
         start = (page - 1) * limit
@@ -262,7 +305,12 @@ class FranceTravailProvider(BaseJobProvider):
         try:
             res, data = self._api_get("offres/search", params)
         except Exception as e:
-            self.logger.error(f"Search failed: {str(e)}")
+            # Core integration call failure - ERROR level
+            self.logger.error(
+                "France Travail job search integration call failed",
+                exc_info=True,
+                extra={"query": query, "department": department, "contract_type": contract_type}
+            )
             raise
 
         if res.status_code == 204:
@@ -306,7 +354,11 @@ class FranceTravailProvider(BaseJobProvider):
         Fetches full details of a single job offer.
         Supports input of raw job ID or a full France Travail job URL.
         """
-        self.logger.info(f"Fetching job detail for id_or_url={job_id}")
+        # Standard Transaction Entry - INFO level
+        self.logger.info(
+            "Initiating external job detail fetch",
+            extra={"provider": "france_travail", "id_or_url": job_id}
+        )
         
         # Clean id_or_url
         clean_id = job_id.strip()
@@ -319,7 +371,12 @@ class FranceTravailProvider(BaseJobProvider):
         try:
             res, data = self._api_get(f"offres/{clean_id}")
         except Exception as e:
-            self.logger.error(f"Fetch detail failed for job_id {clean_id}: {str(e)}")
+            # Core integration call failure - ERROR level
+            self.logger.error(
+                "France Travail job detail fetch integration call failed",
+                exc_info=True,
+                extra={"job_id": clean_id}
+            )
             raise
 
         if res.status_code == 404:

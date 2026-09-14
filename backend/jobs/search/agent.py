@@ -41,7 +41,11 @@ class JobSearchAgent(BaseAgent):
             log_file=log_file,
             log_level=log_level,
         )
-        self.logger.info("JobSearchAgent initialized with JobProviderManager and bound tools.")
+        # Low cardinality/infrastructure details - DEBUG level
+        self.logger.debug(
+            "JobSearchAgent initialized with JobProviderManager and bound tools",
+            extra={"active_providers": providers_list}
+        )
 
     def run_chat_loop(self, user_message: str, max_iterations: int = 5) -> str:
         """
@@ -49,7 +53,15 @@ class JobSearchAgent(BaseAgent):
         Accepts user input, lets the LLM decide which tools to call,
         executes them, feeds results back to the LLM, and returns the final answer.
         """
-        self.logger.info(f"Starting search chat loop for message: {user_message[:60]}...")
+        # Business Transaction Start - INFO
+        self.logger.info(
+            "Starting job search chat loop",
+            extra={
+                "user_message_excerpt": user_message[:60],
+                "message_length": len(user_message),
+                "max_iterations": max_iterations
+            }
+        )
         
         # 1. Define tools using standard Python callable functions
         @tool
@@ -73,7 +85,18 @@ class JobSearchAgent(BaseAgent):
                 page: Page number (default: 1)
                 limit: Max results to return (default: 10, max: 150)
             """
-            self.logger.info(f"Agent tool 'search_jobs' invoked: query={query}, dept={department}, contract={contract_type}, provider={provider}")
+            # Core integration boundary - INFO
+            self.logger.info(
+                "Agent tool 'search_jobs' invoked",
+                extra={
+                    "provider": provider,
+                    "query": query,
+                    "department": department,
+                    "contract_type": contract_type,
+                    "page": page,
+                    "limit": limit
+                }
+            )
             try:
                 results = self.provider_manager.search_jobs(
                     provider_name=provider,
@@ -85,7 +108,16 @@ class JobSearchAgent(BaseAgent):
                 )
                 return results.model_dump_json()
             except Exception as e:
-                self.logger.error(f"Error in search_jobs tool execution: {str(e)}")
+                # System Error - ERROR
+                self.logger.error(
+                    f"Error in search_jobs tool execution: {str(e)}",
+                    exc_info=True,
+                    extra={
+                        "provider": provider,
+                        "query": query,
+                        "department": department
+                    }
+                )
                 return json.dumps({"error": str(e), "results": []})
 
         @tool
@@ -98,8 +130,6 @@ class JobSearchAgent(BaseAgent):
                 job_id: The job identifier slug (e.g., "212MZBL") or full URL.
                 provider: Optional provider name. If omitted, the system will auto-detect from the URL domain.
             """
-            self.logger.info(f"Agent tool 'get_job_detail' invoked: job_id={job_id}, provider={provider}")
-            
             # Smart auto-detection from pasted URL domains
             if not provider:
                 url_str = job_id.lower()
@@ -112,6 +142,12 @@ class JobSearchAgent(BaseAgent):
                 else:
                     # Default fallback
                     provider = "france_travail"
+
+            # Core integration boundary - INFO
+            self.logger.info(
+                "Agent tool 'get_job_detail' invoked",
+                extra={"job_id": job_id, "provider": provider}
+            )
 
             try:
                 details = self.provider_manager.get_job_detail(
@@ -132,7 +168,12 @@ class JobSearchAgent(BaseAgent):
                     "provider": provider,
                 }, indent=2)
             except Exception as e:
-                self.logger.error(f"Error in get_job_detail tool execution: {str(e)}")
+                # System Error - ERROR
+                self.logger.error(
+                    f"Error in get_job_detail tool execution: {str(e)}",
+                    exc_info=True,
+                    extra={"job_id": job_id, "provider": provider}
+                )
                 return json.dumps({"error": str(e)})
 
         # 2. Bind tools to the model
@@ -167,7 +208,11 @@ class JobSearchAgent(BaseAgent):
 
         # 4. Run iteration loop
         for i in range(max_iterations):
-            self.logger.info(f"Chat loop iteration {i+1}/{max_iterations}")
+            # Detailed flow tracking inside high-frequency loops - DEBUG level
+            self.logger.debug(
+                "Executing chat loop iteration",
+                extra={"iteration_index": i + 1, "max_iterations": max_iterations}
+            )
             
             # Invoke model with bound tools
             response = model_with_tools.invoke(messages)
@@ -176,14 +221,21 @@ class JobSearchAgent(BaseAgent):
 
             # If there are tool calls, execute them
             if response.tool_calls:
-                self.logger.info(f"Model generated {len(response.tool_calls)} tool calls.")
+                self.logger.debug(
+                    "Model generated tool calls",
+                    extra={"tool_calls_count": len(response.tool_calls)}
+                )
                 
                 for tool_call in response.tool_calls:
                     name = tool_call["name"]
                     args = tool_call["args"]
                     call_id = tool_call["id"]
 
-                    self.logger.info(f"Executing tool '{name}' with args {args}")
+                    # Core external/internal execution boundary - INFO level
+                    self.logger.info(
+                        "Agent executing tool call",
+                        extra={"tool_name": name, "tool_args": args, "call_id": call_id}
+                    )
                     
                     if name in tools_map:
                         tool_func = tools_map[name]
@@ -199,7 +251,11 @@ class JobSearchAgent(BaseAgent):
                         messages.append(tool_msg)
                         self.conversation_history.append(tool_msg)
                     else:
-                        self.logger.error(f"Unknown tool name called: '{name}'")
+                        # Missing target tool - ERROR level
+                        self.logger.error(
+                            "Model invoked unsupported tool",
+                            extra={"tool_name": name, "call_id": call_id}
+                        )
                         error_msg = ToolMessage(
                             content=f"Error: Tool '{name}' is not supported.",
                             tool_call_id=call_id,
@@ -212,11 +268,17 @@ class JobSearchAgent(BaseAgent):
                 continue
             else:
                 # No more tool calls; we are done!
-                self.logger.info("Model responded directly. Search chat loop finished.")
+                self.logger.debug("Model responded directly. No further tool execution needed.")
                 break
 
         # Trim conversation history to prevent infinite growth
         self._truncate_history_smart()
+        
+        # Business Transaction Success - INFO level
+        self.logger.info(
+            "Search chat loop successfully finalized",
+            extra={"final_message_length": len(messages[-1].content)}
+        )
         
         # Return the final message content
         return messages[-1].content
