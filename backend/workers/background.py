@@ -70,10 +70,14 @@ class BackgroundJobManager:
         self._lock = Lock()
         self._futures: Dict[str, Future] = {}
         
-        # Set default DB path to db/background_jobs.db under the project root
+        # Set default DB path supporting clean DATA_DIR separation
         if db_path is None:
-            project_root = Path(__file__).resolve().parent.parent
-            self.db_path = str(project_root / "db" / "background_jobs.db")
+            data_dir = os.getenv("DATA_DIR")
+            if data_dir:
+                self.db_path = str(Path(data_dir) / "background_jobs.db")
+            else:
+                project_root = Path(__file__).resolve().parent.parent
+                self.db_path = str(project_root / "db" / "background_jobs.db")
         else:
             self.db_path = db_path
             

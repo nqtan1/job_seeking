@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_SYSTEM_PYTHON=1
 ENV PATH="/root/.local/bin/:$PATH"
+ENV DATA_DIR="/db"
 
 # 3. Install System Dependencies, Curl, and Rust Compiler (Required for tiktoken compilation on Python 3.13)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,11 +36,11 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 COPY backend/ /app/backend/
 COPY frontend/ /app/frontend/
 
-# 8. Anchor Execution inside the backend folder context
-WORKDIR /app/backend
+# 8. Create separate, root-level persistent data and log directories (completely outside backend/frontend)
+RUN mkdir -p /db /app/backend/logs
 
-# 9. Create persistent database and log directories inside the container
-RUN mkdir -p db logs
+# 9. Anchor Execution inside the backend folder context
+WORKDIR /app/backend
 
 # 10. Expose Uvicorn API Port
 EXPOSE 8000
