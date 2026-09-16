@@ -108,10 +108,16 @@ class BackgroundJobManager:
                     email TEXT,
                     phone TEXT,
                     extracted_data TEXT NOT NULL,  -- JSON string of CVInformation
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    file_path TEXT
                 )
             """)
-            
+
+            try:
+                conn.execute("ALTER TABLE candidates ADD COLUMN file_path TEXT")
+            except sqlite3.OperationalError:
+                pass  # Already exists
+
             # 3. Jobs Table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -172,6 +178,7 @@ class BackgroundJobManager:
         email: Optional[str],
         phone: Optional[str],
         extracted_data_json: str,
+        file_path: Optional[str] = None,
     ) -> str:
         """Persist structured candidate profile in SQLite database."""
         candidate_id = str(uuid4())
@@ -179,10 +186,10 @@ class BackgroundJobManager:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT INTO candidates (candidate_id, tenant_id, name, email, phone, extracted_data, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO candidates (candidate_id, tenant_id, name, email, phone, extracted_data, created_at, file_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (candidate_id, tenant_id, name, email, phone, extracted_data_json, created_at),
+                (candidate_id, tenant_id, name, email, phone, extracted_data_json, created_at, file_path),
             )
             conn.commit()
         return candidate_id
@@ -192,7 +199,7 @@ class BackgroundJobManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, created_at FROM candidates WHERE candidate_id = ?",
+                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, created_at, file_path FROM candidates WHERE candidate_id = ?",
                 (candidate_id,),
             )
             row = cursor.fetchone()
@@ -206,6 +213,7 @@ class BackgroundJobManager:
                 "phone": row[4],
                 "extracted_data": json.loads(row[5]),
                 "created_at": row[6],
+                "file_path": row[7],
             }
 
     def list_candidates_for_tenant(self, tenant_id: str) -> List[Dict[str, Any]]:
@@ -213,7 +221,7 @@ class BackgroundJobManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, created_at FROM candidates WHERE tenant_id = ? ORDER BY created_at DESC",
+                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, created_at, file_path FROM candidates WHERE tenant_id = ? ORDER BY created_at DESC",
                 (tenant_id,),
             )
             rows = cursor.fetchall()
@@ -226,6 +234,7 @@ class BackgroundJobManager:
                     "phone": row[4],
                     "extracted_data": json.loads(row[5]),
                     "created_at": row[6],
+                    "file_path": row[7],
                 }
                 for row in rows
             ]
