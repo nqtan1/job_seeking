@@ -2,14 +2,19 @@
  * RecruitAI Console Client - Candidate Sandbox Logic Module
  */
 import { state } from './state.js';
-import { extractCV, extractJob, analyzeFit, generateLetter } from './api.js';
+import { extractCV, extractJob, analyzeFit, generateLetter, listCandidates, searchJobs, getJobDetail, getCandidateFile } from './api.js';
 import { showNotification, showError } from './utils.js';
 import { renderCVPreview, renderJDPreview } from './preview.js';
 
 export async function runCandidateAnalysis() {
-    if (!state.cvFile) {
-        showError('Please upload a candidate resume file first!');
-        return;
+    let cvData = state.cvData;
+    let candidateId = state.candidateId;
+
+    if (!cvData) {
+        if (!state.cvFile) {
+            showError('Please upload a candidate resume file or select an existing saved profile first!');
+            return;
+        }
     }
 
     const jdText = document.getElementById('jd-text').value.trim();
@@ -21,29 +26,59 @@ export async function runCandidateAnalysis() {
         showError('Please upload a Job Description document first!');
         return;
     }
+    if (state.jdInputType === 'search' && !state.jobPosition) {
+        showError('Please search and select a job from the search engine first!');
+        return;
+    }
 
     showCandidateLoader(true);
+    updateLoaderBubble("Initializing AI Sandbox... 🤖");
 
     try {
-        // Step 1: CV Extraction
-        const cvResult = await extractCV(state.cvFile, state.tenantId);
-        state.cvData = cvResult.data;
-        state.candidateId = cvResult.candidate_id;
-        console.log("Parsed CV successfully:", state.cvData);
+        // Step 1: CV Extraction (skip if already loaded)
+        if (!cvData) {
+            updateLoaderBubble("Extracting candidate CV profile... 🔍");
+            console.log("Extracting CV document...");
+            const cvResult = await extractCV(state.cvFile, state.tenantId);
+            cvData = cvResult.data;
+            candidateId = cvResult.candidate_id;
+            state.cvData = cvData;
+            state.candidateId = candidateId;
+            console.log("Parsed CV successfully:", state.cvData);
 
-        // Step 2: Job Description Extraction
-        const jobResult = await extractJob(state.jdInputType, state.jdFile, jdText, state.tenantId);
-        state.jobPosition = jobResult.data || jobResult.extracted_data || jobResult;
-        console.log("Parsed Job description successfully:", state.jobPosition);
+            // Refresh DB candidates list immediately, which will auto-select the newly added CV!
+            if (window.populateDbCandidates) {
+                await window.populateDbCandidates();
+            }
+        } else {
+            console.log("Reusing cached candidate CV data.");
+        }
+
+        // Step 2: Job Description Extraction (skip if already selected via search)
+        let jobPosition = state.jobPosition;
+        if (state.jdInputType !== 'search' || !jobPosition) {
+            updateLoaderBubble("Parsing Job Description requirements... 📑");
+            console.log("Extracting Job description...");
+            const jobResult = await extractJob(state.jdInputType, state.jdFile, jdText, state.tenantId);
+            jobPosition = jobResult.data || jobResult.extracted_data || jobResult;
+            state.jobPosition = jobPosition;
+            console.log("Parsed Job description successfully:", state.jobPosition);
+        } else {
+            console.log("Reusing selected job posting detail:", jobPosition);
+        }
 
         // Step 3: Fit Analysis & Interview Kit Generation
+        updateLoaderBubble("Analyzing profile alignment and skills... 🧠");
         const customContext = document.getElementById('fit-custom-context').value.trim();
-        const fitResult = await analyzeFit(state.cvData, state.jobPosition, state.companyType, customContext, state.tenantId);
+        const fitResult = await analyzeFit(cvData, jobPosition, state.companyType, customContext, state.tenantId);
         
         state.fitCheck = fitResult.fit_check;
         state.interviewKit = fitResult.interview_kit;
         console.log("Analyzed Fit successfully:", state.fitCheck);
         console.log("Generated Interview Kit successfully:", state.interviewKit);
+
+        updateLoaderBubble("Ah! Your result is almost done! 🚀");
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         // Render Outputs in DOM
         renderCandidateOutput();
@@ -296,6 +331,9 @@ export function clearCV() {
     state.cvData = null;
     state.candidateId = null;
 
+    const selectEl = document.getElementById('select-db-candidate');
+    if (selectEl) selectEl.value = '';
+
     document.getElementById('cv-file').value = '';
     document.getElementById('cv-upload-info').classList.add('hidden');
     document.getElementById('cv-dropzone').classList.remove('hidden');
@@ -320,4 +358,196 @@ export function showCandidateLoader(show) {
     } else {
         loader.classList.add('hidden');
     }
+}
+
+export function updateLoaderBubble(text) {
+    const el = document.getElementById('candidate-loader-bubble-text');
+    if (el) el.textContent = text;
+}
+
+export async function loadDbCandidate(candidateId) {
+    if (!candidateId) {
+        clearCV();
+        return;
+    }
+
+    const candidate = state.dbCandidates.find(c => String(c.candidate_id) === String(candidateId));
+    if (!candidate) {
+        showError("Profile not found in database.");
+        return;
+    }
+
+    try {
+        let extractedData = candidate.extracted_data;
+        if (typeof extractedData === 'string') {
+            extractedData = JSON.parse(extractedData);
+        }
+
+        state.cvData = extractedData;
+        state.candidateId = candidate.candidate_id;
+
+        document.getElementById('cv-filename').textContent = `${candidate.name} (Saved Profile)`;
+        document.getElementById('cv-upload-info').classList.remove('hidden');
+        document.getElementById('cv-dropzone').classList.add('hidden');
+
+        const statusBadge = document.getElementById('cv-status');
+        statusBadge.textContent = 'Loaded (DB)';
+        statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider';
+
+        try {
+            // Retrieve actual raw file (PDF/Image) from database/server
+            const fileBlob = await getCandidateFile(candidate.candidate_id, state.tenantId);
+            
+            // Extract the correct file extension from candidate's file path if available, or fall back to response content-type
+            let ext = '.pdf';
+            if (candidate.file_path) {
+                const dotIdx = candidate.file_path.lastIndexOf('.');
+                if (dotIdx !== -1) {
+                    ext = candidate.file_path.substring(dotIdx).toLowerCase();
+                }
+            } else {
+                const mimeType = fileBlob.type || 'application/pdf';
+                if (mimeType.includes('png')) ext = '.png';
+                else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = '.jpg';
+                else if (mimeType.includes('plain') || mimeType.includes('text')) ext = '.txt';
+            }
+
+            const mimeType = fileBlob.type || (ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/pdf');
+            const originalName = `${candidate.name.replace(/\s+/g, '_')}_resume${ext}`;
+
+            state.cvFile = new File([fileBlob], originalName, { type: mimeType });
+            state.cvFileName = originalName;
+            console.log(`Loaded original CV document preview: ${originalName} (${mimeType})`);
+        } catch (fileErr) {
+            console.warn("Could not retrieve original document file from backend, falling back to text summary:", fileErr);
+            
+            // Generate fallback dynamic mock file in-memory for preview rendering
+            const skillsList = extractedData.skills ? extractedData.skills.map(s => typeof s === 'string' ? s : s.name).join(', ') : '';
+            const expList = extractedData.experiences ? extractedData.experiences.map(e => `- ${e.job_title} at ${e.company} (${e.start_date || 'N/A'} - ${e.end_date || 'N/A'}): ${e.description || ''}`).join('\n') : '';
+            const eduList = extractedData.formations ? extractedData.formations.map(e => `- ${e.degree} in ${e.field} from ${e.institution}`).join('\n') : '';
+
+            const summaryTxt = `CANDIDATE SAVED PROFILE:\nName: ${candidate.name}\nEmail: ${candidate.email}\nPhone: ${candidate.phone}\n\nSKILLS:\n${skillsList}\n\nEXPERIENCE:\n${expList}\n\nEDUCATION:\n${eduList}`;
+            
+            state.cvFile = new File([summaryTxt], `${candidate.name.replace(/\s+/g, '_')}_profile.txt`, {type: "text/plain"});
+            state.cvFileName = `${candidate.name}_profile.txt`;
+        }
+        
+        renderCVPreview();
+        resetOutputs();
+        showNotification(`Profile for ${candidate.name} loaded successfully!`);
+    } catch (e) {
+        console.error("Failed to parse extracted data:", e);
+        showError("Corrupted profile data in database.");
+    }
+}
+
+
+export async function triggerJobSearch() {
+    const btn = document.getElementById('btn-search-jobs');
+    const resultsContainer = document.getElementById('search-results-list');
+    
+    const query = document.getElementById('search-query').value.trim();
+    const department = document.getElementById('search-dept').value.trim();
+    const contract = document.getElementById('search-contract').value;
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin text-xs"></i> Searching...`;
+    
+    try {
+        const result = await searchJobs(state.searchProvider, query, department, contract, state.tenantId);
+        state.searchResults = result.jobs || result.results || [];
+        
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.remove('hidden');
+
+        if (state.searchResults.length === 0) {
+            resultsContainer.innerHTML = `<p class="text-[10px] text-slate-500 italic text-center py-3">No jobs found matching criteria.</p>`;
+            return;
+        }
+
+        state.searchResults.forEach(job => {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded bg-slate-900 border border-slate-850 hover:border-emerald-500/40 cursor-pointer transition-all flex flex-col gap-1';
+            div.onclick = () => selectSearchJob(job.id);
+            div.innerHTML = `
+                <div class="flex items-center justify-between gap-1.5 min-w-0">
+                    <span class="text-xs font-bold text-slate-200 truncate hover:text-emerald-400 transition-colors">${job.title}</span>
+                    <span class="text-[9px] font-mono font-bold bg-slate-950 text-slate-400 px-1 py-0.5 rounded shrink-0 border border-slate-850">${job.contract_type}</span>
+                </div>
+                <div class="flex items-center justify-between text-[9px] text-slate-400 font-medium">
+                    <span class="truncate">${job.company}</span>
+                    <span class="shrink-0"><i class="fa-solid fa-location-dot text-[8px] mr-0.5 text-emerald-400/80"></i>${job.location}</span>
+                </div>
+            `;
+            resultsContainer.appendChild(div);
+        });
+
+        showNotification(`Found ${state.searchResults.length} job postings!`);
+
+    } catch (e) {
+        console.error("Job search failed:", e);
+        showError(`Search failed: ${e.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-magnifying-glass text-xs"></i> Search Job Postings`;
+    }
+}
+
+export async function selectSearchJob(jobId) {
+    const resultsContainer = document.getElementById('search-results-list');
+    showNotification(`Retrieving detailed job posting information...`);
+    try {
+        const result = await getJobDetail(state.searchProvider, jobId, state.tenantId);
+        const positionData = result.job_position_data;
+        
+        state.jobPosition = positionData;
+        state.selectedSearchJob = result;
+
+        // Auto fill pasted text as backup
+        document.getElementById('jd-text').value = positionData.job_description_text || '';
+
+        // Render card
+        document.getElementById('selected-job-title').textContent = positionData.job_title;
+        document.getElementById('selected-job-meta').textContent = `${positionData.company} | ${positionData.location} | ${positionData.contract_type}`;
+        document.getElementById('selected-job-snippet').textContent = (positionData.job_description_text || '').substring(0, 120) + '...';
+        
+        document.getElementById('selected-job-info').classList.remove('hidden');
+        resultsContainer.classList.add('hidden');
+
+        const statusBadge = document.getElementById('jd-status');
+        statusBadge.textContent = 'Linked';
+        statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider';
+
+        // Set up local file preview in-memory for detail recheck zoom
+        const rawText = positionData.job_description_text || '';
+        state.jdFile = new File([rawText], `job_posting_${jobId}.txt`, {type: "text/plain"});
+        renderJDPreview();
+
+        showNotification(`Job detail retrieved and linked to evaluation context successfully!`);
+
+    } catch (e) {
+        console.error("Failed to load job details:", e);
+        showError(`Detail retrieve failed: ${e.message}`);
+    }
+}
+
+export function clearSelectedSearchJob() {
+    state.jobPosition = null;
+    state.selectedSearchJob = null;
+    state.jdFile = null;
+
+    document.getElementById('selected-job-info').classList.add('hidden');
+    document.getElementById('jd-text').value = '';
+    
+    const statusBadge = document.getElementById('jd-status');
+    statusBadge.textContent = 'Empty';
+    statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-850 text-slate-500 uppercase tracking-wider';
+    
+    renderJDPreview();
+}
+
+export function applyDomainFilter(keywords) {
+    if (!keywords) return;
+    document.getElementById('search-query').value = keywords;
+    triggerJobSearch();
 }

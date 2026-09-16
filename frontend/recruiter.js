@@ -21,6 +21,7 @@ export async function runBatchScreening() {
     }
 
     showRecruiterLoader(true);
+    updateRecruiterLoaderBubble("Initializing screening group pool... 📂");
 
     try {
         const requirementsArray = rawReqs.split('\n').map(r => r.trim()).filter(Boolean);
@@ -51,9 +52,13 @@ export async function runBatchScreening() {
             requirements: requirementsArray
         };
 
+        updateRecruiterLoaderBubble("Comparing and ranking resumes... 🧠");
         const result = await rankCandidates(candidatesPayload, targetJobPayload, state.tenantId);
         state.batchRankings = result.rankings || result;
         console.log("Batch rankings completed successfully:", state.batchRankings);
+
+        updateRecruiterLoaderBubble("Ah! Your result is almost done! 🚀");
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         renderRecruiterOutput(title, company);
         showNotification("Candidate Shortlist Ranking complete!");

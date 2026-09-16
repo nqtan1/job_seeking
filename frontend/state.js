@@ -14,11 +14,24 @@ export const state = {
     interviewKit: null,
     activeKitTab: 'tech',
     
+    // DB Candidates list
+    dbCandidates: [],
+    selectedDbCandidateId: '',
+
     // Job Description File State
     jdFile: null,
     jdFileName: '',
-    jdInputType: 'text',
+    jdInputType: 'text', // 'text', 'file', or 'search'
     
+    // Job Search Engine State
+    searchProvider: 'france_travail',
+    searchQuery: '',
+    searchDept: '',
+    searchContract: '',
+    searchDomain: '',
+    searchResults: [],
+    selectedSearchJob: null,
+
     // Recruiter Hub state
     recruiterCandidates: [
         {
