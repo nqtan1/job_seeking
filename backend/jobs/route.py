@@ -4,9 +4,9 @@ from typing import Optional
 from dotenv import load_dotenv
 
 from utils.logger import get_logger
-from jobs.analysis.agent import JobExtractionAgent
+from jobs.agent import JobExtractionAgent
 from agents.agent_config import AgentConfig
-from jobs.analysis.service import JobService
+from jobs.service import JobService
 from core.auth import TenantContext, get_tenant_context
 
 logger = get_logger(name="jobs.route", log_file="jobs_api.log", level="INFO")
@@ -162,106 +162,3 @@ async def analyze_job(
     except Exception as e:
         logger.error(f"Job analysis failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
-
-
-# ==========================================
-# EXTENSIBLE JOB SEARCH PLATFORM API
-# ==========================================
-from pydantic import BaseModel
-from jobs.search.schema import UnifiedJobSearchResponse
-
-class JobSearchRequest(BaseModel):
-    provider: str = "france_travail"
-    query: Optional[str] = None
-    department: Optional[str] = None
-    contract_type: Optional[str] = None
-    page: int = 1
-    limit: int = 25
-
-
-class JobSearchChatRequest(BaseModel):
-    message: str
-
-
-@router.get("/providers")
-async def list_providers():
-    """Get list of active job search providers."""
-    from jobs.search.providers.manager import JobProviderManager
-    manager = JobProviderManager()
-    return {"providers": manager.list_providers()}
-
-
-@router.post("/search", response_model=UnifiedJobSearchResponse)
-async def search_jobs(
-    request: JobSearchRequest,
-    tenant: TenantContext = Depends(get_tenant_context),
-):
-    """Programmatically search job listings across registered providers."""
-    from jobs.search.providers.manager import JobProviderManager
-    from starlette.concurrency import run_in_threadpool
-    manager = JobProviderManager()
-    try:
-        results = await run_in_threadpool(
-            manager.search_jobs,
-            provider_name=request.provider,
-            query=request.query,
-            department=request.department,
-            contract_type=request.contract_type,
-            page=request.page,
-            limit=request.limit,
-        )
-        return results
-    except Exception as e:
-        logger.error(f"Provider search failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
-
-
-@router.get("/search/{provider}/{job_id}")
-async def get_job_detail(
-    provider: str,
-    job_id: str,
-    tenant: TenantContext = Depends(get_tenant_context),
-):
-    """Retrieve detailed job posting info from a provider, mapped to JobPosition schema."""
-    from jobs.search.providers.manager import JobProviderManager
-    from starlette.concurrency import run_in_threadpool
-    manager = JobProviderManager()
-    try:
-        details = await run_in_threadpool(
-            manager.get_job_detail,
-            provider_name=provider,
-            job_id=job_id,
-        )
-        return details
-    except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Failed to fetch job detail: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
-
-
-@router.post("/search/chat")
-async def search_chat(
-    request: JobSearchChatRequest,
-    tenant: TenantContext = Depends(get_tenant_context),
-):
-    """AI-driven interactive job search chat using tool-calling."""
-    from jobs.search.agent import JobSearchAgent
-    from agents.agent_config import AgentConfig
-    from starlette.concurrency import run_in_threadpool
-    
-    # Instantiate agent in request-execution scope to guarantee absolute statelessness
-    # and prevent cross-tenant credential leakage (GEMINI.md section 3.3)
-    search_agent = JobSearchAgent(config=AgentConfig(config_path=CONFIG_PATH))
-    try:
-        response_text = await run_in_threadpool(
-            search_agent.run_chat_loop,
-            user_message=request.message,
-        )
-        return {
-            "response": response_text,
-            "history": search_agent.get_history_dict()
-        }
-    except Exception as e:
-        logger.error(f"Search chat agent failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Chat agent failed: {str(e)}")
