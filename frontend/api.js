@@ -130,3 +130,95 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
 
     return await response.json();
 }
+
+/**
+ * Get active job search providers
+ */
+export async function getProviders() {
+    const response = await fetch('/api/jobs/providers');
+    if (!response.ok) {
+        throw new Error(`Failed to fetch providers: status ${response.status}`);
+    }
+    return await response.json();
+}
+
+/**
+ * Search job listings across registered providers
+ */
+export async function searchJobs(provider, query, department, contractType, tenantId) {
+    const payload = {
+        provider: provider || "france_travail",
+        query: query || null,
+        department: department || null,
+        contract_type: contractType || null,
+        page: 1,
+        limit: 25
+    };
+
+    const response = await fetch('/api/jobs/search', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Job search failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Fetch detailed job posting information
+ */
+export async function getJobDetail(provider, jobId, tenantId) {
+    const response = await fetch(`/api/jobs/search/${provider}/${jobId}`, {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch job detail: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * List all extracted candidates from SQLite for tenant
+ */
+export async function listCandidates(tenantId) {
+    const response = await fetch('/api/cv/candidates', {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to list candidates: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Fetch the original uploaded candidate document as a raw Blob
+ */
+export async function getCandidateFile(candidateId, tenantId) {
+    const response = await fetch(`/api/cv/candidates/${candidateId}/file`, {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch original candidate file: status ${response.status}`);
+    }
+
+    return await response.blob();
+}
+
