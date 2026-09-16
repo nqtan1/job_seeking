@@ -94,12 +94,23 @@ class FitService:
             fit_score=int(fit_check.fit_score),
             fit_data_json=fit_check.model_dump_json(),
         )
-        self.logger.info(f"Fit analysis persisted in SQLite with analysis_id={analysis_id}")
+        self.logger.info(
+            "Fit analysis persisted in database",
+            extra={
+                "analysis_id": analysis_id,
+                "tenant_id": tenant_id,
+                "job_id": job_id,
+                "fit_score": int(fit_check.fit_score)
+            }
+        )
 
         # 4. Generate Interview Kit if fit is GO or MAYBE
         interview_kit = None
         if fit_check.recommendation.value in {"go", "maybe"}:
-            self.logger.info("Recommendation is %s. Generating Mock Interview Preparation Kit.", fit_check.recommendation.value)
+            self.logger.info(
+                "Recommendation permits generating Mock Interview Preparation Kit",
+                extra={"recommendation": fit_check.recommendation.value}
+            )
             try:
                 from starlette.concurrency import run_in_threadpool
                 interview_kit = await run_in_threadpool(
@@ -110,7 +121,15 @@ class FitService:
                     custom_context=request.custom_context,
                 )
             except Exception as e:
-                self.logger.error("Failed to generate interview kit: %s", str(e), exc_info=True)
+                self.logger.error(
+                    "Failed to generate interview kit",
+                    exc_info=True,
+                    extra={
+                        "tenant_id": tenant_id,
+                        "candidate_id": candidate_id,
+                        "job_id": job_id
+                    }
+                )
 
         return FitAnalysisResponse(
             message="Fit analysis successful",

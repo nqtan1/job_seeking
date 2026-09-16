@@ -1,45 +1,46 @@
 from typing import Optional, List
 from datetime import datetime
-from pathlib import Path
+
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from cv.schema import CVInformation
-from jobs.schema import JobPosition, CandidateAnalysis
+from agents import BaseAgent, AgentConfig
 from motivation_letter.schema import (
-    MotivationLetter,
-    MotivationLetterRequest,
+    MotivationLetterRequest, 
+    MotivationLetter, 
     MotivationLetterMetadata
 )
-
-from agents import BaseAgent, AgentConfig
 from motivation_letter.prompt import get_system_prompt, CUSTOM_CONTEXT_INSTRUCTION
 
 class MotivationLetterAgent(BaseAgent):
     """
-    Agent for generating motivation letters
+    Agent responsible for generating customized motivation letters 
+    using LLMs based on candidate CV and target Job description.
     """
     
     def __init__(
-        self,
+        self, 
         config: Optional[AgentConfig] = None,
         logger_name: str = "motivation_letter.agent",
         log_file: str = "motivation_letter_api.log",
         log_level: str = "INFO"
-        ): 
+    ):
         super().__init__(
-            config,
+            config=config,
             logger_name=logger_name,
             log_file=log_file,
             log_level=log_level
-            )
-        self.logger.info("MotivationLetterAgent initialized")
+        )
+        self.logger.debug("MotivationLetterAgent initialized")
         
     # HELPER functions 
     def _build_user_message(self, request: MotivationLetterRequest) -> str:
         """
         Build the user message with all context for LLM
         """
-        self.logger.info(f"Building user message for job type: {request.job_type}")
+        self.logger.debug(
+            "Building user message context", 
+            extra={"job_type": request.job_type}
+        )
         
         cv_json = request.cv_info.model_dump_json(indent = 2)
         job_json = request.job_info.model_dump_json(indent=2)
@@ -55,23 +56,26 @@ TARGET JOB:
 """
         # Add analysis if available
         if request.candidate_analysis: 
-            self.logger.info("Adding candidate analysis to user message")
+            self.logger.debug("Adding candidate analysis to user message")
             analysis_json = request.candidate_analysis.model_dump_json(indent=2)
             message += f"\n\nCANDIDATE-JOB ANALYSIS:\n{analysis_json}"
 
         # Add custom context if provided
         if request.custom_context:
-            self.logger.info("Adding custom context to user message")
+            self.logger.debug("Adding custom context to user message")
             message += f"\n\n{CUSTOM_CONTEXT_INSTRUCTION.format(custom_context=request.custom_context)}"
             
-        self.logger.info(f"User message built successfully (length: {len(message)} chars)")
+        self.logger.debug(
+            "User message context built successfully", 
+            extra={"message_length": len(message)}
+        )
         return message
 
     def _convert_to_latex(self, content: str) -> str:
         """
         Convert plain text to LaTeX document
         """
-        self.logger.info("Converting content to LaTeX format")
+        self.logger.debug("Converting content to LaTeX format")
         
         latex_template = r"""
 \documentclass[12pt]{letter}
@@ -86,19 +90,22 @@ TARGET JOB:
 \end{document}
 """ % content.replace("\n", "\n\n")
         
-        self.logger.info("LaTeX conversion completed")
+        self.logger.debug("LaTeX conversion completed")
         return latex_template
     
     def _post_process(self, content: str, format: str) -> str:
         """
         Post-process letter content
         """
-        self.logger.info(f"Post-processing letter content with format: {format}")
+        self.logger.debug(
+            "Post-processing letter content", 
+            extra={"format": format}
+        )
         
         if format == "latex": 
             return self._convert_to_latex(content)
         
-        self.logger.info("No post-processing needed for txt format")
+        self.logger.debug("No post-processing needed for txt format")
         return content
     
     def _get_startup_attitudes(self) -> List[str]:
@@ -110,7 +117,10 @@ TARGET JOB:
             "Innovation: Willing to challenge status quo and experiment",
             "Collaboration: Values lean team dynamics over hierarchy"
         ]
-        self.logger.info(f"Generated {len(attitudes)} startup attitudes")
+        self.logger.debug(
+            "Generated startup attitudes", 
+            extra={"count": len(attitudes)}
+        )
         return attitudes
 
     def _get_phd_attitudes(self) -> List[str]:
@@ -122,7 +132,10 @@ TARGET JOB:
             "Academic Rigor: Values methodology and scientific integrity",
             "Curiosity-Driven: Motivated by understanding, not just application"
         ]
-        self.logger.info(f"Generated {len(attitudes)} PhD attitudes")
+        self.logger.debug(
+            "Generated PhD attitudes", 
+            extra={"count": len(attitudes)}
+        )
         return attitudes
 
     def _get_corporation_attitudes(self) -> List[str]:
@@ -134,14 +147,20 @@ TARGET JOB:
             "Team Player: Values stability and collaborative structure",
             "Professional Standards: Respects compliance and governance"
         ]
-        self.logger.info(f"Generated {len(attitudes)} corporation attitudes")
+        self.logger.debug(
+            "Generated corporation attitudes", 
+            extra={"count": len(attitudes)}
+        )
         return attitudes
         
     def _generate_suggestions(self, request: MotivationLetterRequest) -> Optional[List]:
         """
         Generate attitude recommendations based on job type
         """
-        self.logger.info(f"Generating suggestions for job type: {request.job_type}")
+        self.logger.debug(
+            "Generating suggestions for job type", 
+            extra={"job_type": request.job_type}
+        )
         
         if request.job_type == "startup":
             return self._get_startup_attitudes()
@@ -150,7 +169,10 @@ TARGET JOB:
         elif request.job_type == "corporation":
             return self._get_corporation_attitudes()
         
-        self.logger.warning(f"Unknown job type: {request.job_type}")
+        self.logger.warning(
+            "Unknown job type specified in request", 
+            extra={"job_type": request.job_type}
+        )
         return None
 
     
@@ -165,11 +187,20 @@ TARGET JOB:
         Returns: 
             MotivationLetter with content and metadata
         """
-        self.logger.info(f"Starting letter generation - job_type: {request.job_type}, language: {request.language}")
+        # Business Transaction Start - INFO
+        self.logger.info(
+            "Starting motivation letter generation", 
+            extra={
+                "job_type": request.job_type, 
+                "language": request.language, 
+                "tone": request.tone, 
+                "format": request.return_format
+            }
+        )
 
         try:
             # Step 1: Build system prompt 
-            self.logger.info("Building system prompt")
+            self.logger.debug("Building system prompt")
             system_prompt = get_system_prompt(
                 job_type=request.job_type,
                 tone=request.tone,
@@ -177,7 +208,7 @@ TARGET JOB:
             )
             
             # Step 2: Generate and inject attitudes
-            self.logger.info("Injecting attitudes into system prompt")
+            self.logger.debug("Injecting attitudes into system prompt")
             attitudes = self._generate_suggestions(request)
 
             attitudes_context = ""
@@ -190,26 +221,33 @@ CANDIDATE KEY ATTITUDES TO EMPHASIZE:
 Use these attitudes naturally in the letter to highlight candidate's mindset alignment with this {request.job_type} role.
 """
                 system_prompt += "\n" + attitudes_context
-                self.logger.info(f"Attitudes injected: {len(attitudes)} items")
+                self.logger.debug(
+                    "Attitudes context injected successfully", 
+                    extra={"attitudes_count": len(attitudes)}
+                )
             
             # Step 3: Build user message
-            self.logger.info("Building user message")
+            self.logger.debug("Building user message context")
             user_message = self._build_user_message(request=request)
             
             # Step 4: Call LLM
-            self.logger.info(f"Calling LLM model: {self.config.model_name}")
+            # Network Boundary - INFO
+            self.logger.info(
+                "Calling LLM model for motivation letter generation", 
+                extra={"model_name": self.config.model_name}
+            )
             response = self.model.invoke([
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_message)
             ])
-            self.logger.info("LLM response received successfully")
+            self.logger.debug("LLM response received successfully")
             
             # Step 5: Post-process 
-            self.logger.info("Post-processing response")
+            self.logger.debug("Post-processing LLM letter response")
             letter_content = self._post_process(content=response.content, format=request.return_format)
             
             # Step 6: Create metadata
-            self.logger.info("Creating metadata")
+            self.logger.debug("Creating letter metadata")
             metadata = MotivationLetterMetadata(
                 generated_at=datetime.now(),
                 job_type=request.job_type,
@@ -220,8 +258,11 @@ Use these attitudes naturally in the letter to highlight candidate's mindset ali
                 llm_model=self.config.model_name
             )
             
-            # Step 7: Return structured output
-            self.logger.info(f"Letter generation completed successfully")
+            # Business Transaction Success - INFO
+            self.logger.info(
+                "Motivation letter generated successfully", 
+                extra={"content_length": len(letter_content)}
+            )
             return MotivationLetter(
                 content=letter_content,
                 metadata=metadata,
@@ -229,5 +270,10 @@ Use these attitudes naturally in the letter to highlight candidate's mindset ali
             )
             
         except Exception as e:
-            self.logger.error(f"Error generating motivation letter: {str(e)}", exc_info=True)
+            # System Failure - ERROR
+            self.logger.error(
+                "Error generating motivation letter", 
+                exc_info=True, 
+                extra={"job_type": request.job_type, "language": request.language}
+            )
             raise
