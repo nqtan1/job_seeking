@@ -222,3 +222,148 @@ export async function getCandidateFile(candidateId, tenantId) {
     return await response.blob();
 }
 
+/**
+ * Create a new job application
+ */
+export async function createApplication(applicationData, tenantId) {
+    const response = await fetch('/api/applications', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId
+        },
+        body: JSON.stringify(applicationData)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to create application: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * List job applications with optional status and source filters
+ */
+export async function getApplications(filters = {}, tenantId) {
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.source) params.append('source', filters.source);
+    if (filters.sort_by_date) params.append('sort_by_date', filters.sort_by_date);
+
+    const queryString = params.toString();
+    const url = `/api/applications${queryString ? '?' + queryString : ''}`;
+
+    const response = await fetch(url, {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch applications: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Retrieve details for a specific application
+ */
+export async function getApplication(applicationId, tenantId) {
+    const response = await fetch(`/api/applications/${applicationId}`, {
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch application details: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Update a job application
+ */
+export async function updateApplication(applicationId, applicationData, tenantId) {
+    const response = await fetch(`/api/applications/${applicationId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId
+        },
+        body: JSON.stringify(applicationData)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to update application: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Delete a job application
+ */
+export async function deleteApplication(applicationId, tenantId) {
+    const response = await fetch(`/api/applications/${applicationId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete application: status ${response.status}`);
+    }
+}
+
+/**
+ * Upload a document (CV or cover letter) for a job application
+ */
+export async function uploadApplicationFile(applicationId, fileType, file, tenantId) {
+    const formData = new FormData();
+    formData.append('file_type', fileType);
+    formData.append('file', file);
+
+    const response = await fetch(`/api/applications/${applicationId}/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload application file: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Upload multiple special documents (portfolio, certificates, etc.) for a job application
+ */
+export async function uploadSpecialDocuments(applicationId, files, tenantId) {
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
+
+    const response = await fetch(`/api/applications/${applicationId}/upload-special`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Tenant-ID': tenantId
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload special documents: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+

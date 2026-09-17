@@ -50,5 +50,14 @@ export const state = {
         }
     ],
     batchRankings: null,
-    activeOutreachCandidate: null
+    activeOutreachCandidate: null,
+
+    // Job Tracker State
+    applications: [],
+    trackerFilters: {
+        status: '',
+        source: '',
+        sort_by_date: 'desc'
+    },
+    selectedApplicationId: null
 };

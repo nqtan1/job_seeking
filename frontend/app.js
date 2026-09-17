@@ -26,6 +26,7 @@ import {
 } from './recruiter.js';
 import { showNotification, showError } from './utils.js';
 import { listCandidates } from './api.js';
+import { initTracker, renderTracker } from './tracker.js';
 
 // Initialize App Immediately (ES6 Modules are deferred by default, meaning DOM is guaranteed to be parsed)
 initTenantSelector();
@@ -34,6 +35,7 @@ initJDDropzone();
 initBulkDropzone();
 initCompanyTypes();
 populateDbCandidates();
+initTracker();
 
 // Bind public window functions for HTML access
 window.switchTab = switchTab;
@@ -67,20 +69,37 @@ window.copyOutreachEmail = copyOutreachEmail;
 function switchTab(tab) {
     const btnCandidate = document.getElementById('tab-candidate');
     const btnRecruiter = document.getElementById('tab-recruiter');
+    const btnTracker = document.getElementById('tab-tracker');
     const viewCandidate = document.getElementById('view-candidate');
     const viewRecruiter = document.getElementById('view-recruiter');
+    const viewTracker = document.getElementById('view-tracker');
+
+    const activeClass = 'flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-100 bg-slate-800 shadow shadow-slate-950';
+    const inactiveClass = 'flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100';
+
+    // Hide all views
+    viewCandidate.classList.add('hidden');
+    viewRecruiter.classList.add('hidden');
+    if (viewTracker) viewTracker.classList.add('hidden');
+
+    // Reset button styles
+    btnCandidate.className = inactiveClass;
+    btnRecruiter.className = inactiveClass;
+    if (btnTracker) btnTracker.className = inactiveClass;
 
     if (tab === 'candidate') {
-        btnCandidate.className = 'flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-100 bg-slate-800 shadow shadow-slate-950';
-        btnRecruiter.className = 'flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100';
+        btnCandidate.className = activeClass;
         viewCandidate.classList.remove('hidden');
-        viewRecruiter.classList.add('hidden');
-    } else {
-        btnRecruiter.className = 'flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-100 bg-slate-800 shadow shadow-slate-950';
-        btnCandidate.className = 'flex-1 py-2 px-4 rounded-lg font-semibold text-sm transition-all duration-150 flex items-center justify-center gap-2 text-slate-400 hover:text-slate-100';
+    } else if (tab === 'recruiter') {
+        btnRecruiter.className = activeClass;
         viewRecruiter.classList.remove('hidden');
-        viewCandidate.classList.add('hidden');
         renderBulkList();
+    } else if (tab === 'tracker') {
+        if (btnTracker && viewTracker) {
+            btnTracker.className = activeClass;
+            viewTracker.classList.remove('hidden');
+            renderTracker();
+        }
     }
 }
 
@@ -93,6 +112,12 @@ function initTenantSelector() {
         clearCV();
         clearJobSearchState();
         populateDbCandidates();
+
+        // Reload tracker if currently active
+        const viewTracker = document.getElementById('view-tracker');
+        if (viewTracker && !viewTracker.classList.contains('hidden')) {
+            renderTracker();
+        }
     });
 }
 
