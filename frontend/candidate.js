@@ -2,7 +2,7 @@
  * RecruitAI Console Client - Candidate Sandbox Logic Module
  */
 import { state } from './state.js';
-import { extractCV, extractJob, analyzeFit, generateLetter, listCandidates, searchJobs, getJobDetail, getCandidateFile } from './api.js';
+import { extractCV, extractJob, analyzeFit, generateLetter, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF } from './api.js';
 import { showNotification, showError } from './utils.js';
 import { renderCVPreview, renderJDPreview } from './preview.js';
 
@@ -182,31 +182,41 @@ export async function generateMotivationLetter() {
 
     const btnGenerate = document.getElementById('btn-generate-ml');
     btnGenerate.disabled = true;
-    btnGenerate.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Drafting...`;
+    btnGenerate.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Drafting & Compiling...`;
 
     try {
         const language = document.getElementById('ml-language').value;
         const tone = document.getElementById('ml-tone').value;
         const format = document.getElementById('ml-format').value;
 
-        const result = await generateLetter(state.cvData, state.jobPosition, state.companyType, language, tone, format, state.tenantId);
+        // Compile and typeset cover letter PDF
+        const result = await generateTempPDF(state.cvData, state.jobPosition, state.companyType, language, tone, 'txt', state.tenantId);
         state.motivationLetter = result;
 
         // Display results
         const container = document.getElementById('ml-output-container');
         const textarea = document.getElementById('ml-text-output');
+        const pdfContainer = document.getElementById('ml-pdf-container');
+        const pdfPreview = document.getElementById('ml-pdf-preview');
         
         container.classList.remove('hidden');
         textarea.value = result.content;
+
+        if (pdfPreview && result.pdf_url) {
+            pdfPreview.src = result.pdf_url;
+            pdfContainer.classList.remove('hidden');
+        } else if (pdfContainer) {
+            pdfContainer.classList.add('hidden');
+        }
         
-        showNotification("Motivation Letter drafted successfully!");
+        showNotification("Motivation Letter drafted and typeset PDF compiled successfully!");
 
     } catch (err) {
         console.error(err);
         showError(`Letter Error: ${err.message}`);
     } finally {
         btnGenerate.disabled = false;
-        btnGenerate.innerHTML = `<i class="fa-solid fa-feather-pointed"></i> Draft`;
+        btnGenerate.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Draft (PDF)`;
     }
 }
 

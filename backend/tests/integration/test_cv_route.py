@@ -122,3 +122,56 @@ def test_analyze_cv_prefers_file_when_cv_data_is_also_sent(client, mock_extracte
         assert data["candidate"] == "Clement Suto"
         mock_extract.assert_called_once()
         mock_analyze.assert_called_once()
+
+
+def test_list_candidates_and_get_file(client, tmp_path):
+    import workers.background as bg
+    # Isolate DB
+    temp_db = tmp_path / "test_cv_candidates.db"
+    old_manager = bg._BACKGROUND_JOB_MANAGER
+    bg._BACKGROUND_JOB_MANAGER = bg.BackgroundJobManager(db_path=str(temp_db))
+
+    try:
+        # Create a mock file on disk
+        mock_cv_file = tmp_path / "john_doe_resume.pdf"
+        mock_cv_file.write_bytes(b"John Doe CV file contents")
+
+        # Save mock candidate with file_path in DB
+        candidate_id = bg._BACKGROUND_JOB_MANAGER.save_candidate(
+            tenant_id="test-tenant-cv",
+            name="John Doe",
+            email="john.doe@example.com",
+            phone="12345",
+            extracted_data_json='{}',
+            file_path=str(mock_cv_file)
+        )
+
+        # 1. Test listing candidates
+        response = client.get(
+            "/api/cv/candidates",
+            headers={"X-Tenant-ID": "test-tenant-cv"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "candidates" in data
+        assert len(data["candidates"]) == 1
+        assert data["candidates"][0]["name"] == "John Doe"
+        assert data["candidates"][0]["candidate_id"] == candidate_id
+
+        # 2. Test fetching candidate CV file
+        response = client.get(
+            f"/api/cv/candidates/{candidate_id}/file",
+            headers={"X-Tenant-ID": "test-tenant-cv"}
+        )
+        assert response.status_code == 200
+        assert response.content == b"John Doe CV file contents"
+
+        # 3. Test multi-tenant isolation
+        response = client.get(
+            f"/api/cv/candidates/{candidate_id}/file",
+            headers={"X-Tenant-ID": "different-tenant"}
+        )
+        assert response.status_code == 404
+
+    finally:
+        bg._BACKGROUND_JOB_MANAGER = old_manager

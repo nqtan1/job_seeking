@@ -199,12 +199,13 @@ TARGET JOB:
         )
 
         try:
-            # Step 1: Build system prompt 
+            # Step 1: Build system prompt
             self.logger.debug("Building system prompt")
             system_prompt = get_system_prompt(
                 job_type=request.job_type,
                 tone=request.tone,
-                language=request.language
+                language=request.language,
+                return_format=request.return_format
             )
             
             # Step 2: Generate and inject attitudes

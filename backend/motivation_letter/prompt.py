@@ -79,28 +79,50 @@ LANGUAGE_INSTRUCTIONS : Dict[str, str] = {
     "fr" : "Écrivez en français. Utilisez un français clair et professionnel."
 }
 
+# Format-specific instructions to control agent output structure
+FORMAT_INSTRUCTIONS : Dict[str, str] = {
+    "txt" : """
+OUTPUT STRUCTURE CONTRACT (PLAIN TEXT / BODY ONLY):
+- Your output MUST start directly with the opening salutation (e.g., 'Dear Hiring Manager,' or 'Madame, Monsieur,').
+- Your output MUST end with the closing salutation (e.g., 'Sincerely,' or 'Je vous prie d'agréer...').
+- STRICTLY DO NOT generate any headers, sender coordinates, company address, date, or subject line. These are formatted programmatically by the parent wrapper.
+- Do not wrap your response in markdown blocks (such as ```txt). Output clean raw text only.
+""",
+    "latex" : """
+OUTPUT STRUCTURE CONTRACT (VALID LATEX DOCUMENT ONLY):
+- You MUST generate and return a complete, valid LaTeX document code structure.
+- The document MUST begin with '\\documentclass' and end with '\\end{document}'.
+- Do not wrap the response in markdown blocks (such as ```latex). Return only raw LaTeX markup.
+"""
+}
+
 def get_system_prompt(
     job_type: str, 
     tone: str,
-    language: str
+    language: str,
+    return_format: str = "txt"
 ) -> str : 
     """
     Build system prompt by combining:
     - Base prompt 
     - Tone modifier
     - Language instruction
+    - Format instruction
     """
     company_type = CompanyType(job_type)
     
     base = BASE_SYSTEM_PROMPTS[company_type]
     tone_mod = TONE_MODIFIERS.get(tone, "")
     lang_inst = LANGUAGE_INSTRUCTIONS.get(language, "")
+    fmt_inst = FORMAT_INSTRUCTIONS.get(return_format, FORMAT_INSTRUCTIONS["txt"])
     
     return f""" {base}
 
 TONE: {tone_mod}
 
 Language: {lang_inst}
+
+{fmt_inst}
 """
 
 # User-provided context template

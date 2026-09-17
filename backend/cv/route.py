@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
+from fastapi.responses import FileResponse
 from typing import Optional
 from dotenv import load_dotenv
 import unicodedata
@@ -248,6 +249,7 @@ async def extract_cv(
             email=email,
             phone=phone,
             extracted_data_json=extracted_data.model_dump_json(),
+            file_path=processed_file_path,
         )
         logger.info(f"Candidate profile saved in database with candidate_id={candidate_id}")
         
@@ -287,6 +289,7 @@ async def analyze_cv(
         bool(cv_data),
     )
     
+    processed_file_path = None
     try:
         # Prefer file input when a file is provided.
         # This avoids accidental 400s when a form also submits a stale or malformed cv_data field.
@@ -337,6 +340,7 @@ async def analyze_cv(
             email=email,
             phone=phone,
             extracted_data_json=cv_data.model_dump_json(),
+            file_path=processed_file_path,
         )
         
         # Analyze CV
@@ -381,3 +385,71 @@ async def analyze_cv(
     except Exception as e:
         logger.error(f"CV analysis failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@router.get("/candidates")
+async def list_candidates(
+    tenant: TenantContext = Depends(get_tenant_context)
+):
+    """List all candidate profiles parsed under a specific tenant."""
+    logger.info("Listing candidate profiles for tenant %s", tenant.tenant_id)
+    try:
+        manager = get_background_job_manager()
+        candidates = manager.list_candidates_for_tenant(tenant.tenant_id)
+        return {"candidates": candidates}
+    except Exception as exc:
+        logger.error("Failed to list candidates: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve candidates")
+
+
+@router.get("/candidates/{candidate_id}/file")
+async def get_candidate_file_route(
+    candidate_id: str,
+    tenant: TenantContext = Depends(get_tenant_context)
+):
+    """Retrieve original CV file by candidate ID."""
+    logger.info("Retrieving CV file for candidate %s (tenant %s)", candidate_id, tenant.tenant_id)
+    manager = get_background_job_manager()
+    candidate = manager.get_candidate(candidate_id)
+    if not candidate or candidate["tenant_id"] != tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    file_path_str = candidate.get("file_path")
+    filepath = None
+    if file_path_str:
+        filepath = Path(file_path_str)
+
+    # Fallback 1: Scan UPLOAD_BASE_DIR recursively for files containing candidate name
+    if not filepath or not filepath.exists() or not filepath.is_file():
+        sanitized_cand_name = _sanitize_filename(candidate["name"]).lower()
+        found_files = []
+        for p in UPLOAD_BASE_DIR.rglob("*"):
+            if p.is_file() and sanitized_cand_name in p.name.lower():
+                found_files.append(p)
+        
+        if found_files:
+            found_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            filepath = found_files[0]
+            logger.info("Found matching legacy CV file via disk scan: %s", filepath)
+
+    # Fallback 2: Generate dynamic text file fallback with candidate details
+    if not filepath or not filepath.exists() or not filepath.is_file():
+        logger.info("No raw CV file found for candidate %s on disk. Serving compiler fallback text file.", candidate_id)
+        content = f"CANDIDATE RESUME PROFILE\n" \
+                  f"========================\n\n" \
+                  f"Name:  {candidate['name']}\n" \
+                  f"Email: {candidate['email'] or 'N/A'}\n" \
+                  f"Phone: {candidate['phone'] or 'N/A'}\n\n" \
+                  f"----------------------------------------\n" \
+                  f"Note: This candidate profile was saved before the file-tracking feature was added, " \
+                  f"or the original uploaded PDF resume has been removed.\n" \
+                  f"You can still run AI matching and generation using this profile's structured data.\n" \
+                  f"----------------------------------------\n"
+        
+        # Save to temporary text file
+        temp_file = tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False, encoding="utf-8")
+        temp_file.write(content)
+        temp_file.close()
+        return FileResponse(temp_file.name, media_type="text/plain", filename=f"{_sanitize_filename(candidate['name'])}_fallback.txt")
+
+    return FileResponse(filepath)

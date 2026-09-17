@@ -532,22 +532,35 @@
                                 </select>
                             </div>
                             <div class="col-span-2 sm:col-span-1 flex items-end">
-                                <button id="btn-generate-ml" class="w-full py-2 px-3 rounded-lg font-bold text-[10px] bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5 h-[34px]" onclick="generateMotivationLetter()">
-                                    <i class="fa-solid fa-feather-pointed"></i>
-                                    Draft
+                                <button id="btn-generate-ml" class="w-full py-2 px-3 rounded-lg font-bold text-[10px] bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 h-[34px] shadow shadow-emerald-950/25 cursor-pointer animate-pulse" onclick="generateMotivationLetter()">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    Generate AI Draft (PDF)
                                 </button>
                             </div>
                         </div>
 
                         <!-- Motivation Letter Output -->
-                        <div id="ml-output-container" class="hidden flex flex-col gap-2.5">
+                        <div id="ml-output-container" class="hidden flex flex-col gap-2.5 animate-slide-in">
                             <div class="flex items-center justify-between">
-                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">AI Drafted Motivation Letter:</label>
+                                <label class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <i class="fa-solid fa-envelope-open-text text-teal-400"></i> AI Drafted Motivation Letter:
+                                </label>
                                 <button id="btn-copy-ml" class="text-xs font-semibold px-2.5 py-1 rounded bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/60 flex items-center gap-1.5 transition-colors" onclick="copyMotivationLetter()">
                                     <i class="fa-regular fa-copy"></i>
                                     Copy Letter
                                 </button>
                             </div>
+
+                            <!-- Live Typeset PDF Preview Block inside Candidate Sandbox -->
+                            <div id="ml-pdf-container" class="hidden flex flex-col gap-1.5 mt-1.5">
+                                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                    <i class="fa-solid fa-eye text-emerald-400"></i> Live Typeset PDF Preview:
+                                </span>
+                                <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[300px] flex items-center justify-center relative shadow-inner">
+                                    <iframe id="ml-pdf-preview" class="w-full h-full border-0" src=""></iframe>
+                                </div>
+                            </div>
+
                             <textarea id="ml-text-output" rows="12" readonly
                                       class="w-full bg-slate-950 border border-slate-850 rounded-lg p-3.5 text-xs text-slate-300 focus:outline-none font-mono leading-relaxed resize-none"></textarea>
                         </div>
@@ -949,7 +962,7 @@
     </footer>
 
     <!-- Global Document Zoom Modal -->
-    <div id="zoom-modal" class="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md hidden items-center justify-center p-4 transition-all duration-300 opacity-0 scale-95 flex">
+    <div id="zoom-modal" class="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md hidden items-center justify-center p-4 transition-all duration-300 opacity-0 scale-95 flex">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl relative">
             <!-- Modal Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-850">
@@ -1069,132 +1082,201 @@
 
     <!-- Apply Decision Flow Modal (Step 1 Document Selection) -->
     <div id="decision-flow-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden">
-            <!-- Header -->
-            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-850 bg-slate-950/40">
-                <h3 class="font-bold text-sm text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                    <i class="fa-solid fa-file-signature text-emerald-400"></i> Configure & Stage Application
-                </h3>
-                <button onclick="closeDecisionFlowModal()" class="h-8 w-8 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-850 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <!-- Form Body -->
-            <div class="p-6 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">
-                
-                <!-- 1. CV Selection -->
-                <div class="bg-slate-950/30 p-4 rounded-lg border border-slate-850 flex flex-col gap-2.5">
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Choice 1: Select CV / Resume <span class="text-rose-500">*</span></label>
-                    
-                    <div class="flex flex-col gap-1.5">
-                        <label for="df-cv-select" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Use an Existing CV Profile:</label>
-                        <select id="df-cv-select" onchange="toggleCVDocSource(this.value)" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300">
-                            <option value="">-- Upload a new CV file --</option>
-                        </select>
-                    </div>
-
-                    <div id="df-cv-upload-wrapper" class="flex flex-col gap-1.5 mt-1.5">
-                        <label for="df-cv-file" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Or Upload a New CV file:</label>
-                        <input type="file" id="df-cv-file" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-850 file:text-emerald-400 file:font-semibold hover:file:bg-slate-800 file:cursor-pointer" accept=".pdf,.doc,.docx,.txt">
-                    </div>
+        <div id="decision-flow-modal-container" class="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-lg flex flex-row shadow-2xl overflow-hidden transition-all duration-300">
+            
+            <!-- LEFT PANE: Configuration Form -->
+            <div id="df-form-pane" class="flex-1 flex flex-col min-w-0">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-850 bg-slate-950/40">
+                    <h3 class="font-bold text-sm text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-file-signature text-emerald-400"></i> Configure & Stage Application
+                    </h3>
+                    <button onclick="closeDecisionFlowModal()" class="h-8 w-8 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-850 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
-
-                <!-- 2. Motivation Letter Selection -->
-                <div class="bg-slate-950/30 p-4 rounded-lg border border-slate-850 flex flex-col gap-2.5">
-                    <label class="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Choice 2: Attach Motivation Letter <span class="text-rose-500">*</span></label>
+                <!-- Form Body -->
+                <div class="p-6 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">
                     
-                    <div class="flex gap-4">
-                        <label class="flex items-center gap-1.5 text-xs text-slate-300 font-medium cursor-pointer">
-                            <input type="radio" name="df-letter-choice" id="df-letter-ai" value="ai" checked onchange="toggleLetterDocSource(this.value)" class="accent-emerald-500">
-                            Use AI-Generated Draft
-                        </label>
-                        <label class="flex items-center gap-1.5 text-xs text-slate-300 font-medium cursor-pointer">
-                            <input type="radio" name="df-letter-choice" id="df-letter-self" value="self" onchange="toggleLetterDocSource(this.value)" class="accent-emerald-500">
-                            Write My Own
-                        </label>
-                    </div>
-
-                    <div id="df-letter-self-wrapper" class="hidden flex flex-col gap-2.5 mt-1.5">
-                        <div class="flex flex-col gap-1">
-                            <label for="df-letter-text" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Paste or Edit Letter Text:</label>
-                            <textarea id="df-letter-text" rows="4" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono" placeholder="Paste your self-written cover letter content here..."></textarea>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[9px] font-bold text-slate-500 uppercase">Or upload letter file:</span>
-                            <input type="file" id="df-letter-file" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-850 file:text-slate-300 hover:file:bg-slate-800" accept=".pdf,.doc,.docx,.txt">
-                        </div>
-                    </div>
-
-                    <!-- AI-Generated Letter Co-writing Sandbox with Live PDF Preview inside Modal -->
-                    <div id="df-letter-ai-wrapper" class="flex flex-col gap-3 mt-1.5">
+                    <!-- 1. CV Selection -->
+                    <div class="bg-slate-950/30 p-4 rounded-lg border border-slate-850 flex flex-col gap-2.5">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Choice 1: Select CV / Resume <span class="text-rose-500">*</span></label>
                         
-                        <!-- Initial Placeholder / CTA when not generated yet -->
-                        <div id="df-ai-letter-placeholder" class="bg-slate-950/40 p-5 rounded-lg border border-slate-850 text-center flex flex-col items-center justify-center gap-2 animate-slide-in">
-                            <i class="fa-solid fa-file-pdf text-xl text-slate-600 animate-pulse"></i>
-                            <p class="text-[11px] font-bold text-slate-300">Motivation Letter PDF Draft not generated yet</p>
-                            <p class="text-[10px] text-slate-500 max-w-xs leading-relaxed">Click below to trigger the RecruitAI agent to compose a custom cover letter and compile its typeset PDF in-place.</p>
-                            
-                            <button type="button" id="df-btn-initial-draft" onclick="generateDecisionFlowLetterPDF()" class="mt-1 py-1.5 px-4 rounded-lg font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow shadow-emerald-950/20 transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Draft (PDF)
-                            </button>
+                        <div class="flex flex-col gap-1.5">
+                            <label for="df-cv-select" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Use an Existing CV Profile:</label>
+                            <select id="df-cv-select" onchange="toggleCVDocSource(this.value)" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300">
+                                <option value="">-- Upload a new CV file --</option>
+                            </select>
                         </div>
 
-                        <!-- Active Review Container (Hidden by default, shown once generated) -->
-                        <div id="df-ai-letter-active-container" class="hidden flex flex-col gap-3">
-                            <!-- Live PDF Preview Panel -->
-                            <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[220px] flex items-center justify-center relative shadow-inner">
-                                <iframe id="df-ai-letter-pdf-preview" class="w-full h-full border-0" src=""></iframe>
-                            </div>
+                        <div id="df-cv-upload-wrapper" class="flex flex-col gap-1.5 mt-1.5">
+                            <label for="df-cv-file" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Or Upload a New CV file:</label>
+                            <input type="file" id="df-cv-file" class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-850 file:text-emerald-400 file:font-semibold hover:file:bg-slate-800 file:cursor-pointer" accept=".pdf,.doc,.docx,.txt">
+                        </div>
 
-                            <!-- Raw text area (tapped/editable) -->
+                        <!-- Live CV Preview inside Modal -->
+                        <div id="df-cv-preview-container" class="hidden flex flex-col gap-1.5 mt-2 animate-slide-in">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                    <i class="fa-solid fa-eye text-emerald-400"></i> Selected CV Preview:
+                                </span>
+                                <button type="button" onclick="zoomDecisionFlowDoc('cv')" class="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-slate-950 border border-slate-850 px-2 py-0.5 rounded shadow transition-colors cursor-pointer">
+                                    <i class="fa-solid fa-maximize text-[8px]"></i> Zoom Preview
+                                </button>
+                            </div>
+                            <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[150px] flex items-center justify-center relative shadow-inner">
+                                <iframe id="df-cv-pdf-preview" class="w-full h-full border-0" src=""></iframe>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Motivation Letter Selection -->
+                    <div class="bg-slate-950/30 p-4 rounded-lg border border-slate-850 flex flex-col gap-2.5">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Choice 2: Attach Motivation Letter <span class="text-rose-500">*</span></label>
+                        
+                        <div class="flex flex-col gap-1.5">
+                            <label for="df-letter-choice" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Choose Attachment Option:</label>
+                            <select id="df-letter-choice" onchange="toggleLetterDocSource(this.value)" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-medium">
+                                <option value="ai" selected>AI Gen (Co-draft & Typeset PDF)</option>
+                                <option value="self">Upload (Pasted text or upload file)</option>
+                                <option value="none">None (No cover letter attached)</option>
+                            </select>
+                        </div>
+
+                        <!-- Option A: Self Written/Uploaded Letter wrapper -->
+                        <div id="df-letter-self-wrapper" class="hidden flex flex-col gap-2.5 mt-1.5">
                             <div class="flex flex-col gap-1">
-                                <label for="df-ai-letter-text" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Tap to Edit raw letter text if needed:</label>
-                                <textarea id="df-ai-letter-text" rows="6" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono leading-relaxed" placeholder="Review and edit drafted cover letter..."></textarea>
+                                <label for="df-letter-text" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Paste or Edit Letter Text:</label>
+                                <textarea id="df-letter-text" rows="4" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono" placeholder="Paste your self-written cover letter content here..."></textarea>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[9px] font-bold text-slate-500 uppercase">Or upload letter file:</span>
+                                <input type="file" id="df-letter-file" class="text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-slate-850 file:text-slate-300 hover:file:bg-slate-800" accept=".pdf,.doc,.docx,.txt">
                             </div>
 
-                            <!-- Feedback for AI Redo block -->
-                            <div class="flex flex-col gap-1.5 bg-slate-950/50 p-3 rounded-lg border border-slate-850">
+                            <!-- Live Uploaded Letter Preview Panel inside Modal -->
+                            <div id="df-letter-self-preview-container" class="hidden flex flex-col gap-1.5 mt-2 animate-slide-in">
                                 <div class="flex items-center justify-between">
-                                    <label for="df-letter-feedback-input" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                        <i class="fa-solid fa-message-smile text-emerald-400"></i> Feedback for AI Redo:
-                                    </label>
-                                    <span id="df-letter-revision-spinner" class="hidden text-[10px] text-emerald-400 font-semibold animate-pulse flex items-center gap-1.5">
-                                        <i class="fa-solid fa-spinner animate-spin text-xs"></i> AI Agent revising...
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                        <i class="fa-solid fa-eye text-emerald-400"></i> Selected Letter Preview:
                                     </span>
-                                </div>
-                                <div class="flex gap-2">
-                                    <input type="text" id="df-letter-feedback-input" class="flex-1 bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-medium" placeholder="e.g. Make it more formal, focus on FastAPI experience, keep it brief...">
-                                    <button type="button" id="df-btn-letter-revision" onclick="submitDecisionFlowLetterFeedback()" class="py-2 px-3 rounded-lg font-bold text-[10px] bg-slate-850 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/10 transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
-                                        <i class="fa-solid fa-arrows-rotate"></i> Request Revision
+                                    <button type="button" onclick="zoomDecisionFlowDoc('self')" class="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-slate-950 border border-slate-850 px-2 py-0.5 rounded shadow transition-colors cursor-pointer">
+                                        <i class="fa-solid fa-maximize text-[8px]"></i> Zoom Preview
                                     </button>
                                 </div>
+                                <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[150px] flex items-center justify-center relative shadow-inner">
+                                    <iframe id="df-letter-self-pdf-preview" class="w-full h-full border-0" src=""></iframe>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Option B: AI-Generated Letter Co-writing Sandbox with Live PDF Preview inside Modal -->
+                        <div id="df-letter-ai-wrapper" class="flex flex-col gap-3 mt-1.5">
+                            
+                            <!-- Initial Placeholder / CTA when not generated yet -->
+                            <div id="df-ai-letter-placeholder" class="bg-slate-950/40 p-5 rounded-lg border border-slate-850 text-center flex flex-col items-center justify-center gap-2 animate-slide-in">
+                                <i class="fa-solid fa-file-pdf text-xl text-slate-600 animate-pulse"></i>
+                                <p class="text-[11px] font-bold text-slate-300">Motivation Letter PDF Draft not generated yet</p>
+                                <p class="text-[10px] text-slate-500 max-w-xs leading-relaxed">Click below to trigger the RecruitAI agent to compose a custom cover letter and compile its typeset PDF in-place.</p>
+                                
+                                <button type="button" id="df-btn-initial-draft" onclick="generateDecisionFlowLetterPDF()" class="mt-1 py-1.5 px-4 rounded-lg font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow shadow-emerald-950/20 transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Draft (PDF)
+                                </button>
+                            </div>
+
+                            <!-- Active Review Container (Hidden by default, shown once generated) -->
+                            <div id="df-ai-letter-active-container" class="hidden flex flex-col gap-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                        <i class="fa-solid fa-wand-magic-sparkles text-emerald-400 animate-pulse"></i> AI Typeset Letter Preview:
+                                    </span>
+                                    <button type="button" onclick="zoomDecisionFlowDoc('ai')" class="text-[9px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-slate-950 border border-slate-850 px-2 py-0.5 rounded shadow transition-colors cursor-pointer">
+                                        <i class="fa-solid fa-maximize text-[8px]"></i> Zoom Preview
+                                    </button>
+                                </div>
+                                <!-- Live PDF Preview Panel -->
+                                <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[220px] flex items-center justify-center relative shadow-inner">
+                                    <iframe id="df-ai-letter-pdf-preview" class="w-full h-full border-0" src=""></iframe>
+                                </div>
+
+                                <!-- Raw text area (tapped/editable) -->
+                                <div class="flex flex-col gap-1">
+                                    <label for="df-ai-letter-text" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Tap to Edit raw letter text if needed:</label>
+                                    <textarea id="df-ai-letter-text" rows="6" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono leading-relaxed" placeholder="Review and edit drafted cover letter..."></textarea>
+                                </div>
+
+                                <!-- Feedback for AI Redo block -->
+                                <div class="flex flex-col gap-1.5 bg-slate-950/50 p-3 rounded-lg border border-slate-850">
+                                    <div class="flex items-center justify-between">
+                                        <label for="df-letter-feedback-input" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                            <i class="fa-solid fa-message-smile text-emerald-400"></i> Feedback for AI Redo:
+                                        </label>
+                                        <span id="df-letter-revision-spinner" class="hidden text-[10px] text-emerald-400 font-semibold animate-pulse flex items-center gap-1.5">
+                                            <i class="fa-solid fa-spinner animate-spin text-xs"></i> AI Agent revising...
+                                        </span>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <input type="text" id="df-letter-feedback-input" class="flex-1 bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-medium" placeholder="e.g. Make it more formal, focus on FastAPI experience, keep it brief...">
+                                        <button type="button" id="df-btn-letter-revision" onclick="submitDecisionFlowLetterFeedback()" class="py-2 px-3 rounded-lg font-bold text-[10px] bg-slate-850 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/10 transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
+                                            <i class="fa-solid fa-arrows-rotate"></i> Request Revision
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- 3. Special Documents Selection -->
-                <div class="bg-slate-950/30 p-4 rounded-lg border border-slate-850 flex flex-col gap-2.5">
-                    <div class="flex items-center justify-between">
-                        <label class="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Choice 3: Special Documents</label>
-                        <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
-                            <input type="checkbox" id="df-has-special" onchange="toggleSpecialDocsSource(this.checked)" class="accent-emerald-500">
-                            Attach Additional Files?
-                        </label>
+                    <!-- 3. Special Documents Selection -->
+                    <div class="bg-slate-950/30 p-4 rounded-lg border border-slate-850 flex flex-col gap-2.5">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Choice 3: Special Documents</label>
+                            <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                                <input type="checkbox" id="df-has-special" onchange="toggleSpecialDocsSource(this.checked)" class="accent-emerald-500">
+                                Attach Additional Files?
+                            </label>
+                        </div>
+
+                        <div id="df-special-wrapper" class="hidden flex flex-col gap-1.5 mt-1">
+                            <p class="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Upload portfolio, certificates, human references (multiple files):</p>
+                            <input type="file" id="df-special-files" multiple class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-850 file:text-slate-300 hover:file:bg-slate-800 file:cursor-pointer" accept=".pdf,.doc,.docx,.png,.jpg,.txt">
+                            
+                            <!-- Special Files attached list preview container -->
+                            <div id="df-special-list-preview" class="hidden flex flex-col gap-1.5 mt-2 bg-slate-950/80 p-2.5 rounded border border-slate-850 max-h-[120px] overflow-y-auto animate-slide-in">
+                                <span class="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <i class="fa-solid fa-paperclip text-emerald-400"></i> Attached Special Files:
+                                </span>
+                                <div id="df-special-list-items" class="flex flex-col gap-1 text-[11px] font-semibold text-slate-300 font-mono">
+                                    <!-- Dynamically populated list -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div id="df-special-wrapper" class="hidden flex flex-col gap-1.5 mt-1">
-                        <p class="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Upload portfolio, certificates, human references (multiple files):</p>
-                        <input type="file" id="df-special-files" multiple class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-850 file:text-slate-300 hover:file:bg-slate-800 file:cursor-pointer" accept=".pdf,.doc,.docx,.png,.jpg,.txt">
+                    <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-850 mt-2">
+                        <button onclick="closeDecisionFlowModal()" class="py-2 px-4 rounded-lg font-semibold text-xs text-slate-400 hover:text-slate-200 transition-colors uppercase tracking-wider">Cancel</button>
+                        <button onclick="stageDecisionFlowApplication()" class="py-2 px-5 rounded-lg font-semibold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow shadow-emerald-950 transition-colors uppercase tracking-wider">Stage & Save Application</button>
                     </div>
-                </div>
 
-                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-850 mt-2">
-                    <button onclick="closeDecisionFlowModal()" class="py-2 px-4 rounded-lg font-semibold text-xs text-slate-400 hover:text-slate-200 transition-colors uppercase tracking-wider">Cancel</button>
-                    <button onclick="stageDecisionFlowApplication()" class="py-2 px-5 rounded-lg font-semibold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow shadow-emerald-950 transition-colors uppercase tracking-wider">Stage & Save Application</button>
                 </div>
-
             </div>
+
+            <!-- RIGHT PANE: Side-by-Side Live Document Preview Sidebar -->
+            <div id="df-preview-pane" class="hidden w-[500px] border-l border-slate-850 bg-slate-950 flex flex-col shrink-0 animate-slide-in transition-all duration-300">
+                <!-- Side Header -->
+                <div class="flex items-center justify-between px-5 py-4 border-b border-slate-850 bg-slate-900/60">
+                    <h4 id="df-side-preview-title" class="font-bold text-xs text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-eye text-emerald-400"></i> Document Preview
+                    </h4>
+                    <button onclick="closeDecisionFlowSidePreview()" class="h-8 w-8 rounded-lg bg-slate-900 hover:bg-slate-850 border border-slate-850 flex items-center justify-center text-slate-400 hover:text-slate-100 transition-colors cursor-pointer" title="Close Preview Panel">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <!-- Side Frame Container -->
+                <div class="flex-1 p-4 bg-slate-950 flex items-center justify-center relative">
+                    <iframe id="df-side-preview-iframe" class="w-full h-full border-0 rounded bg-slate-950 shadow-inner" src=""></iframe>
+                </div>
+            </div>
+
         </div>
     </div>
 
