@@ -7,6 +7,7 @@ from fit.route import router as fit_router
 from hr.route import router as hr_router
 from jobs.route import router as jobs_router
 from motivation_letter.route import router as motivation_letter_router
+from applications.route import router as applications_router
 
 app = FastAPI(
     title="Job Seeking CV API",
@@ -28,6 +29,9 @@ app.include_router(hr_router, prefix="/api/hr", tags=["HR"])
 
 # Include Motivation Letter routes
 app.include_router(motivation_letter_router, prefix="/api/motivation-letter", tags=["Motivation Letter"])  
+
+# Include Applications routes
+app.include_router(applications_router, prefix="/api/applications", tags=["Applications"])
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
