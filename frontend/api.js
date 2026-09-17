@@ -80,14 +80,15 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 /**
  * Generate Motivation Letter Draft
  */
-export async function generateLetter(cvData, jobPosition, companyType, language, tone, format, tenantId) {
+export async function generateLetter(cvData, jobPosition, companyType, language, tone, format, tenantId, customContext) {
     const payload = {
         cv_info: cvData,
         job_info: jobPosition,
         job_type: companyType,
         language: language,
         tone: tone,
-        return_format: format
+        return_format: format,
+        custom_context: customContext || null
     };
 
     const response = await fetch('/api/motivation-letter/generate', {
