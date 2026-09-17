@@ -108,16 +108,15 @@ class BackgroundJobManager:
                     email TEXT,
                     phone TEXT,
                     extracted_data TEXT NOT NULL,  -- JSON string of CVInformation
-                    created_at TEXT NOT NULL,
-                    file_path TEXT
+                    created_at TEXT NOT NULL
                 )
             """)
-
             try:
                 conn.execute("ALTER TABLE candidates ADD COLUMN file_path TEXT")
+                conn.commit()
             except sqlite3.OperationalError:
-                pass  # Already exists
-
+                pass  # column already exists
+            
             # 3. Jobs Table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -142,6 +141,36 @@ class BackgroundJobManager:
                     created_at TEXT NOT NULL
                 )
             """)
+
+            # 5. Applications Table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS applications (
+                    application_id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    company_name TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    applied_date TEXT NOT NULL,
+                    jd_summary TEXT,
+                    status TEXT NOT NULL,
+                    recruiter_response TEXT,
+                    cv_file TEXT,
+                    cover_letter_file TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            try:
+                conn.execute("ALTER TABLE applications ADD COLUMN special_documents TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE applications ADD COLUMN document_prep_completed_at TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE applications ADD COLUMN applied_confirmed_at TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             conn.commit()
 
@@ -180,16 +209,59 @@ class BackgroundJobManager:
         extracted_data_json: str,
         file_path: Optional[str] = None,
     ) -> str:
-        """Persist structured candidate profile in SQLite database."""
-        candidate_id = str(uuid4())
+        """Persist structured candidate profile in SQLite database, upserting if email or name matches to prevent duplicates."""
         created_at = datetime.now().isoformat()
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+            cursor = conn.cursor()
+            
+            # Check if candidate with same email already exists for this tenant
+            if email:
+                cursor.execute(
+                    "SELECT candidate_id FROM candidates WHERE tenant_id = ? AND email = ?",
+                    (tenant_id, email),
+                )
+                row = cursor.fetchone()
+                if row:
+                    candidate_id = row[0]
+                    # Update existing record and preserve original created_at
+                    cursor.execute(
+                        """
+                        UPDATE candidates
+                        SET name = ?, phone = ?, extracted_data = ?, file_path = COALESCE(?, file_path)
+                        WHERE candidate_id = ?
+                        """,
+                        (name, phone, extracted_data_json, file_path, candidate_id),
+                    )
+                    conn.commit()
+                    return candidate_id
+            
+            # Fallback to name if no email is provided
+            cursor.execute(
+                "SELECT candidate_id FROM candidates WHERE tenant_id = ? AND name = ? AND email IS NULL",
+                (tenant_id, name),
+            )
+            row = cursor.fetchone()
+            if row:
+                candidate_id = row[0]
+                cursor.execute(
+                    """
+                    UPDATE candidates
+                    SET phone = ?, extracted_data = ?, file_path = COALESCE(?, file_path)
+                    WHERE candidate_id = ?
+                    """,
+                    (phone, extracted_data_json, file_path, candidate_id),
+                )
+                conn.commit()
+                return candidate_id
+
+            # If brand new, insert
+            candidate_id = str(uuid4())
+            cursor.execute(
                 """
-                INSERT INTO candidates (candidate_id, tenant_id, name, email, phone, extracted_data, created_at, file_path)
+                INSERT INTO candidates (candidate_id, tenant_id, name, email, phone, extracted_data, file_path, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (candidate_id, tenant_id, name, email, phone, extracted_data_json, created_at, file_path),
+                (candidate_id, tenant_id, name, email, phone, extracted_data_json, file_path, created_at),
             )
             conn.commit()
         return candidate_id
@@ -199,7 +271,7 @@ class BackgroundJobManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, created_at, file_path FROM candidates WHERE candidate_id = ?",
+                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, file_path, created_at FROM candidates WHERE candidate_id = ?",
                 (candidate_id,),
             )
             row = cursor.fetchone()
@@ -212,8 +284,8 @@ class BackgroundJobManager:
                 "email": row[3],
                 "phone": row[4],
                 "extracted_data": json.loads(row[5]),
-                "created_at": row[6],
-                "file_path": row[7],
+                "file_path": row[6],
+                "created_at": row[7],
             }
 
     def list_candidates_for_tenant(self, tenant_id: str) -> List[Dict[str, Any]]:
@@ -221,7 +293,7 @@ class BackgroundJobManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, created_at, file_path FROM candidates WHERE tenant_id = ? ORDER BY created_at DESC",
+                "SELECT candidate_id, tenant_id, name, email, phone, extracted_data, file_path, created_at FROM candidates WHERE tenant_id = ? ORDER BY created_at DESC",
                 (tenant_id,),
             )
             rows = cursor.fetchall()
@@ -233,8 +305,8 @@ class BackgroundJobManager:
                     "email": row[3],
                     "phone": row[4],
                     "extracted_data": json.loads(row[5]),
-                    "created_at": row[6],
-                    "file_path": row[7],
+                    "file_path": row[6],
+                    "created_at": row[7],
                 }
                 for row in rows
             ]
@@ -468,6 +540,182 @@ class BackgroundJobManager:
             )
             rows = cursor.fetchall()
             return [self._row_to_record(row) for row in rows]
+
+    # ==========================================
+    # ==========================================
+    # Applications DAL Methods
+    # ==========================================
+    def save_application(
+        self,
+        tenant_id: str,
+        company_name: str,
+        source: str,
+        applied_date: str,
+        status: str,
+        jd_summary: Optional[str] = None,
+        recruiter_response: Optional[str] = None,
+        cv_file: Optional[str] = None,
+        cover_letter_file: Optional[str] = None,
+        special_documents: Optional[str] = None,
+        document_prep_completed_at: Optional[str] = None,
+        applied_confirmed_at: Optional[str] = None,
+    ) -> str:
+        """Persist structured application details in SQLite database."""
+        application_id = str(uuid4())
+        now = datetime.now().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO applications (
+                    application_id, tenant_id, company_name, source, applied_date,
+                    jd_summary, status, recruiter_response, cv_file, cover_letter_file,
+                    special_documents, document_prep_completed_at, applied_confirmed_at,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    application_id, tenant_id, company_name, source, applied_date,
+                    jd_summary, status, recruiter_response, cv_file, cover_letter_file,
+                    special_documents, document_prep_completed_at, applied_confirmed_at,
+                    now, now
+                ),
+            )
+            conn.commit()
+        return application_id
+
+    def get_application(self, application_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve application by ID."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT application_id, tenant_id, company_name, source, applied_date,
+                       jd_summary, status, recruiter_response, cv_file, cover_letter_file,
+                       special_documents, document_prep_completed_at, applied_confirmed_at,
+                       created_at, updated_at
+                FROM applications WHERE application_id = ?
+                """,
+                (application_id,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return {
+                "application_id": row[0],
+                "tenant_id": row[1],
+                "company_name": row[2],
+                "source": row[3],
+                "applied_date": row[4],
+                "jd_summary": row[5],
+                "status": row[6],
+                "recruiter_response": row[7],
+                "cv_file": row[8],
+                "cover_letter_file": row[9],
+                "special_documents": row[10],
+                "document_prep_completed_at": row[11],
+                "applied_confirmed_at": row[12],
+                "created_at": row[13],
+                "updated_at": row[14],
+            }
+
+    def update_application(
+        self,
+        application_id: str,
+        company_name: str,
+        source: str,
+        applied_date: str,
+        status: str,
+        jd_summary: Optional[str] = None,
+        recruiter_response: Optional[str] = None,
+        cv_file: Optional[str] = None,
+        cover_letter_file: Optional[str] = None,
+        special_documents: Optional[str] = None,
+        document_prep_completed_at: Optional[str] = None,
+        applied_confirmed_at: Optional[str] = None,
+    ) -> bool:
+        """Update application details by ID."""
+        now = datetime.now().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE applications
+                SET company_name = ?, source = ?, applied_date = ?, status = ?,
+                    jd_summary = ?, recruiter_response = ?, cv_file = ?, cover_letter_file = ?,
+                    special_documents = ?, document_prep_completed_at = ?, applied_confirmed_at = ?,
+                    updated_at = ?
+                WHERE application_id = ?
+                """,
+                (
+                    company_name, source, applied_date, status,
+                    jd_summary, recruiter_response, cv_file, cover_letter_file,
+                    special_documents, document_prep_completed_at, applied_confirmed_at,
+                    now, application_id
+                ),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_application(self, application_id: str) -> bool:
+        """Delete application by ID."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM applications WHERE application_id = ?", (application_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def list_applications_for_tenant(
+        self,
+        tenant_id: str,
+        status: Optional[str] = None,
+        source: Optional[str] = None,
+        sort_by_date: str = "desc"
+    ) -> List[Dict[str, Any]]:
+        """List all applications for a specific tenant with filtering and sorting."""
+        query = """
+            SELECT application_id, tenant_id, company_name, source, applied_date,
+                   jd_summary, status, recruiter_response, cv_file, cover_letter_file,
+                   special_documents, document_prep_completed_at, applied_confirmed_at,
+                   created_at, updated_at
+            FROM applications WHERE tenant_id = ?
+        """
+        params = [tenant_id]
+
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        if source:
+            query += " AND source = ?"
+            params.append(source)
+
+        order = "DESC" if sort_by_date.lower() == "desc" else "ASC"
+        query += f" ORDER BY applied_date {order}"
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "application_id": row[0],
+                    "tenant_id": row[1],
+                    "company_name": row[2],
+                    "source": row[3],
+                    "applied_date": row[4],
+                    "jd_summary": row[5],
+                    "status": row[6],
+                    "recruiter_response": row[7],
+                    "cv_file": row[8],
+                    "cover_letter_file": row[9],
+                    "special_documents": row[10],
+                    "document_prep_completed_at": row[11],
+                    "applied_confirmed_at": row[12],
+                    "created_at": row[13],
+                    "updated_at": row[14],
+                }
+                for row in rows
+            ]
 
 
 _BACKGROUND_JOB_MANAGER: Optional[BackgroundJobManager] = None

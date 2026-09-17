@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
+from fastapi.responses import FileResponse
 from typing import Optional
 from dotenv import load_dotenv
 import unicodedata
@@ -288,6 +289,7 @@ async def analyze_cv(
         bool(cv_data),
     )
     
+    processed_file_path = None
     try:
         # Prefer file input when a file is provided.
         # This avoids accidental 400s when a form also submits a stale or malformed cv_data field.
@@ -338,7 +340,7 @@ async def analyze_cv(
             email=email,
             phone=phone,
             extracted_data_json=cv_data.model_dump_json(),
-            file_path=processed_file_path if (file or file_path) else None,
+            file_path=processed_file_path,
         )
         
         # Analyze CV
@@ -385,116 +387,69 @@ async def analyze_cv(
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
-# ==========================================
-# API 3: LIST CANDIDATES
-# ==========================================
 @router.get("/candidates")
 async def list_candidates(
-    tenant: TenantContext = Depends(get_tenant_context),
+    tenant: TenantContext = Depends(get_tenant_context)
 ):
-    """List all extracted candidate profiles in the database for the current tenant."""
-    logger.info("list_candidates called for tenant_id=%s", tenant.tenant_id)
+    """List all candidate profiles parsed under a specific tenant."""
+    logger.info("Listing candidate profiles for tenant %s", tenant.tenant_id)
     try:
-        candidates = get_background_job_manager().list_candidates_for_tenant(tenant.tenant_id)
+        manager = get_background_job_manager()
+        candidates = manager.list_candidates_for_tenant(tenant.tenant_id)
         return {"candidates": candidates}
-    except Exception as e:
-        logger.error(f"Failed to list candidates for tenant: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve candidates: {str(e)}")
+    except Exception as exc:
+        logger.error("Failed to list candidates: %s", str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve candidates")
 
-
-# ==========================================
-# API 4: GET CANDIDATE FILE
-# ==========================================
-from fastapi.responses import FileResponse
-import sqlite3
-from datetime import datetime
 
 @router.get("/candidates/{candidate_id}/file")
-async def get_candidate_file(
+async def get_candidate_file_route(
     candidate_id: str,
-    tenant: TenantContext = Depends(get_tenant_context),
+    tenant: TenantContext = Depends(get_tenant_context)
 ):
-    """Retrieve and stream the original CV file (PDF or Image) for a candidate."""
-    logger.info("get_candidate_file called with candidate_id=%s", candidate_id)
-    try:
-        candidate = get_background_job_manager().get_candidate(candidate_id)
-        if not candidate:
-            raise HTTPException(status_code=404, detail="Candidate not found")
+    """Retrieve original CV file by candidate ID."""
+    logger.info("Retrieving CV file for candidate %s (tenant %s)", candidate_id, tenant.tenant_id)
+    manager = get_background_job_manager()
+    candidate = manager.get_candidate(candidate_id)
+    if not candidate or candidate["tenant_id"] != tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    file_path_str = candidate.get("file_path")
+    filepath = None
+    if file_path_str:
+        filepath = Path(file_path_str)
+
+    # Fallback 1: Scan UPLOAD_BASE_DIR recursively for files containing candidate name
+    if not filepath or not filepath.exists() or not filepath.is_file():
+        sanitized_cand_name = _sanitize_filename(candidate["name"]).lower()
+        found_files = []
+        for p in UPLOAD_BASE_DIR.rglob("*"):
+            if p.is_file() and sanitized_cand_name in p.name.lower():
+                found_files.append(p)
         
-        # Verify tenant isolation matches
-        if candidate["tenant_id"] != tenant.tenant_id:
-            raise HTTPException(status_code=403, detail="Unauthorized access to tenant candidate")
-            
-        file_path_str = candidate.get("file_path")
+        if found_files:
+            found_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            filepath = found_files[0]
+            logger.info("Found matching legacy CV file via disk scan: %s", filepath)
+
+    # Fallback 2: Generate dynamic text file fallback with candidate details
+    if not filepath or not filepath.exists() or not filepath.is_file():
+        logger.info("No raw CV file found for candidate %s on disk. Serving compiler fallback text file.", candidate_id)
+        content = f"CANDIDATE RESUME PROFILE\n" \
+                  f"========================\n\n" \
+                  f"Name:  {candidate['name']}\n" \
+                  f"Email: {candidate['email'] or 'N/A'}\n" \
+                  f"Phone: {candidate['phone'] or 'N/A'}\n\n" \
+                  f"----------------------------------------\n" \
+                  f"Note: This candidate profile was saved before the file-tracking feature was added, " \
+                  f"or the original uploaded PDF resume has been removed.\n" \
+                  f"You can still run AI matching and generation using this profile's structured data.\n" \
+                  f"----------------------------------------\n"
         
-        # Self-healing lookup fallback: If path is NULL or file is not found, recursively search UPLOAD_BASE_DIR
-        if not file_path_str or not Path(file_path_str).exists():
-            logger.info("Candidate file path is empty or invalid on disk. Launching recursive upload directory search...")
-            
-            # Clean candidate name words (length >= 3)
-            name_parts = [w.lower() for w in re.split(r'[\s_.-]+', candidate["name"]) if len(w) >= 3]
-            
-            best_match_path = None
-            best_match_score = 0
-            
-            # Fallback 2: Match by database created_at timestamp proximity
-            try:
-                db_created_dt = datetime.fromisoformat(candidate["created_at"])
-            except Exception:
-                db_created_dt = None
-                
-            closest_time_path = None
-            min_time_diff = 20.0  # within 20 seconds
-            
-            found_path = None
-            # Scan db/cv/uploads recursively
-            for root, dirs, files in os.walk(UPLOAD_BASE_DIR):
-                for file in files:
-                    file_path = Path(root) / file
-                    file_lower = file.lower()
-                    
-                    # 1. Match by name parts
-                    if name_parts:
-                        score = sum(1 for part in name_parts if part in file_lower)
-                        if score > best_match_score:
-                            best_match_score = score
-                            best_match_path = file_path
-                            
-                    # 2. Match by timestamp proximity (for generic names like resume.pdf)
-                    if db_created_dt:
-                        try:
-                            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                            time_diff = abs((db_created_dt - file_mtime).total_seconds())
-                            if time_diff < min_time_diff:
-                                min_time_diff = time_diff
-                                closest_time_path = file_path
-                        except Exception:
-                            pass
-            
-            # Determine the best matching path
-            if best_match_path and best_match_score >= 1:
-                found_path = best_match_path
-            elif closest_time_path:
-                found_path = closest_time_path
-                
-            if found_path:
-                file_path_str = str(found_path)
-                logger.info(f"Self-healed candidate profile file lookup. Found matching original document: {file_path_str}")
-                
-                # Dynamically update candidate SQLite record with healed file path
-                with sqlite3.connect(get_background_job_manager().db_path) as conn:
-                    conn.execute(
-                        "UPDATE candidates SET file_path = ? WHERE candidate_id = ?",
-                        (file_path_str, candidate_id),
-                    )
-                    conn.commit()
-            else:
-                logger.warning(f"Could not find matching CV document on server for candidate: {candidate['name']}")
-                raise HTTPException(status_code=404, detail="Original resume document file not found on server")
-            
-        return FileResponse(file_path_str)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to serve candidate file: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve original file: {str(e)}")
+        # Save to temporary text file
+        temp_file = tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False, encoding="utf-8")
+        temp_file.write(content)
+        temp_file.close()
+        return FileResponse(temp_file.name, media_type="text/plain", filename=f"{_sanitize_filename(candidate['name'])}_fallback.txt")
+
+    return FileResponse(filepath)
