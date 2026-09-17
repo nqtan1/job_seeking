@@ -115,8 +115,8 @@ def test_motivation_letter_pdf_rendering(tmp_path):
 
     # 3. Generate LaTeX content and verify
     latex_content = service.generate_letter_content(request, letter.content)
-    assert "\\documentclass[11pt,francais]{lettre}" in latex_content
-    assert "\\begin{letter}" in latex_content
+    assert "\\documentclass[11pt,french]{article}" in latex_content
+    assert "\\begin{document}" in latex_content
     assert "Startup XYZ" in latex_content
     assert "John Doe" in latex_content
 

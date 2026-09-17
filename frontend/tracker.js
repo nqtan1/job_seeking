@@ -6,7 +6,10 @@ import {
     deleteApplication, 
     uploadApplicationFile,
     uploadSpecialDocuments,
-    listCandidates
+    listCandidates,
+    generateTempPDF,
+    finalizeTempPDF,
+    compileVerbatim
 } from './api.js';
 import { showNotification, showError } from './utils.js';
 
@@ -38,6 +41,70 @@ export function initTracker() {
     window.toggleSpecialDocsSource = toggleSpecialDocsSource;
     window.stageDecisionFlowApplication = stageDecisionFlowApplication;
     window.markAsApplied = markAsApplied;
+    window.generateDecisionFlowLetterPDF = generateDecisionFlowLetterPDF;
+    window.submitDecisionFlowLetterFeedback = submitDecisionFlowLetterFeedback;
+    window.previewTrackerFile = previewTrackerFile;
+    window.zoomDecisionFlowDoc = zoomDecisionFlowDoc;
+    window.closeDecisionFlowSidePreview = closeDecisionFlowSidePreview;
+
+    // File change listeners for live previews in Apply Decision Flow modal
+    const dfCvFile = document.getElementById('df-cv-file');
+    if (dfCvFile) {
+        dfCvFile.addEventListener('change', (e) => {
+            const container = document.getElementById('df-cv-preview-container');
+            const preview = document.getElementById('df-cv-pdf-preview');
+            if (e.target.files && e.target.files.length > 0) {
+                const url = URL.createObjectURL(e.target.files[0]);
+                preview.src = url;
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+                preview.src = "";
+            }
+        });
+    }
+
+    const dfLetterFile = document.getElementById('df-letter-file');
+    if (dfLetterFile) {
+        dfLetterFile.addEventListener('change', (e) => {
+            const container = document.getElementById('df-letter-self-preview-container');
+            const preview = document.getElementById('df-letter-self-pdf-preview');
+            if (e.target.files && e.target.files.length > 0) {
+                const url = URL.createObjectURL(e.target.files[0]);
+                preview.src = url;
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+                preview.src = "";
+            }
+        });
+    }
+
+    const dfSpecialFiles = document.getElementById('df-special-files');
+    if (dfSpecialFiles) {
+        dfSpecialFiles.addEventListener('change', (e) => {
+            const container = document.getElementById('df-special-list-preview');
+            const itemsDiv = document.getElementById('df-special-list-items');
+            itemsDiv.innerHTML = '';
+            if (e.target.files && e.target.files.length > 0) {
+                Array.from(e.target.files).forEach(file => {
+                    const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                    const item = document.createElement('div');
+                    item.className = 'flex items-center justify-between py-1 border-b border-slate-850 last:border-0 text-slate-300';
+                    item.innerHTML = `
+                        <span class="truncate max-w-[280px]" title="${file.name}">
+                            <i class="fa-solid fa-file text-slate-500 mr-1 text-[10px]"></i> ${file.name}
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono shrink-0">${sizeMB} MB</span>
+                    `;
+                    itemsDiv.appendChild(item);
+                });
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        });
+    }
 }
 
 /**
@@ -114,15 +181,15 @@ function createApplicationCard(app) {
         filesHtml = `<div class="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-850/60 mt-1">`;
         if (app.cv_file) {
             filesHtml += `
-                <a href="${app.cv_file}" target="_blank" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 hover:bg-emerald-500/20 transition-all">
+                <button onclick="previewTrackerFile('${app.cv_file}', 'CV - ${app.company_name.replace(/'/g, "\\'")}')" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 hover:bg-emerald-500/20 transition-all cursor-pointer">
                     <i class="fa-solid fa-file-pdf"></i> CV
-                </a>`;
+                </button>`;
         }
         if (app.cover_letter_file) {
             filesHtml += `
-                <a href="${app.cover_letter_file}" target="_blank" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1 hover:bg-blue-500/20 transition-all">
+                <button onclick="previewTrackerFile('${app.cover_letter_file}', 'Letter - ${app.company_name.replace(/'/g, "\\'")}')" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1 hover:bg-blue-500/20 transition-all cursor-pointer">
                     <i class="fa-solid fa-file-lines"></i> Letter
-                </a>`;
+                </button>`;
         }
         if (app.special_documents) {
             try {
@@ -130,17 +197,17 @@ function createApplicationCard(app) {
                 if (specDocs && specDocs.length > 0) {
                     specDocs.forEach((doc, idx) => {
                         filesHtml += `
-                            <a href="${doc}" target="_blank" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-all" title="View Special Doc">
+                            <button onclick="previewTrackerFile('${doc}', 'Doc ${idx + 1} - ${app.company_name.replace(/'/g, "\\'")}')" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-all cursor-pointer" title="View Special Doc">
                                 <i class="fa-solid fa-paperclip"></i> Doc ${idx + 1}
-                            </a>`;
+                            </button>`;
                     });
                 }
             } catch (e) {
                 // If it was stored as a single url string fallback
                 filesHtml += `
-                    <a href="${app.special_documents}" target="_blank" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-all">
+                    <button onclick="previewTrackerFile('${app.special_documents}', 'Special - ${app.company_name.replace(/'/g, "\\'")}')" class="text-[9px] font-extrabold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center gap-1 hover:bg-purple-500/20 transition-all cursor-pointer">
                         <i class="fa-solid fa-paperclip"></i> Special
-                    </a>`;
+                    </button>`;
             }
         }
         filesHtml += `</div>`;
@@ -464,13 +531,19 @@ export async function triggerApplyFlow() {
         document.getElementById('df-cv-file').value = '';
         document.getElementById('df-letter-file').value = '';
         document.getElementById('df-special-files').value = '';
-        document.getElementById('df-letter-ai').checked = true;
+        document.getElementById('df-letter-choice').value = 'ai';
         document.getElementById('df-has-special').checked = false;
 
         // Reset visibility wrappers
         toggleCVDocSource('');
         toggleLetterDocSource('ai');
         toggleSpecialDocsSource(false);
+
+        // Reset AI co-writing sandbox states in Apply modal
+        document.getElementById('df-ai-letter-placeholder').classList.remove('hidden');
+        document.getElementById('df-ai-letter-active-container').classList.add('hidden');
+        document.getElementById('df-ai-letter-text').value = '';
+        document.getElementById('df-ai-letter-pdf-preview').src = '';
 
         // Open Modal
         const modal = document.getElementById('decision-flow-modal');
@@ -489,33 +562,178 @@ export function closeDecisionFlowModal() {
     const modal = document.getElementById('decision-flow-modal');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
+    closeDecisionFlowSidePreview();
 }
 
 /**
- * Toggle CV file upload view
+ * Trigger AI Agent to compose and typeset the cover letter PDF from configure modal
  */
-export function toggleCVDocSource(value) {
-    const wrapper = document.getElementById('df-cv-upload-wrapper');
-    if (value === "") {
-        wrapper.classList.remove('hidden');
-    } else {
-        wrapper.classList.add('hidden');
+export async function generateDecisionFlowLetterPDF() {
+    if (!state.cvData || !state.jobPosition) {
+        showError("CV and Job Position must be analyzed first.");
+        return;
+    }
+
+    const btnInitial = document.getElementById('df-btn-initial-draft');
+    btnInitial.disabled = true;
+    btnInitial.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Generating PDF Draft...`;
+
+    const tenantId = state.tenantId || 'default-tenant';
+    const aiTextarea = document.getElementById('df-ai-letter-text');
+    const iframePreview = document.getElementById('df-ai-letter-pdf-preview');
+
+    try {
+        const result = await generateTempPDF(
+            state.cvData,
+            state.jobPosition,
+            state.companyType || 'corporation',
+            'fr', // Default French standard typeset matching localized needs
+            'professional',
+            'txt',
+            tenantId
+        );
+
+        // Cache staging information
+        state.dfPdfId = result.pdf_id;
+        state.dfPdfUrl = result.pdf_url;
+        state.dfPdfContent = result.content;
+
+        // Load preview and raw text editor
+        aiTextarea.value = result.content;
+        iframePreview.src = result.pdf_url;
+
+        // Toggle views
+        document.getElementById('df-ai-letter-placeholder').classList.add('hidden');
+        document.getElementById('df-ai-letter-active-container').classList.remove('hidden');
+        showNotification("AI Cover letter composed and typeset PDF compiled successfully!");
+    } catch (err) {
+        console.error("Manual PDF draft generation failed:", err);
+        showError(`Staging Draft Failed: ${err.message}`);
+    } finally {
+        btnInitial.disabled = false;
+        btnInitial.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Draft (PDF)`;
     }
 }
 
 /**
- * Toggle Motivation Letter text/upload view
+ * Handle AI Motivation Letter refinement/revision feedback inside the decision flow modal
+ */
+export async function submitDecisionFlowLetterFeedback() {
+    const feedbackInput = document.getElementById('df-letter-feedback-input');
+    const feedbackText = feedbackInput.value.trim();
+    if (!feedbackText) {
+        showError("Please enter your revision feedback first!");
+        return;
+    }
+
+    if (!state.cvData || !state.jobPosition) {
+        showError("A CV and Job Position must be loaded first.");
+        return;
+    }
+
+    const tenantId = state.tenantId || 'default-tenant';
+    const aiTextarea = document.getElementById('df-ai-letter-text');
+    const iframePreview = document.getElementById('df-ai-letter-pdf-preview');
+    const revisionSpinner = document.getElementById('df-letter-revision-spinner');
+    const revisionBtn = document.getElementById('df-btn-letter-revision');
+
+    // Show loading spinner
+    revisionSpinner.classList.remove('hidden');
+    revisionBtn.disabled = true;
+    aiTextarea.value = "AI Agent is compiling updated typeset PDF draft based on feedback...";
+
+    try {
+        const result = await generateTempPDF(
+            state.cvData,
+            state.jobPosition,
+            state.companyType || 'corporation',
+            'fr',
+            'professional',
+            'txt',
+            tenantId,
+            feedbackText
+        );
+
+        state.dfPdfId = result.pdf_id;
+        state.dfPdfUrl = result.pdf_url;
+        state.dfPdfContent = result.content;
+
+        aiTextarea.value = result.content;
+        iframePreview.src = result.pdf_url;
+        feedbackInput.value = ''; // clear input on success
+        showNotification("AI Agent has successfully revised and re-compiled your PDF cover letter!");
+    } catch (err) {
+        console.error("AI revision failed:", err);
+        showError(`Revision failed: ${err.message}`);
+        aiTextarea.value = state.dfPdfContent || "AI generation failed. Enter feedback to retry.";
+    } finally {
+        revisionSpinner.classList.add('hidden');
+        revisionBtn.disabled = false;
+    }
+}
+
+/**
+ * Toggle CV file upload view and update preview
+ */
+export function toggleCVDocSource(value) {
+    const wrapper = document.getElementById('df-cv-upload-wrapper');
+    const container = document.getElementById('df-cv-preview-container');
+    const preview = document.getElementById('df-cv-pdf-preview');
+    
+    if (value === "") {
+        wrapper.classList.remove('hidden');
+        // Check if manual file input has a selected file
+        const fileInput = document.getElementById('df-cv-file');
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+            const url = URL.createObjectURL(fileInput.files[0]);
+            preview.src = url;
+            container.classList.remove('hidden');
+        } else {
+            container.classList.add('hidden');
+            preview.src = "";
+        }
+    } else {
+        wrapper.classList.add('hidden');
+        // Existing DB candidate selected. Set source to candidate's file route.
+        const tenantId = state.tenantId || 'default-tenant';
+        preview.src = `/api/cv/candidates/${value}/file?tenant_id=${tenantId}`;
+        container.classList.remove('hidden');
+    }
+}
+
+/**
+ * Toggle Motivation Letter text/upload view and live preview
  */
 export function toggleLetterDocSource(value) {
     const selfWrapper = document.getElementById('df-letter-self-wrapper');
-    const aiStatus = document.getElementById('df-letter-ai-status');
+    const aiWrapper = document.getElementById('df-letter-ai-wrapper');
+    const selfContainer = document.getElementById('df-letter-self-preview-container');
+    const selfPreview = document.getElementById('df-letter-self-pdf-preview');
 
     if (value === 'self') {
         selfWrapper.classList.remove('hidden');
-        aiStatus.classList.add('hidden');
-    } else {
+        aiWrapper.classList.add('hidden');
+        
+        // Show live preview if a file is already uploaded
+        const fileInput = document.getElementById('df-letter-file');
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+            const url = URL.createObjectURL(fileInput.files[0]);
+            selfPreview.src = url;
+            selfContainer.classList.remove('hidden');
+        } else {
+            selfContainer.classList.add('hidden');
+            selfPreview.src = "";
+        }
+    } else if (value === 'ai') {
         selfWrapper.classList.add('hidden');
-        aiStatus.classList.remove('hidden');
+        aiWrapper.classList.remove('hidden');
+        selfContainer.classList.add('hidden');
+        selfPreview.src = "";
+    } else { // 'none'
+        selfWrapper.classList.add('hidden');
+        aiWrapper.classList.add('hidden');
+        selfContainer.classList.add('hidden');
+        selfPreview.src = "";
     }
 }
 
@@ -524,10 +742,16 @@ export function toggleLetterDocSource(value) {
  */
 export function toggleSpecialDocsSource(checked) {
     const wrapper = document.getElementById('df-special-wrapper');
+    const container = document.getElementById('df-special-list-preview');
     if (checked) {
         wrapper.classList.remove('hidden');
+        const specialFilesInput = document.getElementById('df-special-files');
+        if (specialFilesInput && specialFilesInput.files && specialFilesInput.files.length > 0) {
+            container.classList.remove('hidden');
+        }
     } else {
         wrapper.classList.add('hidden');
+        container.classList.add('hidden');
     }
 }
 
@@ -564,37 +788,65 @@ async function selectCVChoice(appId, tenantId) {
  * Single-purpose helper: Resolve Motivation Letter Source Selection
  */
 async function selectLetterChoice(appId, tenantId) {
-    const choiceRadio = document.querySelector('input[name="df-letter-choice"]:checked').value;
+    const choiceRadio = document.getElementById('df-letter-choice').value;
+
+    // Option C: None
+    if (choiceRadio === 'none') {
+        return null;
+    }
 
     // Use AI Generated cover letter
     if (choiceRadio === 'ai') {
-        const letterText = state.motivationLetter?.content || document.getElementById('df-letter-text').value.trim();
-        if (!letterText) {
-            return null;
+        // Re-draft compiled PDF draft on-demand
+        if (!state.dfPdfId) {
+            showError("Please generate the AI cover letter PDF draft before submitting!");
+            throw new Error("No PDF Draft generated.");
         }
-        // Compile string to standard File object
-        const blob = new Blob([letterText], { type: "text/plain" });
-        const letterFile = new File([blob], `${_sanitize_filename(state.jobPosition?.company || "Company")}_AI_Letter.txt`, { type: "text/plain" });
+
+        const aiTextarea = document.getElementById('df-ai-letter-text');
+        const letterText = aiTextarea ? aiTextarea.value.trim() : (state.dfPdfContent || "");
         
-        const updatedApp = await uploadApplicationFile(appId, 'cover_letter', letterFile, tenantId);
-        return updatedApp.cover_letter_file;
+        let activePdfId = state.dfPdfId;
+
+        // If the user made manual inline modifications, compile an updated temporary PDF verbatim (NO AI CALL!)
+        if (letterText !== state.dfPdfContent) {
+            showNotification("Saving and compiling manual inline edits verbatim...");
+            const compiled = await compileVerbatim(
+                state.cvData,
+                state.jobPosition,
+                letterText,
+                tenantId
+            );
+            activePdfId = compiled.pdf_id;
+        }
+
+        // Finalize temporary PDF (moves PDF from /tmp to /db/motivation_letter permanently)
+        const companyName = state.jobPosition?.company || "Company";
+        const jobTitle = state.jobPosition?.job_title || "Job";
+        
+        const finalResult = await finalizeTempPDF(activePdfId, companyName, jobTitle, tenantId);
+        
+        // Return permanent path of the compiled cover letter PDF
+        return finalResult.pdf_path;
     }
 
     // Use Self Written letter
-    const selfFileInput = document.getElementById('df-letter-file');
-    if (selfFileInput.files && selfFileInput.files.length > 0) {
-        const file = selfFileInput.files[0];
-        const updatedApp = await uploadApplicationFile(appId, 'cover_letter', file, tenantId);
-        return updatedApp.cover_letter_file;
-    }
+    if (choiceRadio === 'self') {
+        const selfFileInput = document.getElementById('df-letter-file');
+        if (selfFileInput.files && selfFileInput.files.length > 0) {
+            const file = selfFileInput.files[0];
+            const updatedApp = await uploadApplicationFile(appId, 'cover_letter', file, tenantId);
+            return updatedApp.cover_letter_file;
+        }
 
-    const selfText = document.getElementById('df-letter-text').value.trim();
-    if (selfText) {
-        const blob = new Blob([selfText], { type: "text/plain" });
-        const letterFile = new File([blob], "Self_Written_Letter.txt", { type: "text/plain" });
-        
-        const updatedApp = await uploadApplicationFile(appId, 'cover_letter', letterFile, tenantId);
-        return updatedApp.cover_letter_file;
+        const selfText = document.getElementById('df-letter-text').value.trim();
+        if (selfText) {
+            const blob = new Blob([selfText], { type: "text/plain" });
+            const letterFile = new File([blob], "Self_Written_Letter.txt", { type: "text/plain" });
+            
+            const updatedApp = await uploadApplicationFile(appId, 'cover_letter', letterFile, tenantId);
+            return updatedApp.cover_letter_file;
+        }
     }
 
     return null;
@@ -720,4 +972,102 @@ function _sanitize_filename(filename) {
         .replace(/[^\w\s.-]/g, '_')
         .replace(/[\s_]+/g, '_')
         .replace(/_+$/, '');
+}
+
+/**
+ * Open zoom-modal to preview CV, letter or special files natively in-app
+ */
+export function previewTrackerFile(fileUrl, title) {
+    if (!fileUrl) return;
+
+    const modal = document.getElementById('zoom-modal');
+    const modalTitle = document.getElementById('zoom-modal-title');
+    const iframe = document.getElementById('zoom-iframe');
+    const img = document.getElementById('zoom-img');
+    const txt = document.getElementById('zoom-txt');
+
+    modalTitle.innerText = title;
+
+    // Reset visibility
+    iframe.classList.add('hidden');
+    img.classList.add('hidden');
+    txt.classList.add('hidden');
+
+    const ext = fileUrl.split('.').pop().split('?')[0].toLowerCase();
+    
+    if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
+        img.src = fileUrl;
+        img.classList.remove('hidden');
+    } else {
+        iframe.src = fileUrl;
+        iframe.classList.remove('hidden');
+    }
+
+    // Show Modal with beautiful smooth transition
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0', 'scale-95');
+        modal.classList.add('opacity-100', 'scale-100');
+    }, 10);
+}
+
+/**
+ * Capture modal preview document and trigger side-by-side split view in-app
+ */
+export function zoomDecisionFlowDoc(docType) {
+    let fileUrl = '';
+    let title = '';
+    
+    if (docType === 'cv') {
+        const iframe = document.getElementById('df-cv-pdf-preview');
+        fileUrl = iframe ? iframe.src : '';
+        title = 'Staged CV / Resume Document';
+    } else if (docType === 'self') {
+        const iframe = document.getElementById('df-letter-self-pdf-preview');
+        fileUrl = iframe ? iframe.src : '';
+        title = 'Self Written/Uploaded Letter';
+    } else if (docType === 'ai') {
+        const iframe = document.getElementById('df-ai-letter-pdf-preview');
+        fileUrl = iframe ? iframe.src : '';
+        title = 'RecruitAI Typeset Cover Letter';
+    }
+    
+    // Validate we have a non-empty active preview url
+    if (fileUrl && fileUrl !== window.location.href && !fileUrl.endsWith('#') && fileUrl !== '') {
+        const container = document.getElementById('decision-flow-modal-container');
+        const sidePane = document.getElementById('df-preview-pane');
+        const sideIframe = document.getElementById('df-side-preview-iframe');
+        const sideTitle = document.getElementById('df-side-preview-title');
+        
+        // Load content inside sidebar preview
+        sideIframe.src = fileUrl;
+        sideTitle.innerHTML = `<i class="fa-solid fa-eye text-emerald-400"></i> ${title}`;
+        
+        // Smoothly expand modal and slide-in sidebar pane side-by-side
+        container.classList.remove('max-w-lg');
+        container.classList.add('max-w-5xl');
+        sidePane.classList.remove('hidden');
+    } else {
+        showError("No active document preview loaded to zoom. Please select or generate a document first!");
+    }
+}
+
+/**
+ * Collapse and close the side-by-side live preview panel
+ */
+export function closeDecisionFlowSidePreview() {
+    const container = document.getElementById('decision-flow-modal-container');
+    const sidePane = document.getElementById('df-preview-pane');
+    const sideIframe = document.getElementById('df-side-preview-iframe');
+    
+    if (sidePane) {
+        sidePane.classList.add('hidden');
+    }
+    if (container) {
+        container.classList.remove('max-w-5xl');
+        container.classList.add('max-w-lg');
+    }
+    if (sideIframe) {
+        sideIframe.src = '';
+    }
 }

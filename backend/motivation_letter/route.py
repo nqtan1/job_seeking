@@ -20,10 +20,19 @@ agent = None
 service = MotivationLetterService()
 
 
+from cv.schema import CVInformation
+from jobs.schema import JobPosition
+
 class FinalizeRequest(BaseModel):
     pdf_id: str
     company: str
     job_title: str
+
+
+class CompileVerbatimRequest(BaseModel):
+    cv_info: CVInformation
+    job_info: JobPosition
+    content: str
 
 
 def _get_agent() -> MotivationLetterAgent:
@@ -92,7 +101,34 @@ async def get_temp_pdf_file(pdf_id: str):
     pdf_path = service.db_base_dir / "motivation_letter" / "tmp" / pdf_id / "motivation_letter.pdf"
     if not pdf_path.exists():
         raise HTTPException(status_code=404, detail="Temporary PDF not found or expired.")
-    return FileResponse(pdf_path, media_type="application/pdf", filename="motivation_letter.pdf")
+    return FileResponse(pdf_path, media_type="application/pdf", content_disposition_type="inline")
+
+
+@router.post("/compile-verbatim")
+async def compile_verbatim_endpoint(request: CompileVerbatimRequest) -> dict:
+    """Compile provided cover letter text verbatim to a temporary typeset PDF inside /tmp."""
+    import uuid
+    try:
+        logger.info("Compiling user's manual edited text verbatim to typeset PDF")
+        pdf_id = str(uuid.uuid4())
+        
+        # We need a MotivationLetterRequest structure for generate_temp_pdf
+        from motivation_letter.schema import MotivationLetterRequest
+        dummy_req = MotivationLetterRequest(
+            cv_info=request.cv_info,
+            job_info=request.job_info,
+            job_type="corporation", # dummy value
+        )
+        
+        pdf_path = service.generate_temp_pdf(dummy_req, request.content, pdf_id)
+        return {
+            "pdf_id": pdf_id,
+            "pdf_url": f"/api/motivation-letter/temp/{pdf_id}/file",
+            "content": request.content
+        }
+    except Exception as e:
+        logger.error(f"Error compiling verbatim PDF: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to compile verbatim PDF: {str(e)}")
 
 
 @router.post("/finalize")

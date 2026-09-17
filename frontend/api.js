@@ -367,3 +367,90 @@ export async function uploadSpecialDocuments(applicationId, files, tenantId) {
     return await response.json();
 }
 
+/**
+ * Generate a temporary PDF draft for motivation letter typeset preview
+ */
+export async function generateTempPDF(cvData, jobPosition, companyType, language, tone, format, tenantId, customContext) {
+    const payload = {
+        cv_info: cvData,
+        job_info: jobPosition,
+        job_type: companyType,
+        language: language,
+        tone: tone,
+        return_format: format,
+        custom_context: customContext || null
+    };
+
+    const response = await fetch('/api/motivation-letter/generate-temp-pdf', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Temp PDF drafting failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Finalize a temporary PDF draft, saving it to db/motivation_letter
+ */
+export async function finalizeTempPDF(pdfId, company, jobTitle, tenantId) {
+    const payload = {
+        pdf_id: pdfId,
+        company: company,
+        job_title: jobTitle
+    };
+
+    const response = await fetch('/api/motivation-letter/finalize', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Finalization of PDF failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Compile provided motivation letter text verbatim to typeset PDF (NO AI call!)
+ */
+export async function compileVerbatim(cvData, jobPosition, content, tenantId) {
+    const payload = {
+        cv_info: cvData,
+        job_info: jobPosition,
+        content: content
+    };
+
+    const response = await fetch('/api/motivation-letter/compile-verbatim', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Verbatim compiling failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+
+

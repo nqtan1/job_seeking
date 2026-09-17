@@ -91,27 +91,56 @@ class MotivationLetterService:
             
         body_text = "\n\n".join(paragraphs)
         
-        # Format LaTeX string using the verified lettre layout
-        latex_template = f"""\\documentclass[11pt,francais]{{lettre}}
+        # Format LaTeX string using a highly customizable, modern, side-by-side article layout
+        latex_template = f"""\\documentclass[11pt,french]{{article}}
 \\usepackage[T1]{{fontenc}}
 \\usepackage[utf8]{{inputenc}}
 \\usepackage[french]{{babel}}
+\\usepackage{{geometry}}
+\\geometry{{a4paper, margin=2cm}}
+\\usepackage{{parskip}}
 
 \\begin{{document}}
-\\begin{{letter}}{{{safe_company_name}}}
-\\name{{{safe_sender_name}}}
-\\address{{{sender_info}}}
-\\lieu{{Paris}}
-\\date{{\\today}}
-\\conc{{Candidature au poste de {safe_job_title}}}
+\\pagestyle{{empty}}
 
-\\opening{{{opening}}}
+% Sender and Recipient Address blocks side-by-side
+\\begin{{minipage}}[t]{{0.55\\textwidth}}
+\\textbf{{{safe_sender_name}}} \\\\
+{safe_sender_address}
+\\end{{minipage}}
+\\begin{{minipage}}[t]{{0.45\\textwidth}}
+\\begin{{flushright}}
+\\textbf{{{safe_company_name}}} \\\\
+\\textit{{À l'attention du service recrutement}}
+\\end{{flushright}}
+\\end{{minipage}}
+
+\\vspace{{1.5em}}
+
+\\begin{{flushright}}
+Paris, le \\today
+\\end{{flushright}}
+
+\\vspace{{1em}}
+
+\\textbf{{Objet : Candidature au poste de {safe_job_title}}}
+
+\\vspace{{1.5em}}
+
+{opening}
 
 {body_text}
 
-\\closing{{{closing}}}
+\\vspace{{1.5em}}
 
-\\end{{letter}}
+{closing}
+
+\\vspace{{2.5em}}
+
+\\begin{{flushright}}
+\\textbf{{{safe_sender_name}}}
+\\end{{flushright}}
+
 \\end{{document}}
 """
         return latex_template
