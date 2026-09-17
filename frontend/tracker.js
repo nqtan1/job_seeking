@@ -7,7 +7,8 @@ import {
     uploadApplicationFile,
     uploadSpecialDocuments,
     listCandidates,
-    generateLetter
+    generateTempPDF,
+    finalizeTempPDF
 } from './api.js';
 import { showNotification, showError } from './utils.js';
 
@@ -39,6 +40,7 @@ export function initTracker() {
     window.toggleSpecialDocsSource = toggleSpecialDocsSource;
     window.stageDecisionFlowApplication = stageDecisionFlowApplication;
     window.markAsApplied = markAsApplied;
+    window.generateDecisionFlowLetterPDF = generateDecisionFlowLetterPDF;
     window.submitDecisionFlowLetterFeedback = submitDecisionFlowLetterFeedback;
 }
 
@@ -49,9 +51,9 @@ export async function renderTracker() {
     try {
         const tenantId = state.tenantId || 'default-tenant';
         
-        // Fetch applications from backend
+        // Fetch applications from backend (API returns List[ApplicationResponse])
         const result = await getApplications({}, tenantId);
-        state.applications = result.applications || [];
+        state.applications = Array.isArray(result) ? result : (result.applications || []);
         
         // Empty columns
         const statuses = ['to_apply', 'applied', 'in_review', 'interview', 'offer', 'rejected', 'ghosted'];
@@ -338,42 +340,18 @@ export async function triggerApplyFlow() {
             cvSelect.appendChild(opt);
         });
 
-        // Initialize Live AI-Generated Motivation Letter Co-writing block
-        const aiTextarea = document.getElementById('df-ai-letter-text');
-        const revisionSpinner = document.getElementById('df-letter-revision-spinner');
-        
-        // Clear previous input
-        const feedbackInput = document.getElementById('df-letter-feedback-input');
-        if (feedbackInput) feedbackInput.value = '';
+        // Clean up temporary PDF drafting states (Strictly on-demand!)
+        state.dfPdfId = null;
+        state.dfPdfUrl = null;
+        state.dfPdfContent = null;
 
-        if (state.motivationLetter && state.motivationLetter.content) {
-            aiTextarea.value = state.motivationLetter.content;
-            if (revisionSpinner) revisionSpinner.classList.add('hidden');
-        } else if (state.cvData && state.jobPosition) {
-            // Generate draft in-place asynchronously!
-            aiTextarea.value = "Drafting customized cover letter via RecruitAI agent...";
-            if (revisionSpinner) revisionSpinner.classList.remove('hidden');
-            
-            generateLetter(
-                state.cvData, 
-                state.jobPosition, 
-                state.companyType || 'corporation', 
-                'fr', 
-                'professional', 
-                'txt', 
-                tenantId
-            ).then(result => {
-                state.motivationLetter = result;
-                aiTextarea.value = result.content;
-                if (revisionSpinner) revisionSpinner.classList.add('hidden');
-            }).catch(err => {
-                console.error("Auto letter drafting failed:", err);
-                aiTextarea.value = "Failed to draft motivation letter automatically. Please try Request Revision with feedback.";
-                if (revisionSpinner) revisionSpinner.classList.add('hidden');
-            });
-        } else {
-            aiTextarea.value = "Please analyze a CV and JD first to generate an AI draft.";
-        }
+        // Reset AI cover letter sandbox views to Initial Placeholder
+        document.getElementById('df-ai-letter-placeholder').classList.remove('hidden');
+        document.getElementById('df-ai-letter-active-container').classList.add('hidden');
+        document.getElementById('df-ai-letter-text').value = '';
+        document.getElementById('df-ai-letter-pdf-preview').src = '';
+        document.getElementById('df-letter-feedback-input').value = '';
+        document.getElementById('df-letter-revision-spinner').classList.add('hidden');
 
         // Prefill generic Motivation Letter text for 'self' option
         const letterTextarea = document.getElementById('df-letter-text');
@@ -406,6 +384,56 @@ export async function triggerApplyFlow() {
 }
 
 /**
+ * Handle manual cover letter PDF generation in-place (Tapped by user, NOT automatic!)
+ */
+export async function generateDecisionFlowLetterPDF() {
+    if (!state.cvData || !state.jobPosition) {
+        showError("CV and Job Position must be analyzed first.");
+        return;
+    }
+
+    const btnInitial = document.getElementById('df-btn-initial-draft');
+    btnInitial.disabled = true;
+    btnInitial.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Generating PDF Draft...`;
+
+    const tenantId = state.tenantId || 'default-tenant';
+    const aiTextarea = document.getElementById('df-ai-letter-text');
+    const iframePreview = document.getElementById('df-ai-letter-pdf-preview');
+
+    try {
+        const result = await generateTempPDF(
+            state.cvData,
+            state.jobPosition,
+            state.companyType || 'corporation',
+            'fr', // Default French standard typeset
+            'professional',
+            'txt',
+            tenantId
+        );
+
+        // Cache staging information
+        state.dfPdfId = result.pdf_id;
+        state.dfPdfUrl = result.pdf_url;
+        state.dfPdfContent = result.content;
+
+        // Load preview and raw text editor
+        aiTextarea.value = result.content;
+        iframePreview.src = result.pdf_url;
+
+        // Toggle views
+        document.getElementById('df-ai-letter-placeholder').classList.add('hidden');
+        document.getElementById('df-ai-letter-active-container').classList.remove('hidden');
+        showNotification("AI Cover letter composed and typeset PDF compiled successfully!");
+    } catch (err) {
+        console.error("Manual PDF draft generation failed:", err);
+        showError(`Staging Draft Failed: ${err.message}`);
+    } finally {
+        btnInitial.disabled = false;
+        btnInitial.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Draft (PDF)`;
+    }
+}
+
+/**
  * Handle AI Motivation Letter refinement/revision feedback inside the decision flow modal
  */
 export async function submitDecisionFlowLetterFeedback() {
@@ -423,16 +451,17 @@ export async function submitDecisionFlowLetterFeedback() {
 
     const tenantId = state.tenantId || 'default-tenant';
     const aiTextarea = document.getElementById('df-ai-letter-text');
+    const iframePreview = document.getElementById('df-ai-letter-pdf-preview');
     const revisionSpinner = document.getElementById('df-letter-revision-spinner');
     const revisionBtn = document.getElementById('df-btn-letter-revision');
 
     // Show loading spinner
     revisionSpinner.classList.remove('hidden');
     revisionBtn.disabled = true;
-    aiTextarea.value = "AI Agent is revising your letter based on feedback...";
+    aiTextarea.value = "AI Agent is compiling updated typeset PDF draft based on feedback...";
 
     try {
-        const result = await generateLetter(
+        const result = await generateTempPDF(
             state.cvData,
             state.jobPosition,
             state.companyType || 'corporation',
@@ -443,14 +472,18 @@ export async function submitDecisionFlowLetterFeedback() {
             feedbackText
         );
 
-        state.motivationLetter = result;
+        state.dfPdfId = result.pdf_id;
+        state.dfPdfUrl = result.pdf_url;
+        state.dfPdfContent = result.content;
+
         aiTextarea.value = result.content;
+        iframePreview.src = result.pdf_url;
         feedbackInput.value = ''; // clear input on success
-        showNotification("AI Agent has successfully revised the letter draft!");
+        showNotification("AI Agent has successfully revised and re-compiled your PDF cover letter!");
     } catch (err) {
         console.error("AI revision failed:", err);
         showError(`Revision failed: ${err.message}`);
-        aiTextarea.value = state.motivationLetter?.content || "AI generation failed. Enter feedback to retry.";
+        aiTextarea.value = state.dfPdfContent || "AI generation failed. Enter feedback to retry.";
     } finally {
         revisionSpinner.classList.add('hidden');
         revisionBtn.disabled = false;
@@ -543,23 +576,41 @@ async function selectLetterChoice(appId, tenantId) {
 
     // Use AI Generated cover letter
     if (choiceRadio === 'ai') {
-        const aiTextarea = document.getElementById('df-ai-letter-text');
-        const letterText = aiTextarea ? aiTextarea.value.trim() : (state.motivationLetter?.content || "");
-        if (!letterText) {
-            return null;
-        }
-        
-        // Update local state content with users manual edits
-        if (state.motivationLetter) {
-            state.motivationLetter.content = letterText;
+        // Re-draft compiled PDF draft on-demand
+        if (!state.dfPdfId) {
+            showError("Please generate the AI cover letter PDF draft before submitting!");
+            throw new Error("No PDF Draft generated.");
         }
 
-        // Compile string to standard File object
-        const blob = new Blob([letterText], { type: "text/plain" });
-        const letterFile = new File([blob], `${_sanitize_filename(state.jobPosition?.company || "Company")}_AI_Letter.txt`, { type: "text/plain" });
+        const aiTextarea = document.getElementById('df-ai-letter-text');
+        const letterText = aiTextarea ? aiTextarea.value.trim() : (state.dfPdfContent || "");
         
-        const updatedApp = await uploadApplicationFile(appId, 'cover_letter', letterFile, tenantId);
-        return updatedApp.cover_letter_file;
+        let activePdfId = state.dfPdfId;
+
+        // If the user made manual inline modifications, compile an updated temporary PDF first
+        if (letterText !== state.dfPdfContent) {
+            showNotification("Saving and compiling manual inline edits...");
+            const compiled = await generateTempPDF(
+                state.cvData,
+                state.jobPosition,
+                state.companyType || 'corporation',
+                'fr',
+                'professional',
+                'txt',
+                tenantId,
+                null // no prompt, compile verbatim
+            );
+            activePdfId = compiled.pdf_id;
+        }
+
+        // Finalize temporary PDF (moves PDF from /tmp to /db/motivation_letter permanently)
+        const companyName = state.jobPosition?.company || "Company";
+        const jobTitle = state.jobPosition?.job_title || "Job";
+        
+        const finalResult = await finalizeTempPDF(activePdfId, companyName, jobTitle, tenantId);
+        
+        // Return permanent path of the compiled cover letter PDF
+        return finalResult.pdf_path;
     }
 
     // Use Self Written letter

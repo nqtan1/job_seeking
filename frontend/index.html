@@ -1125,27 +1125,49 @@
                         </div>
                     </div>
 
-                    <!-- AI-Generated Letter Co-writing Sandbox inside Modal -->
-                    <div id="df-letter-ai-wrapper" class="flex flex-col gap-2.5 mt-1.5">
-                        <div class="flex flex-col gap-1">
-                            <label for="df-ai-letter-text" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Review & Edit AI Letter Draft (Tapped/Editable):</label>
-                            <textarea id="df-ai-letter-text" rows="8" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono leading-relaxed" placeholder="Awaiting AI letter draft generation..."></textarea>
-                        </div>
+                    <!-- AI-Generated Letter Co-writing Sandbox with Live PDF Preview inside Modal -->
+                    <div id="df-letter-ai-wrapper" class="flex flex-col gap-3 mt-1.5">
                         
-                        <div class="flex flex-col gap-1.5 bg-slate-950/50 p-3 rounded-lg border border-slate-850">
-                            <div class="flex items-center justify-between">
-                                <label for="df-letter-feedback-input" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-400"></i> Feedback for AI Redo:
-                                </label>
-                                <span id="df-letter-revision-spinner" class="hidden text-[10px] text-emerald-400 font-semibold animate-pulse flex items-center gap-1.5">
-                                    <i class="fa-solid fa-spinner animate-spin text-xs"></i> AI Agent revising...
-                                </span>
+                        <!-- Initial Placeholder / CTA when not generated yet -->
+                        <div id="df-ai-letter-placeholder" class="bg-slate-950/40 p-5 rounded-lg border border-slate-850 text-center flex flex-col items-center justify-center gap-2 animate-slide-in">
+                            <i class="fa-solid fa-file-pdf text-xl text-slate-600 animate-pulse"></i>
+                            <p class="text-[11px] font-bold text-slate-300">Motivation Letter PDF Draft not generated yet</p>
+                            <p class="text-[10px] text-slate-500 max-w-xs leading-relaxed">Click below to trigger the RecruitAI agent to compose a custom cover letter and compile its typeset PDF in-place.</p>
+                            
+                            <button type="button" id="df-btn-initial-draft" onclick="generateDecisionFlowLetterPDF()" class="mt-1 py-1.5 px-4 rounded-lg font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow shadow-emerald-950/20 transition-all uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate AI Draft (PDF)
+                            </button>
+                        </div>
+
+                        <!-- Active Review Container (Hidden by default, shown once generated) -->
+                        <div id="df-ai-letter-active-container" class="hidden flex flex-col gap-3">
+                            <!-- Live PDF Preview Panel -->
+                            <div class="bg-slate-950 rounded-lg overflow-hidden border border-slate-850 h-[220px] flex items-center justify-center relative shadow-inner">
+                                <iframe id="df-ai-letter-pdf-preview" class="w-full h-full border-0" src=""></iframe>
                             </div>
-                            <div class="flex gap-2">
-                                <input type="text" id="df-letter-feedback-input" class="flex-1 bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-medium" placeholder="e.g. Make it more formal, focus on FastAPI experience, keep it brief...">
-                                <button type="button" id="df-btn-letter-revision" onclick="submitDecisionFlowLetterFeedback()" class="py-2 px-3 rounded-lg font-bold text-[10px] bg-slate-850 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/10 transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5 shrink-0">
-                                    <i class="fa-solid fa-arrows-rotate"></i> Request Revision
-                                </button>
+
+                            <!-- Raw text area (tapped/editable) -->
+                            <div class="flex flex-col gap-1">
+                                <label for="df-ai-letter-text" class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Tap to Edit raw letter text if needed:</label>
+                                <textarea id="df-ai-letter-text" rows="6" class="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-slate-300 focus:outline-none focus:border-emerald-500 font-mono leading-relaxed" placeholder="Review and edit drafted cover letter..."></textarea>
+                            </div>
+
+                            <!-- Feedback for AI Redo block -->
+                            <div class="flex flex-col gap-1.5 bg-slate-950/50 p-3 rounded-lg border border-slate-850">
+                                <div class="flex items-center justify-between">
+                                    <label for="df-letter-feedback-input" class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        <i class="fa-solid fa-message-smile text-emerald-400"></i> Feedback for AI Redo:
+                                    </label>
+                                    <span id="df-letter-revision-spinner" class="hidden text-[10px] text-emerald-400 font-semibold animate-pulse flex items-center gap-1.5">
+                                        <i class="fa-solid fa-spinner animate-spin text-xs"></i> AI Agent revising...
+                                    </span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" id="df-letter-feedback-input" class="flex-1 bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs focus:outline-none focus:border-emerald-500 text-slate-300 font-medium" placeholder="e.g. Make it more formal, focus on FastAPI experience, keep it brief...">
+                                    <button type="button" id="df-btn-letter-revision" onclick="submitDecisionFlowLetterFeedback()" class="py-2 px-3 rounded-lg font-bold text-[10px] bg-slate-850 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/10 transition-colors uppercase tracking-wider flex items-center justify-center gap-1.5 shrink-0 cursor-pointer">
+                                        <i class="fa-solid fa-arrows-rotate"></i> Request Revision
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
