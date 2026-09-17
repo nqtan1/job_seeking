@@ -214,3 +214,45 @@ class MotivationLetterService:
         self.logger.info("Request details saved to: %s", request_file)
 
         return letter
+
+    def generate_temp_pdf(self, request: MotivationLetterRequest, letter_content: str, pdf_id: str) -> Path:
+        """Generate and compile a temporary PDF draft inside a tmp directory."""
+        temp_folder = self.db_base_dir / "motivation_letter" / "tmp" / pdf_id
+        temp_folder.mkdir(parents=True, exist_ok=True)
+        
+        # Save content
+        letter_file = temp_folder / f"motivation_letter.{request.return_format}"
+        letter_file.write_text(letter_content, encoding="utf-8")
+        
+        # Generate LaTeX and compile PDF
+        latex_content = self.generate_letter_content(request, letter_content)
+        tex_file = temp_folder / "motivation_letter.tex"
+        tex_file.write_text(latex_content, encoding="utf-8")
+        
+        pdf_path = self.render_letter_pdf(latex_content, temp_folder, "motivation_letter")
+        if not pdf_path:
+            raise Exception("Failed to compile temporary PDF draft.")
+        return pdf_path
+
+    def finalize_temp_pdf(self, pdf_id: str, company: str, job_title: str) -> tuple[Path, str]:
+        """Move temporary PDF files to permanent results folder and return paths."""
+        temp_folder = self.db_base_dir / "motivation_letter" / "tmp" / pdf_id
+        if not temp_folder.exists():
+            raise Exception(f"Temporary PDF folder with ID {pdf_id} not found.")
+            
+        result_folder = self._get_result_folder(company, job_title)
+        
+        # Move all files from temp to permanent
+        import shutil
+        for file in temp_folder.iterdir():
+            shutil.move(str(file), str(result_folder / file.name))
+            
+        # Remove temp folder
+        try:
+            shutil.rmtree(str(temp_folder))
+        except Exception:
+            pass
+            
+        final_pdf_path = result_folder / "motivation_letter.pdf"
+        return final_pdf_path, str(final_pdf_path)
+

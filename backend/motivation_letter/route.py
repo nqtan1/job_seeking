@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from pathlib import Path
+from pydantic import BaseModel
 
 from utils.logger import get_logger
 from agents.agent_config import AgentConfig
@@ -18,6 +20,12 @@ agent = None
 service = MotivationLetterService()
 
 
+class FinalizeRequest(BaseModel):
+    pdf_id: str
+    company: str
+    job_title: str
+
+
 def _get_agent() -> MotivationLetterAgent:
     global agent
     if agent is not None:
@@ -29,20 +37,6 @@ def _get_agent() -> MotivationLetterAgent:
 async def generate_motivation_letter(request: MotivationLetterRequest) -> MotivationLetter:
     """
     Generate a motivation letter based on CV and job information
-    
-    Args:
-        request: MotivationLetterRequest containing:
-            - cv_info: Candidate CV information
-            - job_info: Target job position
-            - job_type: "startup", "phd", or "corporation"
-            - language: "en" or "fr"
-            - tone: "professional", "academic", or "formal"
-            - return_format: "txt" or "latex"
-            - candidate_analysis: (optional) Pre-computed fit analysis
-            - custom_context: (optional) User-provided additional context
-    
-    Returns:
-        MotivationLetter with content and metadata
     """
     try:
         logger.info(
@@ -66,6 +60,53 @@ async def generate_motivation_letter(request: MotivationLetterRequest) -> Motiva
     except Exception as e:
         logger.error(f"Error generating motivation letter: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate motivation letter")
+
+
+@router.post("/generate-temp-pdf")
+async def generate_temp_pdf_endpoint(request: MotivationLetterRequest) -> dict:
+    """Generate motivation letter draft and compile to a temporary PDF inside /tmp."""
+    import uuid
+    from starlette.concurrency import run_in_threadpool
+    try:
+        logger.info("Generating temporary PDF motivation letter draft")
+        # 1. Generate letter text using agent
+        letter = await run_in_threadpool(_get_agent().generate_letter, request)
+        
+        # 2. Compile to temporary PDF
+        pdf_id = str(uuid.uuid4())
+        pdf_path = service.generate_temp_pdf(request, letter.content, pdf_id)
+        
+        return {
+            "pdf_id": pdf_id,
+            "pdf_url": f"/api/motivation-letter/temp/{pdf_id}/file",
+            "content": letter.content
+        }
+    except Exception as e:
+        logger.error(f"Error generating temporary PDF: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to compile PDF draft: {str(e)}")
+
+
+@router.get("/temp/{pdf_id}/file")
+async def get_temp_pdf_file(pdf_id: str):
+    """Retrieve temporary compiled PDF file."""
+    pdf_path = service.db_base_dir / "motivation_letter" / "tmp" / pdf_id / "motivation_letter.pdf"
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="Temporary PDF not found or expired.")
+    return FileResponse(pdf_path, media_type="application/pdf", filename="motivation_letter.pdf")
+
+
+@router.post("/finalize")
+async def finalize_temp_pdf_endpoint(req: FinalizeRequest) -> dict:
+    """Move temporary PDF files to permanent results folder."""
+    try:
+        logger.info("Finalizing temporary PDF draft for company: %s", req.company)
+        final_pdf_path, final_pdf_str = service.finalize_temp_pdf(req.pdf_id, req.company, req.job_title)
+        return {
+            "pdf_path": final_pdf_str
+        }
+    except Exception as e:
+        logger.error(f"Error finalizing temporary PDF: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to save PDF permanently: {str(e)}")
 
 
 @router.get("/formats")
