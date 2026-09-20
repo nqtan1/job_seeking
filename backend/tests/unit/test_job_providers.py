@@ -1,10 +1,11 @@
 import unittest
 from unittest.mock import MagicMock, patch
+import os
 import json
 import time
 
-from jobs.providers.france_travail import FranceTravailProvider
-from jobs.providers.manager import JobProviderManager
+from infrastructure.jobs.providers.france_travail import FranceTravailProvider
+from infrastructure.jobs.providers.manager import JobProviderManager
 
 
 class TestJobProviders(unittest.TestCase):
@@ -19,7 +20,7 @@ class TestJobProviders(unittest.TestCase):
     def tearDown(self):
         self.env_patcher.stop()
 
-    @patch("jobs.providers.france_travail.requests.post")
+    @patch("infrastructure.jobs.search.providers.france_travail.requests.post")
     def test_france_travail_token_cache(self, mock_post):
         # Mock oauth token response
         mock_response = MagicMock()
@@ -33,14 +34,14 @@ class TestJobProviders(unittest.TestCase):
         provider = FranceTravailProvider()
         
         # Mock Path.exists and read_text / write_text to prevent actual file writes
-        with patch("jobs.providers.france_travail.Path.exists", return_value=False), \
-             patch("jobs.providers.france_travail.Path.write_text") as mock_write:
+        with patch("infrastructure.jobs.search.providers.france_travail.Path.exists", return_value=False), \
+             patch("infrastructure.jobs.search.providers.france_travail.Path.write_text") as mock_write:
             token = provider._get_token()
             self.assertEqual(token, "mock_token_12345")
             mock_post.assert_called_once()
             mock_write.assert_called_once()
 
-    @patch("jobs.providers.france_travail.FranceTravailProvider._api_get")
+    @patch("infrastructure.jobs.search.providers.france_travail.FranceTravailProvider._api_get")
     def test_france_travail_search(self, mock_api_get):
         provider = FranceTravailProvider()
         
@@ -107,7 +108,7 @@ class TestJobProviders(unittest.TestCase):
             
         self.assertIsNone(provider._normalize_department(None))
 
-    @patch("jobs.providers.france_travail.FranceTravailProvider._api_get")
+    @patch("infrastructure.jobs.search.providers.france_travail.FranceTravailProvider._api_get")
     def test_france_travail_detail_and_mapping(self, mock_api_get):
         provider = FranceTravailProvider()
         

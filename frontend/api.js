@@ -2,6 +2,19 @@
  * RecruitAI Console Client - Backend API Client Layer
  */
 
+import { state } from './state.js';
+
+function getHeaders(tenantId, additionalHeaders = {}) {
+    const headers = {
+        'X-Tenant-ID': tenantId || state.tenantId || 'default-tenant',
+        ...additionalHeaders
+    };
+    if (state.apiKey) {
+        headers['X-API-Key'] = state.apiKey;
+    }
+    return headers;
+}
+
 /**
  * Upload and extract a CV PDF/image/txt
  */
@@ -12,9 +25,7 @@ export async function extractCV(file, tenantId) {
     const response = await fetch('/api/cv/extract', {
         method: 'POST',
         body: cvFormData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -38,9 +49,7 @@ export async function extractJob(inputType, file, text, tenantId) {
     const response = await fetch('/api/jobs/extract', {
         method: 'POST',
         body: jdFormData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -63,10 +72,7 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 
     const response = await fetch('/api/fit/analyze', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(fitPayload)
     });
 
@@ -92,10 +98,7 @@ export async function generateLetter(cvData, jobPosition, companyType, language,
 
     const response = await fetch('/api/motivation-letter/generate', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -117,10 +120,7 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
 
     const response = await fetch('/api/hr/rank', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -130,3 +130,293 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
 
     return await response.json();
 }
+
+/**
+ * Get active job search providers
+ */
+export async function getProviders() {
+    const response = await fetch('/api/jobs/providers');
+    if (!response.ok) {
+        throw new Error(`Failed to fetch providers: status ${response.status}`);
+    }
+    return await response.json();
+}
+
+/**
+ * Search job listings across registered providers
+ */
+export async function searchJobs(provider, query, department, contractType, tenantId) {
+    const payload = {
+        provider: provider || "france_travail",
+        query: query || null,
+        department: department || null,
+        contract_type: contractType || null,
+        page: 1,
+        limit: 25
+    };
+
+    const response = await fetch('/api/jobs/search', {
+        method: 'POST',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Job search failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Fetch detailed job posting information
+ */
+export async function getJobDetail(provider, jobId, tenantId) {
+    const response = await fetch(`/api/jobs/search/${provider}/${jobId}`, {
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch job detail: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * List all extracted candidates from SQLite for tenant
+ */
+export async function listCandidates(tenantId) {
+    const response = await fetch('/api/cv/candidates', {
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to list candidates: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Fetch the original uploaded candidate document as a raw Blob
+ */
+export async function getCandidateFile(candidateId, tenantId) {
+    const response = await fetch(`/api/cv/candidates/${candidateId}/file`, {
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch original candidate file: status ${response.status}`);
+    }
+
+    return await response.blob();
+}
+
+/**
+ * Create a new job application
+ */
+export async function createApplication(applicationData, tenantId) {
+    const response = await fetch('/api/applications', {
+        method: 'POST',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(applicationData)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to create application: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * List job applications with optional status and source filters
+ */
+export async function getApplications(filters = {}, tenantId) {
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.source) params.append('source', filters.source);
+    if (filters.sort_by_date) params.append('sort_by_date', filters.sort_by_date);
+
+    const queryString = params.toString();
+    const url = `/api/applications${queryString ? '?' + queryString : ''}`;
+
+    const response = await fetch(url, {
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch applications: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Retrieve details for a specific application
+ */
+export async function getApplication(applicationId, tenantId) {
+    const response = await fetch(`/api/applications/${applicationId}`, {
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch application details: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Update a job application
+ */
+export async function updateApplication(applicationId, applicationData, tenantId) {
+    const response = await fetch(`/api/applications/${applicationId}`, {
+        method: 'PUT',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(applicationData)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to update application: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Delete a job application
+ */
+export async function deleteApplication(applicationId, tenantId) {
+    const response = await fetch(`/api/applications/${applicationId}`, {
+        method: 'DELETE',
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete application: status ${response.status}`);
+    }
+}
+
+/**
+ * Upload a document (CV or cover letter) for a job application
+ */
+export async function uploadApplicationFile(applicationId, fileType, file, tenantId) {
+    const formData = new FormData();
+    formData.append('file_type', fileType);
+    formData.append('file', file);
+
+    const response = await fetch(`/api/applications/${applicationId}/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload application file: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Upload multiple special documents (portfolio, certificates, etc.) for a job application
+ */
+export async function uploadSpecialDocuments(applicationId, files, tenantId) {
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+    }
+
+    const response = await fetch(`/api/applications/${applicationId}/upload-special`, {
+        method: 'POST',
+        body: formData,
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to upload special documents: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Generate a temporary PDF draft for motivation letter typeset preview
+ */
+export async function generateTempPDF(cvData, jobPosition, companyType, language, tone, format, tenantId, customContext) {
+    const payload = {
+        cv_info: cvData,
+        job_info: jobPosition,
+        job_type: companyType,
+        language: language,
+        tone: tone,
+        return_format: format,
+        custom_context: customContext || null
+    };
+
+    const response = await fetch('/api/motivation-letter/generate-temp-pdf', {
+        method: 'POST',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Temp PDF drafting failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Finalize a temporary PDF draft, saving it to db/motivation_letter
+ */
+export async function finalizeTempPDF(pdfId, company, jobTitle, tenantId) {
+    const payload = {
+        pdf_id: pdfId,
+        company: company,
+        job_title: jobTitle
+    };
+
+    const response = await fetch('/api/motivation-letter/finalize', {
+        method: 'POST',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Finalization of PDF failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
+ * Compile provided motivation letter text verbatim to typeset PDF (NO AI call!)
+ */
+export async function compileVerbatim(cvData, jobPosition, content, tenantId) {
+    const payload = {
+        cv_info: cvData,
+        job_info: jobPosition,
+        content: content
+    };
+
+    const response = await fetch('/api/motivation-letter/compile-verbatim', {
+        method: 'POST',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Verbatim compiling failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+
+

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional, Set
 
-from fastapi import Header, HTTPException
+from fastapi import Header, HTTPException, Query
 
 
 @dataclass(frozen=True)
@@ -74,11 +74,7 @@ def resolve_tenant_context(
     registry = get_tenant_registry()
 
     if not registry.is_configured():
-        return TenantContext(
-            tenant_id=tenant_id or "default",
-            api_key=api_key,
-            is_authenticated=False,
-        )
+        raise HTTPException(status_code=401, detail="Tenant registry not configured")
 
     if not tenant_id or not api_key:
         raise HTTPException(status_code=401, detail="Tenant authentication required")
@@ -89,5 +85,9 @@ def resolve_tenant_context(
 def get_tenant_context(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-Id"),
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    tenant_id: Optional[str] = Query(default=None, alias="tenant_id"),
+    api_key: Optional[str] = Query(default=None, alias="api_key"),
 ) -> TenantContext:
-    return resolve_tenant_context(x_tenant_id, x_api_key)
+    effective_tenant = x_tenant_id or tenant_id
+    effective_api_key = x_api_key or api_key
+    return resolve_tenant_context(effective_tenant, effective_api_key)

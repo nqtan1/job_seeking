@@ -3,6 +3,7 @@
  */
 export const state = {
     tenantId: 'default-tenant',
+    apiKey: '',
     companyType: 'corporation',
     cvFile: null,
     cvData: null,
@@ -14,11 +15,24 @@ export const state = {
     interviewKit: null,
     activeKitTab: 'tech',
     
+    // DB Candidates list
+    dbCandidates: [],
+    selectedDbCandidateId: '',
+
     // Job Description File State
     jdFile: null,
     jdFileName: '',
-    jdInputType: 'text',
+    jdInputType: 'text', // 'text', 'file', or 'search'
     
+    // Job Search Engine State
+    searchProvider: 'france_travail',
+    searchQuery: '',
+    searchDept: '',
+    searchContract: '',
+    searchDomain: '',
+    searchResults: [],
+    selectedSearchJob: null,
+
     // Recruiter Hub state
     recruiterCandidates: [
         {
@@ -37,5 +51,14 @@ export const state = {
         }
     ],
     batchRankings: null,
-    activeOutreachCandidate: null
+    activeOutreachCandidate: null,
+
+    // Job Tracker State
+    applications: [],
+    trackerFilters: {
+        status: '',
+        source: '',
+        sort_by_date: 'desc'
+    },
+    selectedApplicationId: null
 };
