@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock, patch
 
-from agents.agent_config import AgentConfig
-from cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from fit.agent import FitAgent
-from fit.schema import FitCheck
-from jobs.schema import JobPosition
+from infrastructure.agents.agent_config import AgentConfig
+from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
+from infrastructure.fit.agent import FitAgent
+from domain.fit.schema import FitCheck
+from domain.jobs.schema import JobPosition
 
 
 def _build_model_mock():
@@ -17,7 +17,7 @@ def _build_model_mock():
 def test_analyze_fit_uses_structured_prompt_and_payload():
     mock_model = _build_model_mock()
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model):
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model):
         agent = FitAgent(
             config=AgentConfig(
                 provider="vertex",

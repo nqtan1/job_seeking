@@ -1,6 +1,7 @@
-from motivation_letter import MotivationLetterRequest, MotivationLetterAgent
-from cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from jobs.schema import JobPosition
+from domain.motivation_letter.schema import MotivationLetterRequest
+from infrastructure.motivation_letter.agent import MotivationLetterAgent
+from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
+from domain.jobs.schema import JobPosition
 
 
 def create_mock_cv() -> CVInformation:
@@ -78,8 +79,8 @@ def test_motivation_letter_generation():
 
 def test_motivation_letter_pdf_rendering(tmp_path):
     """Test that MotivationLetterService compiles and renders a PDF successfully"""
-    from motivation_letter.service import MotivationLetterService
-    from motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
+    from application.motivation_letter.service import MotivationLetterService
+    from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
     from datetime import datetime
 
     # 1. Setup mock data

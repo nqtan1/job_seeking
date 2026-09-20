@@ -68,12 +68,22 @@
             </div>
 
             <!-- Global Tenant Selector -->
-            <div class="flex items-center gap-2.5 bg-slate-950 border border-slate-850 rounded-lg px-3 py-1.5 shadow-inner">
-                <i class="fa-solid fa-network-wired text-emerald-400 text-xs"></i>
-                <label for="tenant-id" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tenant ID:</label>
-                <input type="text" id="tenant-id" value="default-tenant" 
-                       class="bg-transparent border-0 focus:outline-none focus:ring-0 text-xs font-mono font-medium text-emerald-300 w-28 text-center"
-                       placeholder="tenant-id" title="Enter tenant ID to simulate isolated workspace state.">
+            <div class="flex items-center gap-4 bg-slate-950 border border-slate-850 rounded-lg px-4 py-1.5 shadow-inner">
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-network-wired text-emerald-400 text-xs"></i>
+                    <label for="tenant-id" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tenant ID:</label>
+                    <input type="text" id="tenant-id" value="default-tenant" 
+                           class="bg-transparent border-0 focus:outline-none focus:ring-0 text-xs font-mono font-medium text-emerald-300 w-28 text-center"
+                           placeholder="tenant-id" title="Enter tenant ID to simulate isolated workspace state.">
+                </div>
+                <div class="h-4 w-[1px] bg-slate-850"></div>
+                <div class="flex items-center gap-2.5">
+                    <i class="fa-solid fa-key text-emerald-400 text-[10px]"></i>
+                    <label for="tenant-api-key" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">API Key:</label>
+                    <input type="password" id="tenant-api-key" value="" 
+                           class="bg-transparent border-0 focus:outline-none focus:ring-0 text-xs font-mono font-medium text-emerald-300 w-36 text-center"
+                           placeholder="api-key" title="Enter tenant API Key.">
+                </div>
             </div>
         </div>
     </header>

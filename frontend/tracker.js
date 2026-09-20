@@ -696,7 +696,11 @@ export function toggleCVDocSource(value) {
         wrapper.classList.add('hidden');
         // Existing DB candidate selected. Set source to candidate's file route.
         const tenantId = state.tenantId || 'default-tenant';
-        preview.src = `/api/cv/candidates/${value}/file?tenant_id=${tenantId}`;
+        let srcUrl = `/api/cv/candidates/${value}/file?tenant_id=${tenantId}`;
+        if (state.apiKey) {
+            srcUrl += `&api_key=${encodeURIComponent(state.apiKey)}`;
+        }
+        preview.src = srcUrl;
         container.classList.remove('hidden');
     }
 }
@@ -993,13 +997,20 @@ export function previewTrackerFile(fileUrl, title) {
     img.classList.add('hidden');
     txt.classList.add('hidden');
 
-    const ext = fileUrl.split('.').pop().split('?')[0].toLowerCase();
+    // Automatically append tenant authentication parameters to internal API routes
+    let activeUrl = fileUrl;
+    if (activeUrl.startsWith('/api/') && state.apiKey) {
+        const separator = activeUrl.includes('?') ? '&' : '?';
+        activeUrl += `${separator}tenant_id=${encodeURIComponent(state.tenantId || 'default-tenant')}&api_key=${encodeURIComponent(state.apiKey)}`;
+    }
+
+    const ext = activeUrl.split('.').pop().split('?')[0].toLowerCase();
     
     if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
-        img.src = fileUrl;
+        img.src = activeUrl;
         img.classList.remove('hidden');
     } else {
-        iframe.src = fileUrl;
+        iframe.src = activeUrl;
         iframe.classList.remove('hidden');
     }
 

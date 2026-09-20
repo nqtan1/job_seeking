@@ -2,9 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from agents.agent_config import AgentConfig
-from cv.agent import CVAnalysisAgent
-from cv.schema import CVInformation
+from infrastructure.agents.agent_config import AgentConfig
+from infrastructure.cv.agent import CVAnalysisAgent
+from domain.cv.schema import CVInformation
 
 
 def _build_model_mock():
@@ -23,8 +23,8 @@ def test_extract_cv_uses_gemini_file_upload(tmp_path):
     mock_client = MagicMock()
     mock_client.files.upload.return_value = mock_file
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "cv.agent.genai.Client", return_value=mock_client
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
+        "infrastructure.cv.agent.genai.Client", return_value=mock_client
     ):
         agent = CVAnalysisAgent(
             config=AgentConfig(
@@ -57,8 +57,8 @@ def test_extract_cv_uses_vertex_base64_payload(tmp_path):
 
     mock_model = _build_model_mock()
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "cv.agent.genai.Client"
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
+        "infrastructure.cv.agent.genai.Client"
     ) as mock_client:
         agent = CVAnalysisAgent(
             config=AgentConfig(

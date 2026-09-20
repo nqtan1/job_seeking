@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from cv.route import _sanitize_filename, _validate_and_get_file_path
+from api.cv import _sanitize_filename, _validate_and_get_file_path
 
 class TestSanitizeFileName: 
     def test_removes_accents(self):

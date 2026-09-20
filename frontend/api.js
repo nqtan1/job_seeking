@@ -2,6 +2,19 @@
  * RecruitAI Console Client - Backend API Client Layer
  */
 
+import { state } from './state.js';
+
+function getHeaders(tenantId, additionalHeaders = {}) {
+    const headers = {
+        'X-Tenant-ID': tenantId || state.tenantId || 'default-tenant',
+        ...additionalHeaders
+    };
+    if (state.apiKey) {
+        headers['X-API-Key'] = state.apiKey;
+    }
+    return headers;
+}
+
 /**
  * Upload and extract a CV PDF/image/txt
  */
@@ -12,9 +25,7 @@ export async function extractCV(file, tenantId) {
     const response = await fetch('/api/cv/extract', {
         method: 'POST',
         body: cvFormData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -38,9 +49,7 @@ export async function extractJob(inputType, file, text, tenantId) {
     const response = await fetch('/api/jobs/extract', {
         method: 'POST',
         body: jdFormData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -63,10 +72,7 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 
     const response = await fetch('/api/fit/analyze', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(fitPayload)
     });
 
@@ -92,10 +98,7 @@ export async function generateLetter(cvData, jobPosition, companyType, language,
 
     const response = await fetch('/api/motivation-letter/generate', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -117,10 +120,7 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
 
     const response = await fetch('/api/hr/rank', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -157,10 +157,7 @@ export async function searchJobs(provider, query, department, contractType, tena
 
     const response = await fetch('/api/jobs/search', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -176,9 +173,7 @@ export async function searchJobs(provider, query, department, contractType, tena
  */
 export async function getJobDetail(provider, jobId, tenantId) {
     const response = await fetch(`/api/jobs/search/${provider}/${jobId}`, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -193,9 +188,7 @@ export async function getJobDetail(provider, jobId, tenantId) {
  */
 export async function listCandidates(tenantId) {
     const response = await fetch('/api/cv/candidates', {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -210,9 +203,7 @@ export async function listCandidates(tenantId) {
  */
 export async function getCandidateFile(candidateId, tenantId) {
     const response = await fetch(`/api/cv/candidates/${candidateId}/file`, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -228,10 +219,7 @@ export async function getCandidateFile(candidateId, tenantId) {
 export async function createApplication(applicationData, tenantId) {
     const response = await fetch('/api/applications', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(applicationData)
     });
 
@@ -255,9 +243,7 @@ export async function getApplications(filters = {}, tenantId) {
     const url = `/api/applications${queryString ? '?' + queryString : ''}`;
 
     const response = await fetch(url, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -272,9 +258,7 @@ export async function getApplications(filters = {}, tenantId) {
  */
 export async function getApplication(applicationId, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}`, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -290,10 +274,7 @@ export async function getApplication(applicationId, tenantId) {
 export async function updateApplication(applicationId, applicationData, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}`, {
         method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(applicationData)
     });
 
@@ -310,9 +291,7 @@ export async function updateApplication(applicationId, applicationData, tenantId
 export async function deleteApplication(applicationId, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}`, {
         method: 'DELETE',
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -331,9 +310,7 @@ export async function uploadApplicationFile(applicationId, fileType, file, tenan
     const response = await fetch(`/api/applications/${applicationId}/upload`, {
         method: 'POST',
         body: formData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -355,9 +332,7 @@ export async function uploadSpecialDocuments(applicationId, files, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}/upload-special`, {
         method: 'POST',
         body: formData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -383,10 +358,7 @@ export async function generateTempPDF(cvData, jobPosition, companyType, language
 
     const response = await fetch('/api/motivation-letter/generate-temp-pdf', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -410,10 +382,7 @@ export async function finalizeTempPDF(pdfId, company, jobTitle, tenantId) {
 
     const response = await fetch('/api/motivation-letter/finalize', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -437,10 +406,7 @@ export async function compileVerbatim(cvData, jobPosition, content, tenantId) {
 
     const response = await fetch('/api/motivation-letter/compile-verbatim', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 

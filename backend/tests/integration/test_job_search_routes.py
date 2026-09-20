@@ -21,7 +21,7 @@ def test_list_providers_endpoint(client):
     assert "france_travail" in data["providers"]
 
 
-@patch("jobs.providers.manager.JobProviderManager.search_jobs")
+@patch("infrastructure.jobs.search.providers.manager.JobProviderManager.search_jobs")
 def test_search_jobs_endpoint(mock_search, client):
     mock_search.return_value = {
         "meta": {"count": 1, "page": 1, "total": 1},
@@ -66,7 +66,7 @@ def test_search_jobs_endpoint(mock_search, client):
     )
 
 
-@patch("jobs.providers.manager.JobProviderManager.get_job_detail")
+@patch("infrastructure.jobs.search.providers.manager.JobProviderManager.get_job_detail")
 def test_get_job_detail_endpoint(mock_get_detail, client):
     mock_get_detail.return_value = {
         "provider": "france_travail",
@@ -98,7 +98,7 @@ def test_get_job_detail_endpoint(mock_get_detail, client):
     mock_get_detail.assert_called_once_with(provider_name="france_travail", job_id="456")
 
 
-@patch("jobs.search.agent.JobSearchAgent.run_chat_loop")
+@patch("infrastructure.jobs.search.agent.JobSearchAgent.run_chat_loop")
 def test_search_chat_endpoint(mock_chat, client):
     mock_chat.return_value = "Here are some nice Python jobs in Paris:\n- Job 1\n- Job 2"
 
@@ -107,7 +107,7 @@ def test_search_chat_endpoint(mock_chat, client):
     }
 
     # Patch ChatGoogleGenerativeAI to avoid network call during initialization
-    with patch("agents.base_agents.ChatGoogleGenerativeAI"):
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI"):
         response = client.post(
             "/api/jobs/search/chat",
             json=payload,

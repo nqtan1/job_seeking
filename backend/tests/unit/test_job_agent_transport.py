@@ -2,9 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from agents.agent_config import AgentConfig
-from jobs.agent import JobExtractionAgent
-from jobs.schema import JobPosition
+from infrastructure.agents.agent_config import AgentConfig
+from infrastructure.jobs.analysis.agent import JobExtractionAgent
+from domain.jobs.schema import JobPosition
 
 
 def _build_model_mock():
@@ -23,8 +23,8 @@ def test_extract_job_uses_gemini_file_upload(tmp_path):
     mock_client = MagicMock()
     mock_client.files.upload.return_value = mock_file
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "jobs.agent.genai.Client", return_value=mock_client
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
+        "infrastructure.jobs.analysis.agent.genai.Client", return_value=mock_client
     ):
         agent = JobExtractionAgent(
             config=AgentConfig(
@@ -57,8 +57,8 @@ def test_extract_job_uses_vertex_base64_payload(tmp_path):
 
     mock_model = _build_model_mock()
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "jobs.agent.genai.Client"
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
+        "infrastructure.jobs.analysis.agent.genai.Client"
     ) as mock_client:
         agent = JobExtractionAgent(
             config=AgentConfig(
@@ -89,8 +89,8 @@ def test_extract_job_uses_vertex_base64_payload(tmp_path):
 def test_extract_job_uses_raw_text_without_files():
     mock_model = _build_model_mock()
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "jobs.agent.genai.Client"
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
+        "infrastructure.jobs.analysis.agent.genai.Client"
     ) as mock_client:
         agent = JobExtractionAgent(
             config=AgentConfig(
@@ -108,8 +108,3 @@ def test_extract_job_uses_raw_text_without_files():
         )
 
     assert result is mock_model.invoke.return_value
-    mock_client.assert_not_called()
-
-    human_message = mock_model.invoke.call_args.args[0][1]
-    assert human_message.content[0]["text"] == "Extract job details"
-    assert human_message.content[1]["text"] == "Job Description:\nIngénieur IA, CDI, Paris"

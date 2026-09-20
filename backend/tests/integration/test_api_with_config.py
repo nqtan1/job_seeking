@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from agents.agent_config import AgentConfig
-from cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from jobs.schema import CompensationInfo, JobPosition, JobRequirements
-from motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
+from infrastructure.agents.agent_config import AgentConfig
+from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
+from domain.jobs.schema import CompensationInfo, JobPosition, JobRequirements
+from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
 
 
 class FakeResult:
@@ -132,17 +132,17 @@ def client(monkeypatch):
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/fake-credentials.json")
     monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI") as mock_llm, \
-         patch("cv.agent.genai.Client") as mock_cv_client, \
-         patch("jobs.agent.genai.Client") as mock_jobs_client:
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm, \
+         patch("infrastructure.cv.agent.genai.Client") as mock_cv_client, \
+         patch("infrastructure.jobs.analysis.agent.genai.Client") as mock_jobs_client:
         mock_llm.return_value = MagicMock()
         mock_cv_client.return_value = MagicMock()
         mock_jobs_client.return_value = MagicMock()
 
         from main import app
-        import cv.route as cv_route
-        import jobs.route as jobs_route
-        import motivation_letter.route as ml_route
+        import api.cv as cv_route
+        import api.jobs as jobs_route
+        import api.motivation_letter as ml_route
 
         config = AgentConfig(config_path=Path("config/agent_config.yaml"))
 

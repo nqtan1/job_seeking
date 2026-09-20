@@ -53,9 +53,11 @@ Ceci est le corps de la lettre de motivation de test, rédigé en français et u
             result = subprocess.run(
                 ["latexmk", "-pdf", "-interaction=nonstopmode", "-output-directory=" + str(tmp_path), str(tex_file)],
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
+                stderr=subprocess.PIPE
             )
+            
+            stdout_str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+            stderr_str = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
             
             if result.returncode == 0:
                 print("Compilation successful!")
@@ -74,8 +76,8 @@ Ceci est le corps de la lettre de motivation de test, rédigé en français et u
                     return False
             else:
                 print(f"Error: Compilation failed with exit code {result.returncode}")
-                print(f"STDOUT:\n{result.stdout}")
-                print(f"STDERR:\n{result.stderr}")
+                print(f"STDOUT:\n{stdout_str}")
+                print(f"STDERR:\n{stderr_str}")
                 return False
                 
         except Exception as e:

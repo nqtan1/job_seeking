@@ -119,6 +119,28 @@ function initTenantSelector() {
             renderTracker();
         }
     });
+
+    const apiKeyInput = document.getElementById('tenant-api-key');
+    if (apiKeyInput) {
+        // Update state in real-time as they type so requests have the key immediately
+        apiKeyInput.addEventListener('input', (e) => {
+            state.apiKey = e.target.value.trim();
+        });
+
+        // Trigger UI refresh when they finish typing (lose focus or press enter)
+        apiKeyInput.addEventListener('change', (e) => {
+            state.apiKey = e.target.value.trim();
+            console.log(`Updated X-API-Key context.`);
+            showNotification(`Tenant API key updated`);
+            populateDbCandidates();
+
+            // Reload tracker if currently active
+            const viewTracker = document.getElementById('view-tracker');
+            if (viewTracker && !viewTracker.classList.contains('hidden')) {
+                renderTracker();
+            }
+        });
+    }
 }
 
 function clearJobSearchState() {

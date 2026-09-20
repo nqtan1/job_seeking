@@ -3,6 +3,7 @@
  */
 export const state = {
     tenantId: 'default-tenant',
+    apiKey: '',
     companyType: 'corporation',
     cvFile: null,
     cvData: null,

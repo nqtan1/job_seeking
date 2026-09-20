@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 
-from jobs.schema import JobPosition, CompensationInfo, JobRequirements, CandidateAnalysis, RecruiterAnalysis
+from domain.jobs.schema import JobPosition, CompensationInfo, JobRequirements, CandidateAnalysis, RecruiterAnalysis
 
 @pytest.fixture
 def client():
@@ -77,7 +77,7 @@ def test_extract_job_success(client, mock_job_position):
     """
     Test successful job extraction endpoint
     """
-    with patch("jobs.agent.JobExtractionAgent.extract_job") as mock_extract:
+    with patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.extract_job") as mock_extract:
         mock_extract.return_value = mock_job_position
         
         response = client.post(
@@ -124,7 +124,7 @@ def test_extract_job_from_text(client, mock_job_position):
     """
     job_text = "Ingénieur en IA, CDI, Paris, Salaire 45k-60k"
     
-    with patch("jobs.agent.JobExtractionAgent.extract_job") as mock_extract:
+    with patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.extract_job") as mock_extract:
         mock_extract.return_value = mock_job_position
         
         response = client.post(
@@ -141,9 +141,9 @@ def test_analyze_job_from_file(client, mock_job_position, mock_candidate_analysi
     """
     Test analysis from uploaded file
     """
-    with patch("jobs.agent.JobExtractionAgent.extract_job") as mock_extract, \
-         patch("jobs.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
-         patch("jobs.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
+    with patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.extract_job") as mock_extract, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
         
         mock_extract.return_value = mock_job_position
         mock_candidate.return_value = mock_candidate_analysis
@@ -170,9 +170,9 @@ def test_analyze_job_from_text(client, mock_job_position, mock_candidate_analysi
     """
     job_text = "Ingénieur en IA, CDI, Paris, Salaire 45k-60k, Python required"
     
-    with patch("jobs.agent.JobExtractionAgent.extract_job") as mock_extract, \
-         patch("jobs.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
-         patch("jobs.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
+    with patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.extract_job") as mock_extract, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
         
         mock_extract.return_value = mock_job_position
         mock_candidate.return_value = mock_candidate_analysis
@@ -204,8 +204,8 @@ def test_analyze_job_from_job_data(client, mock_candidate_analysis, mock_recruit
     )
     job_data_json = job_position.model_dump_json()
     
-    with patch("jobs.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
-         patch("jobs.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
+    with patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
         
         mock_candidate.return_value = mock_candidate_analysis
         mock_recruiter.return_value = mock_recruiter_analysis
