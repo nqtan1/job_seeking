@@ -40,7 +40,7 @@ def _get_agent() -> MotivationLetterAgent:
     global agent
     if agent is not None:
         return agent
-    return MotivationLetterAgent(config=AgentConfig(config_path=CONFIG_PATH))
+    return MotivationLetterAgent(config=AgentConfig(config_path=CONFIG_PATH, section="motivation_letter"))
 
 
 @router.post("/generate", response_model=MotivationLetter)

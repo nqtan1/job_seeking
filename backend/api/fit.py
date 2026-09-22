@@ -20,7 +20,7 @@ def _get_service() -> FitService:
 	global agent
 	active_agent = agent
 	if active_agent is None:
-		active_agent = FitAgent(config=AgentConfig(config_path=CONFIG_PATH))
+		active_agent = FitAgent(config=AgentConfig(config_path=CONFIG_PATH, section="fit"))
 	return FitService(agent=active_agent)
 
 

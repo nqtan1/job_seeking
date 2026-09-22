@@ -34,6 +34,7 @@ htmlcov/
 .env.*
 !.env.example
 .gemini/.env
+.claude
 
 # ==============================================================================
 # Local Databases & File-System Cache Folders
@@ -60,9 +61,13 @@ Thumbs.db
 personal/
 summary/
 config/
+!backend/config/
+backend/config/*
+!backend/config/agent_config.yaml.example
 .SYSTEM_DESIGN.md
 ARCHITECTURE_DESIGN.md
 
 # Local-only playbooks & modular documentation (strictly untracked)
 docs/
-GEMINI.md
+GEMINI.md.claude/settings.local.json
+.claude/settings.local.json

@@ -28,7 +28,7 @@ class FitAgent(BaseAgent):
         self.logger.info(
             "FitAgent initialized with provider=%s api_key_set=%s",
             self.config.provider,
-            bool(self.config.api_key),
+            self.config.is_api_key_set,
         )
 
     def _build_user_message(
@@ -128,7 +128,7 @@ JOB INFORMATION:
         if custom_context:
             user_content += f"\nADDITIONAL CONTEXT:\n{custom_context}"
 
-        self.logger.info("Requesting Gemini to generate Interview prep kit for company_type=%s", company_type)
+        self.logger.info("Requesting agent to generate Interview prep kit for company_type=%s", company_type)
         response = model.invoke([
             SystemMessage(content=system_prompt),
             HumanMessage(content=user_content),

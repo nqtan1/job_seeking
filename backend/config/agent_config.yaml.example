@@ -1,0 +1,57 @@
+# ==============================================================================
+# RecruitAI Console - Unified Agent Configuration Example
+# ==============================================================================
+# This file allows you to configure LLM settings for all agents in the platform
+# individually or globally from a single file.
+# Each section represents a specific agent / route in the system.
+#
+# Supported providers: "vertex", "api_key", "qwen"
+#
+# Switch providers globally in .env with:
+#   LLM_PROVIDER=gemini|qwen
+# ==============================================================================
+
+# ==============================================================================
+# 1. CV Extraction & Analysis Agent (used in /api/cv/extract and /api/cv/analyze)
+# ==============================================================================
+cv:
+  provider: "qwen"
+  model_name: "qwen2.5-coder-14b"
+  temperature: 0.2          # Lower temperature for precise schema/JSON extraction
+  max_history: 10
+
+# ==============================================================================
+# 2. Fit Assessment Agent (used in /api/fit/analyze)
+# ==============================================================================
+fit:
+  provider: "qwen"
+  model_name: "qwen2.5-coder-14b"
+  temperature: 0.5          # Balanced temperature for analysis and evaluation
+  max_history: 10
+
+# ==============================================================================
+# 3. HR Screening & Candidate Batch Ranking Agent (used in /api/hr)
+# ==============================================================================
+hr:
+  provider: "qwen"
+  model_name: "qwen2.5-coder-14b"
+  temperature: 0.3          # Lower temperature for consistent ranking scores
+  max_history: 10
+
+# ==============================================================================
+# 4. Job Description Parsing Agent (used in /api/jobs/extract)
+# ==============================================================================
+jobs:
+  provider: "qwen"
+  model_name: "qwen2.5-coder-14b"
+  temperature: 0.1          # Very low temperature for precise schema matching
+  max_history: 10
+
+# ==============================================================================
+# 5. Motivation Letter Generation Agent (used in /api/motivation-letter/generate)
+# ==============================================================================
+motivation_letter:
+  provider: "vertex"        # High-quality Gemini Vertex AI for creative letter style
+  model_name: "gemini-2.5-flash-lite"
+  temperature: 0.8          # Higher temperature for professional and organic phrasing
+  max_history: 10

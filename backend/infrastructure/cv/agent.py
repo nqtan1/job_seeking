@@ -31,7 +31,7 @@ class CVAnalysisAgent(BaseAgent):
         self.logger.info(
             "CVAnalysisAgent initialized with provider=%s api_key_set=%s",
             self.config.provider,
-            bool(self.config.api_key),
+            self.config.is_api_key_set,
         )
         self.client = genai.Client(api_key=self.config.api_key) if self.config.provider == "api_key" else None
 

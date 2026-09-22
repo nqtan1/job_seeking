@@ -28,8 +28,8 @@ def _get_agent() -> CVAnalysisAgent:
     global agent
     if agent is not None:
         return agent
-    return CVAnalysisAgent(config=AgentConfig(config_path=CONFIG_PATH))
-
+    agent = CVAnalysisAgent(config=AgentConfig(config_path=CONFIG_PATH, section="cv"))
+    return agent
 # Allowed file extensions 
 ALLOWED_EXTENSIONS = {".pdf", ".img", ".txt", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 10 * 1024 * 1024

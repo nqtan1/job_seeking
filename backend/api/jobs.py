@@ -21,7 +21,7 @@ def _get_service() -> JobService:
     global agent
     active_agent = agent
     if active_agent is None:
-        active_agent = JobExtractionAgent(config=AgentConfig(config_path=CONFIG_PATH))
+        active_agent = JobExtractionAgent(config=AgentConfig(config_path=CONFIG_PATH, section="jobs"))
     return JobService(agent=active_agent)
 
 

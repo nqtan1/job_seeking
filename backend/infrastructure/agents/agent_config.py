@@ -13,7 +13,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-Provider = Literal["vertex", "api_key"]
+Provider = Literal["vertex", "api_key", "qwen"]
 
 
 def _get_gemini_api_key_from_env() -> Optional[str]:
@@ -37,12 +37,27 @@ def _get_application_credentials_path_from_env() -> Optional[str]:
     return str(Path(value).expanduser()) if value else None
 
 
+def _sanitize_base_url(url: Optional[str]) -> Optional[str]:
+    """Sanitize base URL to ensure compatibility with OpenAI/vLLM endpoints."""
+    if not url:
+        return url
+    url = url.rstrip("/")
+    if url.endswith("/chat/completions"):
+        url = url[:-17]
+    elif url.endswith("/chat"):
+        url = url[:-5]
+    url = url.rstrip("/")
+    if not url.endswith("/v1") and "/v1/" not in url:
+        url = f"{url}/v1"
+    return url
+
+
 @dataclass(slots=True)
 class AgentConfig:
     """
     Configuration class for agents.
     Loads settings from JSON/YAML config file with env var fallbacks.
-    Supports both API key and Vertex AI authentication modes.
+    Supports both API key, Vertex AI, and Qwen/vLLM authentication modes.
     """
     provider: Provider = "vertex"
     model_name: str = "gemini-2.5-flash-lite"
@@ -54,11 +69,15 @@ class AgentConfig:
     api_key: Optional[str] = None
     credentials_path: Optional[str] = None
 
+    qwen_base_url: Optional[str] = None
+    qwen_api_key: Optional[str] = None
+
     optional_params: Dict[str, Any] = field(default_factory=dict)
 
     def __init__(
         self,
         config_path: Optional[str | Path] = None,
+        section: Optional[str] = None,
         provider: Optional[Provider] = None,
         model_name: Optional[str] = None,
         temperature: Optional[float] = None,
@@ -67,6 +86,8 @@ class AgentConfig:
         project_id: Optional[str] = None,
         location: Optional[str] = None,
         credentials_path: Optional[str] = None,
+        qwen_base_url: Optional[str] = None,
+        qwen_api_key: Optional[str] = None,
         optional_params: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ):
@@ -77,23 +98,54 @@ class AgentConfig:
 
         Args:
             config_path: Path to JSON or YAML config file (optional).
-            provider: Backend provider ("vertex" or "api_key").
-            model_name: Gemini model name.
+            section: Section name in config file (optional, e.g., 'cv', 'fit').
+            provider: Backend provider ("vertex", "api_key", or "qwen").
+            model_name: Model name.
             temperature: Model temperature (0.0 to 2.0).
             max_history: Max conversation history messages.
             api_key: Gemini API key (API key mode).
             project_id: GCP project ID (Vertex mode).
             location: GCP region (Vertex mode).
             credentials_path: Path to credentials JSON (Vertex mode).
+            qwen_base_url: Base URL for Qwen vLLM endpoint.
+            qwen_api_key: API Key for Qwen vLLM endpoint (optional).
             optional_params: Additional model params.
             **kwargs: Extra optional params.
         """
         file_data = self._load_config_file(config_path) if config_path else {}
 
-        self.provider = provider if provider is not None else file_data.get("provider", "vertex")
-        self.model_name = (
-            model_name if model_name is not None else file_data.get("model_name", "gemini-2.5-flash-lite")
-        )
+        if section and isinstance(file_data.get(section), dict):
+            section_data = file_data[section]
+            if isinstance(section_data, dict) and isinstance(section_data.get("llm"), dict):
+                section_data = {**section_data, **section_data["llm"]}
+                section_data.pop("llm", None)
+            file_data = section_data
+
+        # Determine active provider using LLM_PROVIDER env variable fallback
+        env_provider = os.getenv("LLM_PROVIDER")
+        if provider is not None:
+            self.provider = provider
+        elif env_provider == "qwen":
+            self.provider = "qwen"
+        elif env_provider == "gemini":
+            file_provider = file_data.get("provider", "vertex")
+            self.provider = file_provider if file_provider in ("vertex", "api_key") else "vertex"
+        else:
+            self.provider = file_data.get("provider", "vertex")
+
+        # Set model_name: if provider is qwen, prioritize QWEN_MODEL_NAME env var, else use standard fallback
+        if self.provider == "qwen":
+            self.model_name = (
+                model_name if model_name is not None
+                else os.getenv("QWEN_MODEL_NAME")
+                or file_data.get("model_name")
+                or ""
+            )
+        else:
+            self.model_name = (
+                model_name if model_name is not None else file_data.get("model_name", "gemini-2.5-flash-lite")
+            )
+
         self.temperature = self._validate_temperature(
             temperature if temperature is not None else file_data.get("temperature", 0.7)
         )
@@ -116,6 +168,13 @@ class AgentConfig:
             credentials_path
             if credentials_path is not None
             else file_data.get("credentials_path")
+        )
+
+        self.qwen_base_url = (
+            _sanitize_base_url(qwen_base_url) if qwen_base_url is not None else _sanitize_base_url(file_data.get("qwen_base_url"))
+        )
+        self.qwen_api_key = (
+            qwen_api_key if qwen_api_key is not None else file_data.get("qwen_api_key")
         )
 
         file_optional_params = file_data.get("optional_params", {})
@@ -169,6 +228,9 @@ class AgentConfig:
             self.credentials_path = (
                 self.credentials_path or _get_application_credentials_path_from_env()
             )
+        elif self.provider == "qwen":
+            self.qwen_base_url = _sanitize_base_url(self.qwen_base_url or os.getenv("QWEN_BASE_URL"))
+            self.qwen_api_key = self.qwen_api_key or os.getenv("QWEN_API_KEY")
 
         if self.credentials_path:
             self.credentials_path = str(Path(self.credentials_path).expanduser())
@@ -176,8 +238,8 @@ class AgentConfig:
 
     def _validate(self) -> None:
         """Validate that required values are present for chosen provider."""
-        if self.provider not in ("vertex", "api_key"):
-            raise ValueError("provider must be either 'vertex' or 'api_key'")
+        if self.provider not in ("vertex", "api_key", "qwen"):
+            raise ValueError("provider must be either 'vertex', 'api_key', or 'qwen'")
 
         if self.provider == "api_key" and not self.api_key:
             raise ValueError(
@@ -194,6 +256,16 @@ class AgentConfig:
                     "Vertex mode requires GOOGLE_CLOUD_LOCATION env var"
                 )
 
+        if self.provider == "qwen":
+            if not self.qwen_base_url:
+                raise ValueError(
+                    "Qwen mode requires QWEN_BASE_URL env var"
+                )
+            if not self.model_name:
+                raise ValueError(
+                    "Qwen mode requires QWEN_MODEL_NAME env var"
+                )
+
     @staticmethod
     def _validate_temperature(temp: float) -> float:
         """Validate and clamp temperature to valid range (0.0 to 2.0)."""
@@ -202,6 +274,13 @@ class AgentConfig:
         if temp > 2.0:
             return 2.0
         return temp
+
+    @property
+    def is_api_key_set(self) -> bool:
+        """Check if the active provider's API key is configured."""
+        if self.provider == "qwen":
+            return bool(self.qwen_api_key)
+        return bool(self.api_key)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary (excludes sensitive api_key)."""
@@ -213,6 +292,7 @@ class AgentConfig:
             "project_id": self.project_id,
             "location": self.location,
             "credentials_path": self.credentials_path,
+            "qwen_base_url": self.qwen_base_url,
             "optional_params": self.optional_params,
         }
 

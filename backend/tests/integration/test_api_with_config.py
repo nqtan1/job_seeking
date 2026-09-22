@@ -127,6 +127,7 @@ class FakeMotivationLetterAgent:
 
 @pytest.fixture
 def client(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/fake-credentials.json")
@@ -144,7 +145,14 @@ def client(monkeypatch):
         import api.jobs as jobs_route
         import api.motivation_letter as ml_route
 
-        config = AgentConfig(config_path=Path("config/agent_config.yaml"))
+        mock_data = {
+            "provider": "vertex",
+            "model_name": "gemini-2.5-flash",
+            "temperature": 0.7,
+            "max_history": 50,
+        }
+        with patch.object(AgentConfig, "_load_config_file", return_value=mock_data):
+            config = AgentConfig(config_path=Path("config/agent_config.yaml"))
 
         cv_route.agent = FakeCVAgent(config)
         jobs_route.agent = FakeJobAgent(config)
@@ -154,11 +162,19 @@ def client(monkeypatch):
 
 
 def test_agent_config_loads_from_yaml(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/fake-credentials.json")
 
-    config = AgentConfig(config_path="config/agent_config.yaml")
+    mock_data = {
+        "provider": "vertex",
+        "model_name": "gemini-2.5-flash",
+        "temperature": 0.7,
+        "max_history": 50,
+    }
+    with patch.object(AgentConfig, "_load_config_file", return_value=mock_data):
+        config = AgentConfig(config_path="config/agent_config.yaml")
 
     assert config.provider == "vertex"
     assert config.model_name == "gemini-2.5-flash"
