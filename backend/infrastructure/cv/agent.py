@@ -88,6 +88,45 @@ class CVAnalysisAgent(BaseAgent):
                 },
             ]
         )
+
+    def _extract_text_from_file(self, file_path: Union[str, Path]) -> str:
+        file_path = Path(file_path)
+        ext = file_path.suffix.lower()
+        if ext == ".pdf":
+            try:
+                import pdfplumber
+                self.logger.info("Extracting text from PDF locally: %s", file_path)
+                with pdfplumber.open(file_path) as pdf:
+                    text_content = []
+                    for i, page in enumerate(pdf.pages):
+                        page_text = page.extract_text()
+                        if page_text:
+                            text_content.append(page_text)
+                        else:
+                            self.logger.warning("No text extracted from page %d of %s", i + 1, file_path)
+                    full_text = "\n\n".join(text_content)
+                    if not full_text or not full_text.strip():
+                        raise RuntimeError(
+                            f"The PDF file '{file_path.name}' is empty or scanned (contains images only). "
+                            "Text-only LLM providers like Qwen require digital PDFs with selectable text. "
+                            "Please upload a digital PDF, or use a multimodal provider like Gemini."
+                        )
+                    self.logger.info("Successfully extracted %d characters from PDF: %s", len(full_text), file_path)
+                    return full_text
+            except Exception as e:
+                self.logger.error("Failed to extract text from PDF %s: %s", file_path, str(e), exc_info=True)
+                raise RuntimeError(f"Failed to parse PDF file: {str(e)}")
+        elif ext == ".txt":
+            try:
+                self.logger.info("Reading text from TXT file locally: %s", file_path)
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read()
+            except Exception as e:
+                self.logger.error("Failed to read TXT file %s: %s", file_path, str(e), exc_info=True)
+                raise RuntimeError(f"Failed to read TXT file: {str(e)}")
+        else:
+            self.logger.warning("Unsupported file format for local text extraction: %s", ext)
+            raise ValueError(f"File type {ext} is not supported for text extraction on provider '{self.config.provider}'")
         
     def extract_cv(
         self, 
@@ -113,7 +152,12 @@ class CVAnalysisAgent(BaseAgent):
         model = self.model.with_structured_output(output_schema) if output_schema else self.model
         self.logger.info("Using structured output=%s", bool(output_schema))
         
-        if self.config.provider == "api_key":
+        if self.config.provider == "qwen":
+            extracted_text = self._extract_text_from_file(file_path)
+            message_obj = HumanMessage(
+                content=f"{message}\n\n--- CV CONTENT ---\n{extracted_text}\n--- END CV CONTENT ---"
+            )
+        elif self.config.provider == "api_key":
             message_obj = self._build_gemini_file_message(file_path, message)
         else:
             message_obj = self._build_vertex_file_message(file_path, message)

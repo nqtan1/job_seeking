@@ -97,9 +97,9 @@ export function renderCandidateOutput() {
     document.getElementById('candidate-output').classList.remove('hidden');
 
     // Profile Details
-    const name = state.cvData?.personal_info?.name || "Jane Doe";
-    const email = state.cvData?.personal_info?.email || "unknown@email.com";
-    const phone = state.cvData?.personal_info?.phone || "+1-555-0100";
+    const name = state.cvData?.personal_info?.name || "N/A";
+    const email = state.cvData?.personal_info?.email || "N/A";
+    const phone = state.cvData?.personal_info?.phone || "N/A";
     
     document.getElementById('profile-name').textContent = name;
     document.getElementById('profile-email-phone').textContent = `${email} | ${phone}`;
@@ -131,33 +131,47 @@ export function renderCandidateOutput() {
     badge.textContent = state.fitCheck?.recommendation?.toUpperCase().replace('_', ' ') || 'MAYBE';
 
     // Summary
-    document.getElementById('score-voice-summary').textContent = state.fitCheck?.summary || "A highly aligned fit matching primary requirements.";
+    document.getElementById('score-voice-summary').textContent = state.fitCheck?.summary || "No fit summary compiled.";
     document.getElementById('analysis-confidence').textContent = state.fitCheck?.confidence ? `${Math.round(state.fitCheck.confidence * 100)}%` : '90%';
 
     // Strengths
     const strengthsUl = document.getElementById('strengths-list');
     strengthsUl.innerHTML = '';
-    const strengths = state.fitCheck?.strengths || ["Highly skilled Python backend development background."];
-    strengths.forEach(st => {
+    const strengths = state.fitCheck?.strengths || [];
+    if (strengths.length === 0) {
         const li = document.createElement('li');
-        li.className = 'flex items-start gap-2 leading-relaxed';
-        li.innerHTML = `<i class="fa-solid fa-chevron-right text-emerald-500 text-[10px] mt-1 shrink-0"></i> <span>${st}</span>`;
+        li.className = 'text-slate-500 italic text-[11px]';
+        li.textContent = 'No strengths compiled.';
         strengthsUl.appendChild(li);
-    });
+    } else {
+        strengths.forEach(st => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start gap-2 leading-relaxed';
+            li.innerHTML = `<i class="fa-solid fa-chevron-right text-emerald-500 text-[10px] mt-1 shrink-0"></i> <span>${st}</span>`;
+            strengthsUl.appendChild(li);
+        });
+    }
 
     // Gaps
     const gapsUl = document.getElementById('gaps-list');
     gapsUl.innerHTML = '';
-    const gaps = state.fitCheck?.gaps || ["Minor experience containerization gaps shown on paper."];
-    gaps.forEach(gp => {
+    const gaps = state.fitCheck?.gaps || [];
+    if (gaps.length === 0) {
         const li = document.createElement('li');
-        li.className = 'flex items-start gap-2 leading-relaxed';
-        li.innerHTML = `<i class="fa-solid fa-circle-minus text-rose-400 text-[10px] mt-1 shrink-0"></i> <span>${gp}</span>`;
+        li.className = 'text-slate-500 italic text-[11px]';
+        li.textContent = 'No gaps or critical risks flagged.';
         gapsUl.appendChild(li);
-    });
+    } else {
+        gaps.forEach(gp => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start gap-2 leading-relaxed';
+            li.innerHTML = `<i class="fa-solid fa-circle-minus text-rose-400 text-[10px] mt-1 shrink-0"></i> <span>${gp}</span>`;
+            gapsUl.appendChild(li);
+        });
+    }
 
     // Constructive Feedback
-    document.getElementById('constructive-feedback').textContent = state.fitCheck?.constructive_feedback || "Optimize your summary line to highlight containerized architectures, Docker experience, or microservices deployment grids matching requirements.";
+    document.getElementById('constructive-feedback').textContent = state.fitCheck?.constructive_feedback || "No coaching advice is available for this match.";
 
     // Show/Hide Mock Interview Preparation Kit
     const kitCard = document.getElementById('interview-kit-card');
@@ -553,6 +567,12 @@ export function clearSelectedSearchJob() {
     statusBadge.textContent = 'Empty';
     statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-850 text-slate-500 uppercase tracking-wider';
     
+    // Restore the search results list visibility if we had search results previously loaded
+    const resultsContainer = document.getElementById('search-results-list');
+    if (state.searchResults && state.searchResults.length > 0) {
+        resultsContainer.classList.remove('hidden');
+    }
+
     renderJDPreview();
 }
 

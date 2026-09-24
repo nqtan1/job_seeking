@@ -23,8 +23,14 @@ export function renderCVPreview() {
 
     try {
         if (ext === '.pdf') {
-            iframe.src = URL.createObjectURL(state.cvFile);
-            iframe.classList.remove('hidden');
+            const newUrl = URL.createObjectURL(state.cvFile);
+            
+            // Re-create/clone the iframe element to bypass standard browser PDF caching/refresh issues
+            const newIframe = iframe.cloneNode(true);
+            newIframe.src = newUrl;
+            iframe.parentElement.replaceChild(newIframe, iframe);
+            
+            newIframe.classList.remove('hidden');
         } else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext)) {
             img.src = URL.createObjectURL(state.cvFile);
             img.classList.remove('hidden');
@@ -57,8 +63,14 @@ export function renderJDPreview() {
 
     try {
         if (ext === '.pdf') {
-            iframe.src = URL.createObjectURL(state.jdFile);
-            iframe.classList.remove('hidden');
+            const newUrl = URL.createObjectURL(state.jdFile);
+            
+            // Re-create/clone the iframe element to bypass standard browser PDF caching/refresh issues
+            const newIframe = iframe.cloneNode(true);
+            newIframe.src = newUrl;
+            iframe.parentElement.replaceChild(newIframe, iframe);
+            
+            newIframe.classList.remove('hidden');
         } else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext)) {
             img.src = URL.createObjectURL(state.jdFile);
             img.classList.remove('hidden');
@@ -96,8 +108,14 @@ export function zoomDocument(type) {
 
     try {
         if (ext === '.pdf') {
-            iframe.src = URL.createObjectURL(file);
-            iframe.classList.remove('hidden');
+            const newUrl = URL.createObjectURL(file);
+            
+            // Re-create/clone the iframe element to bypass standard browser PDF caching/refresh issues
+            const newIframe = iframe.cloneNode(true);
+            newIframe.src = newUrl;
+            iframe.parentElement.replaceChild(newIframe, iframe);
+            
+            newIframe.classList.remove('hidden');
         } else if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext)) {
             img.src = URL.createObjectURL(file);
             img.classList.remove('hidden');

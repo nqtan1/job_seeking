@@ -108,3 +108,72 @@ def test_extract_job_uses_raw_text_without_files():
         )
 
     assert result is mock_model.invoke.return_value
+
+
+@patch("pdfplumber.open")
+def test_extract_job_with_qwen(mock_pdfplumber, tmp_path):
+    pdf_path = tmp_path / "job.pdf"
+    pdf_path.write_bytes(b"pdf bytes")
+
+    # Mock pdfplumber context manager and page extraction
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "This is my job text"
+    mock_pdf.pages = [mock_page]
+    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
+
+    mock_model = _build_model_mock()
+
+    with patch("infrastructure.agents.base_agents.ChatOpenAI", return_value=mock_model):
+        agent = JobExtractionAgent(
+            config=AgentConfig(
+                provider="qwen",
+                qwen_base_url="http://vllm-endpoint/v1",
+                qwen_api_key="test-key",
+                model_name="Qwen/Qwen2.5-7B-Instruct",
+            )
+        )
+
+        result = agent.extract_job(
+            file_path=str(pdf_path),
+            message="Extract job details",
+            output_schema=JobPosition,
+        )
+
+    assert result is mock_model.invoke.return_value
+    # Verify the model was invoked with the extracted text in the message
+    human_message = mock_model.invoke.call_args.args[0][1]
+    assert isinstance(human_message.content, str)
+    assert "This is my job text" in human_message.content
+    assert "Extract job details" in human_message.content
+
+
+def test_extract_job_with_qwen_scanned_pdf(tmp_path):
+    pdf_path = tmp_path / "scanned_job.pdf"
+    pdf_path.write_bytes(b"pdf bytes")
+
+    # Mock pdfplumber context manager to return empty pages / empty text
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "  \n  " # Pure whitespace/scanned
+    mock_pdf.pages = [mock_page]
+
+    with patch("pdfplumber.open", return_value=MagicMock(__enter__=MagicMock(return_value=mock_pdf))):
+        agent = JobExtractionAgent(
+            config=AgentConfig(
+                provider="qwen",
+                qwen_base_url="http://vllm-endpoint/v1",
+                qwen_api_key="test-key",
+                model_name="Qwen/Qwen2.5-7B-Instruct",
+            )
+        )
+
+        import pytest
+        with pytest.raises(RuntimeError, match="empty or scanned"):
+            agent.extract_job(
+                file_path=str(pdf_path),
+                message="Extract job details",
+                output_schema=JobPosition,
+            )
+
+

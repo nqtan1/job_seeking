@@ -23,6 +23,7 @@ class Formation(BaseModel):
     institution: str = Field(..., description="University/School name")
     gpa: Optional[float] = Field(None, description="GPA score")
     subjects: Optional[List[str]] = Field(None, description="Main subjects studied")
+    references: Optional[List[PersonalInfo]] = Field(..., description="Reference professor informations")
     description: Optional[str] = Field(None, description="Additional context about education")
 
 class Experience(BaseModel):

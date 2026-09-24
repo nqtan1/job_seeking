@@ -10,6 +10,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from domain.jobs.schema import JobPosition
+from infrastructure.jobs.analysis.prompt import (
+    SYSTEM_PROMPT_JOB_EXTRACTION,
+    SYSTEM_PROMPT_JOB_ANALYSIS,
+    SYSTEM_PROMPT_JOB_CANDIDATE,
+    SYSTEM_PROMPT_JOB_RECRUITER,
+)
 
 
 class JobExtractionAgent(BaseAgent):
@@ -139,6 +145,45 @@ class JobExtractionAgent(BaseAgent):
             return self._build_gemini_file_message(file_paths, message)
         return self._build_vertex_file_message(file_paths, message)
 
+    def _extract_text_from_file(self, file_path: Union[str, Path]) -> str:
+        file_path = Path(file_path)
+        ext = file_path.suffix.lower()
+        if ext == ".pdf":
+            try:
+                import pdfplumber
+                self.logger.info("Extracting text from PDF locally: %s", file_path)
+                with pdfplumber.open(file_path) as pdf:
+                    text_content = []
+                    for i, page in enumerate(pdf.pages):
+                        page_text = page.extract_text()
+                        if page_text:
+                            text_content.append(page_text)
+                        else:
+                            self.logger.warning("No text extracted from page %d of %s", i + 1, file_path)
+                    full_text = "\n\n".join(text_content)
+                    if not full_text or not full_text.strip():
+                        raise RuntimeError(
+                            f"The PDF file '{file_path.name}' is empty or scanned (contains images only). "
+                            "Text-only LLM providers like Qwen require digital PDFs with selectable text. "
+                            "Please upload a digital PDF, or use a multimodal provider like Gemini."
+                        )
+                    self.logger.info("Successfully extracted %d characters from PDF: %s", len(full_text), file_path)
+                    return full_text
+            except Exception as e:
+                self.logger.error("Failed to extract text from PDF %s: %s", file_path, str(e), exc_info=True)
+                raise RuntimeError(f"Failed to parse PDF file: {str(e)}")
+        elif ext == ".txt":
+            try:
+                self.logger.info("Reading text from TXT file locally: %s", file_path)
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read()
+            except Exception as e:
+                self.logger.error("Failed to read TXT file %s: %s", file_path, str(e), exc_info=True)
+                raise RuntimeError(f"Failed to read TXT file: {str(e)}")
+        else:
+            self.logger.warning("Unsupported file format for local text extraction: %s", ext)
+            raise ValueError(f"File type {ext} is not supported for text extraction on provider '{self.config.provider}'")
+
     def extract_job(
         self,
         file_path: Optional[Union[str, Path, Sequence[Union[str, Path]]]] = None,
@@ -160,10 +205,7 @@ class JobExtractionAgent(BaseAgent):
         """
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default job extraction prompt.")
-            system_prompt = """You are an expert recruiter assistant specializing in French job market.
-            Extract and structure all job information comprehensively. Identify contract types:
-            CDI (Contrat à Durée Indéterminée), CDD (Contrat à Durée Déterminée),
-            Stage (Internship), Freelance, or Alternance (Work-study)."""
+            system_prompt = SYSTEM_PROMPT_JOB_EXTRACTION
 
         if message is None:
             self.logger.info("No message provided, using the default job extraction message.")
@@ -187,7 +229,18 @@ class JobExtractionAgent(BaseAgent):
                 len(file_paths),
                 self.config.provider,
             )
-            message_obj = self._build_file_message(file_paths, message)
+            if self.config.provider == "qwen":
+                # Extract text from file(s) locally
+                extracted_texts = []
+                for fpath in file_paths:
+                    text = self._extract_text_from_file(fpath)
+                    extracted_texts.append(f"--- FILE: {fpath.name} ---\n{text}\n--- END FILE ---")
+                full_extracted_text = "\n\n".join(extracted_texts)
+                message_obj = HumanMessage(
+                    content=f"{message}\n\n--- JOB DESCRIPTION CONTENT ---\n{full_extracted_text}\n--- END JOB DESCRIPTION CONTENT ---"
+                )
+            else:
+                message_obj = self._build_file_message(file_paths, message)
         else:
             raise ValueError("Provide either 'file_path' or 'job_text'")
 
@@ -219,9 +272,7 @@ class JobExtractionAgent(BaseAgent):
         )
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default job analysis prompt.")
-            system_prompt = """You are an expert recruiter specializing in French job market.
-            Analyze job postings to provide strategic insights about role requirements,
-            difficulty level, market competitiveness, and candidate profile recommendations."""
+            system_prompt = SYSTEM_PROMPT_JOB_ANALYSIS
 
         if message is None:
             self.logger.info("No message provided, using the default job analysis message.")
@@ -268,14 +319,7 @@ JOB INFORMATION:
         )
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default candidate-perspective prompt.")
-            system_prompt = """You are an expert career coach specializing in the French job market.
-            Analyze job postings from a candidate perspective to help job seekers understand:
-            - Career growth and learning opportunities
-            - Work-life balance indicators
-            - Compensation and benefits analysis
-            - Whether this role would be a good fit for their career
-            - Pros and cons of the position
-            Focus on what matters to candidates, not recruiters."""
+            system_prompt = SYSTEM_PROMPT_JOB_CANDIDATE
 
         if message is None:
             self.logger.info("No message provided, using the default candidate-perspective message.")
@@ -321,14 +365,7 @@ JOB INFORMATION:
         )
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default recruiter-perspective prompt.")
-            system_prompt = """You are an expert recruiter specializing in the French job market.
-            Analyze job postings to provide strategic insights about:
-            - Role complexity and seniority level
-            - Critical skills and their market value
-            - Market competitiveness and hiring difficulty
-            - Ideal candidate profiles and requirements
-            - Time to fill estimates and hiring risks
-            Focus on what matters to recruiters and hiring managers."""
+            system_prompt = SYSTEM_PROMPT_JOB_RECRUITER
 
         if message is None:
             self.logger.info("No message provided, using the default recruiter-perspective message.")
