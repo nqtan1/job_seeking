@@ -26,7 +26,7 @@ export async function runCandidateAnalysis() {
         showError('Please upload a Job Description document first!');
         return;
     }
-    if (state.jdInputType === 'search' && !state.jobPosition) {
+    if (state.jdInputType === 'search' && !state.selectedSearchJob) {
         showError('Please search and select a job from the search engine first!');
         return;
     }
@@ -60,7 +60,7 @@ export async function runCandidateAnalysis() {
             updateLoaderBubble("Parsing Job Description requirements... 📑");
             console.log("Extracting Job description...");
             const jobResult = await extractJob(state.jdInputType, state.jdFile, jdText, state.tenantId);
-            jobPosition = jobResult.data || jobResult.extracted_data || jobResult;
+            jobPosition = jobResult.data;
             state.jobPosition = jobPosition;
             console.log("Parsed Job description successfully:", state.jobPosition);
         } else {
@@ -558,18 +558,24 @@ export async function selectSearchJob(jobId) {
     try {
         const result = await getJobDetail(state.searchProvider, jobId, state.tenantId);
         const positionData = result.job_position_data;
-        
-        state.jobPosition = positionData;
+        const rawText = positionData.job_description_text || '';
+
+        // Show the posting immediately from the search provider's own (older, flat)
+        // mapping — the user should be able to read the JD right away, without
+        // waiting on an LLM call. state.jobPosition is deliberately left unset here:
+        // runCandidateAnalysis() already knows how to extract a schema-correct
+        // JobPosition from raw text (same path used for pasted/uploaded JDs), and
+        // will run it exactly once, when the user actually starts an analysis,
+        // instead of duplicating that call on every job selected in the list.
         state.selectedSearchJob = result;
+        state.jobPosition = null;
 
-        // Auto fill pasted text as backup
-        document.getElementById('jd-text').value = positionData.job_description_text || '';
+        document.getElementById('jd-text').value = rawText;
 
-        // Render card
         document.getElementById('selected-job-title').textContent = positionData.job_title;
         document.getElementById('selected-job-meta').textContent = `${positionData.company} | ${positionData.location} | ${positionData.contract_type}`;
-        document.getElementById('selected-job-snippet').textContent = (positionData.job_description_text || '').substring(0, 120) + '...';
-        
+        document.getElementById('selected-job-snippet').textContent = rawText.substring(0, 120) + '...';
+
         document.getElementById('selected-job-info').classList.remove('hidden');
         resultsContainer.classList.add('hidden');
 
@@ -578,7 +584,6 @@ export async function selectSearchJob(jobId) {
         statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider';
 
         // Set up local file preview in-memory for detail recheck zoom
-        const rawText = positionData.job_description_text || '';
         state.jdFile = new File([rawText], `job_posting_${jobId}.txt`, {type: "text/plain"});
         renderJDPreview();
 
