@@ -7,6 +7,11 @@ from being production-grade, and defines the target architecture and stack.
 Every later code change should follow it. If a decision here turns out wrong,
 change this document first, then the code.
 
+> **Handbook:** the reasoning behind this spec lives in [`architecture/`](architecture/README.md):
+> a system walkthrough, one decision record per technology choice (with the
+> alternatives), the strengths and weaknesses of each phase, risks and costs,
+> operations and security, and a glossary.
+
 ---
 
 ## 1. Decisions at a glance
@@ -235,7 +240,7 @@ are UUIDv7 (time-sortable).
 | `job_postings` | id, org_id, source (`manual` \| `file` \| `france_travail`), external_id, title, company, data JSONB | Unique on (org_id, source, external_id) |
 | `fit_analyses` | id, org_id, candidate_id, job_id, score, verdict, data JSONB, model, prompt_version | |
 | `screenings`, `screening_results` | *(later, B2B module)* | Not built in v1 |
-| `letters` | id, org_id, candidate_id, job_id, kind, template, content JSONB, latex_override, language, tone, length, status (`draft` \| `final`) | See §10.3 |
+| `letters` | id, org_id, candidate_id, job_id, kind, template, content JSONB, latex_override, language, tone, length, status (`draft` \| `final`), render_status, pdf_document_id | See §10.3 |
 | `letter_versions` | letter_id, n, content JSONB, created_at | Version history |
 | `applications` | id, org_id, job_id NULL, company_name, source, status, applied_at, notes | |
 | `application_events` | id, application_id, from_status, to_status, at, note | Status history for the tracker timeline |
@@ -594,5 +599,7 @@ before public launch.*
 
 ## 12. Architecture decision records
 
-When a decision in this document changes, add a short ADR to `adr/NNNN-title.md`
-(context → decision → consequences). The initial set is the rows in §1 and §8.
+Decision records live in [`architecture/decisions/`](architecture/decisions/).
+The initial set (0001–0014) covers every row of §1 and §8. When a decision
+changes, write a new record from `0000-template.md` and mark the old one
+*Superseded*. Update this spec in the same PR.
