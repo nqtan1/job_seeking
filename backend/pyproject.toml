@@ -18,4 +18,5 @@ dependencies = [
     "python-multipart>=0.0.26",
     "uvicorn>=0.46.0",
     "vertexai>=1.71.1",
+    "beautifulsoup4>=4.12.3",
 ]
