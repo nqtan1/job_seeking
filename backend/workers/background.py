@@ -428,13 +428,13 @@ class BackgroundJobManager:
             conn.commit()
         return job_id
 
-    def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve job description by ID."""
+    def get_job(self, job_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve job description by ID, scoped to the owning tenant."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT job_id, tenant_id, job_title, company, extracted_data, created_at FROM jobs WHERE job_id = ?",
-                (job_id,),
+                "SELECT job_id, tenant_id, job_title, company, extracted_data, created_at FROM jobs WHERE job_id = ? AND tenant_id = ?",
+                (job_id, tenant_id),
             )
             row = cursor.fetchone()
             if row is None:
@@ -494,13 +494,13 @@ class BackgroundJobManager:
             conn.commit()
         return analysis_id
 
-    def get_fit_analysis(self, analysis_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve fit analysis by ID."""
+    def get_fit_analysis(self, analysis_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve fit analysis by ID, scoped to the owning tenant."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT analysis_id, tenant_id, candidate_id, job_id, fit_score, fit_data, created_at FROM fit_analyses WHERE analysis_id = ?",
-                (analysis_id,),
+                "SELECT analysis_id, tenant_id, candidate_id, job_id, fit_score, fit_data, created_at FROM fit_analyses WHERE analysis_id = ? AND tenant_id = ?",
+                (analysis_id, tenant_id),
             )
             row = cursor.fetchone()
             if row is None:
