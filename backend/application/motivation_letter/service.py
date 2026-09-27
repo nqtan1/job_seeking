@@ -61,8 +61,8 @@ class MotivationLetterService:
         sender_address = request.cv_info.personal_info.address or ""
         
         # Gather recipient info
-        company_name = request.job_info.company or "Destinataire"
-        job_title = request.job_info.job_title or ""
+        company_name = request.job_info.company.name or "Destinataire"
+        job_title = request.job_info.title or ""
         
         # Escape values for LaTeX safety
         safe_sender_name = pl_utils.escape_latex(sender_name)
@@ -75,28 +75,30 @@ class MotivationLetterService:
         if sender_address:
             sender_info += f" \\\\ {safe_sender_address}"
             
-        # Build body by paragraphs
-        paragraphs = [pl_utils.escape_latex(p.strip()) for p in letter_content.split("\n\n") if p.strip()]
-        
-        # Extract opening and closing if possible, or use standard
-        opening = "Madame, Monsieur,"
-        closing = "Je vous prie d'agréer, l'expression de mes salutations distinguées."
-        
-        # If the first paragraph looks like an opening, extract it
-        if paragraphs and any(paragraphs[0].startswith(o) for o in ["Madame", "Monsieur", "Chère", "Cher"]):
-            opening = paragraphs.pop(0)
-            
-        # If the last paragraph looks like a closing salutation, extract it
-        if paragraphs and len(paragraphs) > 1 and any(paragraphs[-1].startswith(c) for c in ["Je vous prie", "Veuillez", "Cordialement", "Bien cordialement"]):
-            closing = paragraphs.pop()
-            
-        body_text = "\n\n".join(paragraphs)
-        
+        # The LLM's output already contains its own opening salutation and closing
+        # salutation (the prompt contract in infrastructure/motivation_letter/prompt.py
+        # requires both, in the requested language) — do not try to detect/strip/replace
+        # them here. Re-adding a hardcoded French opening/closing on top of whatever the
+        # model wrote was the source of duplicated and mixed-language letters.
+        body_text = "\n\n".join(
+            pl_utils.escape_latex(p.strip()) for p in letter_content.split("\n\n") if p.strip()
+        )
+
+        # Boilerplate furniture (attn line, subject line, babel language) that the LLM
+        # was explicitly told NOT to generate, so it must match the requested language here.
+        is_french = request.language == "fr"
+        babel_option = "french" if is_french else "english"
+        documentclass_option = "11pt,french" if is_french else "11pt"
+        attn_line = "À l'attention du service recrutement" if is_french else "Attn: Recruitment Team"
+        subject_line = f"Objet : Candidature au poste de {safe_job_title}" if is_french \
+            else f"Subject: Application for the {safe_job_title} position"
+        date_line = "Paris, le \\today" if is_french else "\\today"
+
         # Format LaTeX string using a highly customizable, modern, side-by-side article layout
-        latex_template = f"""\\documentclass[11pt,french]{{article}}
+        latex_template = f"""\\documentclass[{documentclass_option}]{{article}}
 \\usepackage[T1]{{fontenc}}
 \\usepackage[utf8]{{inputenc}}
-\\usepackage[french]{{babel}}
+\\usepackage[{babel_option}]{{babel}}
 \\usepackage{{geometry}}
 \\geometry{{a4paper, margin=2cm}}
 \\usepackage{{parskip}}
@@ -112,29 +114,23 @@ class MotivationLetterService:
 \\begin{{minipage}}[t]{{0.45\\textwidth}}
 \\begin{{flushright}}
 \\textbf{{{safe_company_name}}} \\\\
-\\textit{{À l'attention du service recrutement}}
+\\textit{{{attn_line}}}
 \\end{{flushright}}
 \\end{{minipage}}
 
 \\vspace{{1.5em}}
 
 \\begin{{flushright}}
-Paris, le \\today
+{date_line}
 \\end{{flushright}}
 
 \\vspace{{1em}}
 
-\\textbf{{Objet : Candidature au poste de {safe_job_title}}}
+\\textbf{{{subject_line}}}
 
 \\vspace{{1.5em}}
-
-{opening}
 
 {body_text}
-
-\\vspace{{1.5em}}
-
-{closing}
 
 \\vspace{{2.5em}}
 
@@ -196,8 +192,8 @@ Paris, le \\today
             request.return_format,
         )
         result_folder = self._get_result_folder(
-            company=request.job_info.company,
-            job_title=request.job_info.job_title,
+            company=request.job_info.company.name,
+            job_title=request.job_info.title,
             tenant_id=tenant_id
         )
 
@@ -229,8 +225,8 @@ Paris, le \\today
         metadata_dict["generated_at"] = metadata_dict["generated_at"].isoformat()
         metadata_dict["candidate_name"] = request.cv_info.personal_info.name
         metadata_dict["candidate_email"] = str(request.cv_info.personal_info.email)
-        metadata_dict["company"] = request.job_info.company
-        metadata_dict["job_title"] = request.job_info.job_title
+        metadata_dict["company"] = request.job_info.company.name
+        metadata_dict["job_title"] = request.job_info.title
         metadata_dict["tenant_id"] = tenant_id  # Save tenant ID to metadata JSON!
 
         with open(metadata_file, "w", encoding="utf-8") as file:
