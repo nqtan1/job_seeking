@@ -1,0 +1,1 @@
+# domain/applications package initialization

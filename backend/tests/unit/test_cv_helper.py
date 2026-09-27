@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 import tempfile
 
-from cv.route import _sanitize_filename, _validate_and_get_file_path
+from api.cv import _sanitize_filename, _validate_and_get_file_path
 
 class TestSanitizeFileName: 
     def test_removes_accents(self):
@@ -62,12 +62,43 @@ class TestValidateAndGetFilePath:
         """
         from fastapi import UploadFile, HTTPException
         import io
-        
+
         file = UploadFile(
             filename="test_huge_file.pdf",
             file=io.BytesIO(b"x" * (11 * 1024 * 1024))
         )
-        
-        with pytest.raises(HTTPException) as exc: 
+
+        with pytest.raises(HTTPException) as exc:
             await _validate_and_get_file_path(file, None)
         assert exc.value.status_code == 413
+
+    @pytest.mark.asyncio
+    async def test_file_path_outside_db_base_dir_is_rejected(self, tmp_path):
+        """
+        A client-supplied file_path pointing outside DB_BASE_DIR (e.g. arbitrary
+        filesystem paths, or another tenant's upload directory reached via
+        traversal) must be rejected rather than read.
+        """
+        from fastapi import HTTPException
+
+        outside_file = tmp_path / "not_in_db_dir.pdf"
+        outside_file.write_bytes(b"mock pdf content")
+
+        with pytest.raises(HTTPException) as exc:
+            await _validate_and_get_file_path(None, str(outside_file))
+        assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_file_path_traversal_is_rejected(self):
+        """
+        A file_path containing '..' segments that resolve outside DB_BASE_DIR
+        must be rejected.
+        """
+        from fastapi import HTTPException
+        from api.cv import DB_BASE_DIR
+
+        traversal_path = str(DB_BASE_DIR / "cv" / "uploads" / ".." / ".." / ".." / "etc" / "passwd")
+
+        with pytest.raises(HTTPException) as exc:
+            await _validate_and_get_file_path(None, traversal_path)
+        assert exc.value.status_code == 403

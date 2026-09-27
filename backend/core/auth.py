@@ -74,11 +74,7 @@ def resolve_tenant_context(
     registry = get_tenant_registry()
 
     if not registry.is_configured():
-        return TenantContext(
-            tenant_id=tenant_id or "default",
-            api_key=api_key,
-            is_authenticated=False,
-        )
+        raise HTTPException(status_code=401, detail="Tenant registry not configured")
 
     if not tenant_id or not api_key:
         raise HTTPException(status_code=401, detail="Tenant authentication required")

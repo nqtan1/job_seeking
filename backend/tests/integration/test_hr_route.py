@@ -5,10 +5,10 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
-from agents.agent_config import AgentConfig
-from cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
-from hr.schema import HRBatchRankingRequest, HRCandidateInput
-from jobs.schema import JobPosition
+from infrastructure.agents.agent_config import AgentConfig
+from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
+from domain.hr.schema import HRBatchRankingRequest, HRCandidateInput
+from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 from workers.background import get_background_job_manager
 from core.auth import get_tenant_registry
 
@@ -23,7 +23,7 @@ class FakeFitAgent:
             is_fit=True,
             fit_score=fit_score,
             recommendation="go" if fit_score >= 80 else "maybe",
-            strengths=[f"Strong match for {job_information.job_title}"],
+            strengths=[f"Strong match for {job_information.title}"],
             gaps=["No direct domain experience"],
             reasons=["Core skills align", "Reasonable seniority match"],
             key_missing_requirements=["French C1"],
@@ -40,11 +40,11 @@ def client(monkeypatch):
     monkeypatch.setenv("TENANT_API_KEYS_JSON", '{"tenant-a": ["tenant-key-a"]}')
     get_tenant_registry.cache_clear()
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
         mock_llm.return_value = MagicMock()
 
         from main import app
-        import hr.route as hr_route
+        import api.hr as hr_route
 
         hr_route.fit_agent = FakeFitAgent(
             AgentConfig(
@@ -61,10 +61,19 @@ def client(monkeypatch):
 def _build_hr_request() -> HRBatchRankingRequest:
     return HRBatchRankingRequest(
         job_information=JobPosition(
-            job_title="AI Engineer",
-            company="Startup XYZ",
-            location="Paris",
-            contract_type="CDI",
+            title="AI Engineer",
+            company=CompanyInfo(name="Startup XYZ", type="employer"),
+            badges=Badges(
+                location="Paris",
+                contract_type="CDI",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=[],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(),
+            modalities=Modalities(),
+            source_meta=SourceMeta(),
         ),
         company_type="startup",
         shortlist_size=1,
@@ -90,8 +99,24 @@ def _build_hr_request() -> HRBatchRankingRequest:
 
 
 def test_hr_rank_requires_tenant_auth(client):
-    response = client.get("/api/hr/context")
+    response = client.get("/api/hr/context", headers={"X-Skip-Tenant-Inject": "true"})
     assert response.status_code == 401
+
+
+def test_hr_rank_rejects_unknown_tenant(client):
+    response = client.get(
+        "/api/hr/context",
+        headers={"X-Tenant-Id": "unknown-tenant", "X-API-Key": "some-key"}
+    )
+    assert response.status_code == 403
+
+
+def test_hr_rank_rejects_invalid_api_key(client):
+    response = client.get(
+        "/api/hr/context",
+        headers={"X-Tenant-Id": "tenant-a", "X-API-Key": "wrong-key"}
+    )
+    assert response.status_code == 403
 
 
 def test_hr_rank_sync_returns_ranked_candidates(client):

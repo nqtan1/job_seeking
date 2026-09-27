@@ -8,8 +8,9 @@ import {
     generateMotivationLetter, 
     copyMotivationLetter, 
     switchKitTab, 
-    copySimulationPrompt, 
+    copySimulationPrompt,
     clearCV,
+    removeCV,
     resetOutputs,
     loadDbCandidate,
     triggerJobSearch,
@@ -27,6 +28,7 @@ import {
 import { showNotification, showError } from './utils.js';
 import { listCandidates } from './api.js';
 import { initTracker, renderTracker } from './tracker.js';
+import { sendCareerChatMessage, clearCareerChat } from './careerChat.js';
 
 // Initialize App Immediately (ES6 Modules are deferred by default, meaning DOM is guaranteed to be parsed)
 initTenantSelector();
@@ -48,9 +50,11 @@ window.copyMotivationLetter = copyMotivationLetter;
 window.switchKitTab = switchKitTab;
 window.copySimulationPrompt = copySimulationPrompt;
 window.clearCV = clearCV;
+window.removeCV = removeCV;
 window.clearJDFile = clearJDFile;
 
 window.loadDbCandidate = loadDbCandidate;
+window.populateDbCandidates = populateDbCandidates;
 window.triggerJobSearch = triggerJobSearch;
 window.selectSearchJob = selectSearchJob;
 window.clearSelectedSearchJob = clearSelectedSearchJob;
@@ -62,6 +66,9 @@ window.runBatchScreening = runBatchScreening;
 window.clearBulkGroup = clearBulkGroup;
 window.viewCandidateOutreach = viewCandidateOutreach;
 window.copyOutreachEmail = copyOutreachEmail;
+
+window.sendCareerChatMessage = sendCareerChatMessage;
+window.clearCareerChat = clearCareerChat;
 
 // ==========================================
 // 1. Navigation & Configurations
@@ -119,6 +126,28 @@ function initTenantSelector() {
             renderTracker();
         }
     });
+
+    const apiKeyInput = document.getElementById('tenant-api-key');
+    if (apiKeyInput) {
+        // Update state in real-time as they type so requests have the key immediately
+        apiKeyInput.addEventListener('input', (e) => {
+            state.apiKey = e.target.value.trim();
+        });
+
+        // Trigger UI refresh when they finish typing (lose focus or press enter)
+        apiKeyInput.addEventListener('change', (e) => {
+            state.apiKey = e.target.value.trim();
+            console.log(`Updated X-API-Key context.`);
+            showNotification(`Tenant API key updated`);
+            populateDbCandidates();
+
+            // Reload tracker if currently active
+            const viewTracker = document.getElementById('view-tracker');
+            if (viewTracker && !viewTracker.classList.contains('hidden')) {
+                renderTracker();
+            }
+        });
+    }
 }
 
 function clearJobSearchState() {

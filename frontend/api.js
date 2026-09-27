@@ -2,6 +2,19 @@
  * RecruitAI Console Client - Backend API Client Layer
  */
 
+import { state } from './state.js';
+
+function getHeaders(tenantId, additionalHeaders = {}) {
+    const headers = {
+        'X-Tenant-ID': tenantId || state.tenantId || 'default-tenant',
+        ...additionalHeaders
+    };
+    if (state.apiKey) {
+        headers['X-API-Key'] = state.apiKey;
+    }
+    return headers;
+}
+
 /**
  * Upload and extract a CV PDF/image/txt
  */
@@ -12,9 +25,7 @@ export async function extractCV(file, tenantId) {
     const response = await fetch('/api/cv/extract', {
         method: 'POST',
         body: cvFormData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -38,16 +49,16 @@ export async function extractJob(inputType, file, text, tenantId) {
     const response = await fetch('/api/jobs/extract', {
         method: 'POST',
         body: jdFormData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
         throw new Error(`Job extraction failed: status ${response.status}`);
     }
 
-    return await response.json();
+    const jobResult = await response.json();
+    console.log("Job extraction result:", JSON.stringify(jobResult, null, 2));
+    return jobResult;
 }
 
 /**
@@ -63,10 +74,7 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 
     const response = await fetch('/api/fit/analyze', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(fitPayload)
     });
 
@@ -78,29 +86,19 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 }
 
 /**
- * Generate Motivation Letter Draft
+ * Send a message to the Career Chat coach, grounded in the candidate's current
+ * CV / job / fit analysis / interview kit context
  */
-export async function generateLetter(cvData, jobPosition, companyType, language, tone, format, tenantId) {
-    const payload = {
-        cv_info: cvData,
-        job_info: jobPosition,
-        job_type: companyType,
-        language: language,
-        tone: tone,
-        return_format: format
-    };
-
-    const response = await fetch('/api/motivation-letter/generate', {
+export async function sendCareerChatMessage(payload, tenantId) {
+    const response = await fetch('/api/career-chat/message', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-        throw new Error(`Letter generation failed: status ${response.status}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Career chat failed: status ${response.status}`);
     }
 
     return await response.json();
@@ -117,10 +115,7 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
 
     const response = await fetch('/api/hr/rank', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -128,17 +123,6 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
         throw new Error(`Screening failed: status ${response.status}`);
     }
 
-    return await response.json();
-}
-
-/**
- * Get active job search providers
- */
-export async function getProviders() {
-    const response = await fetch('/api/jobs/providers');
-    if (!response.ok) {
-        throw new Error(`Failed to fetch providers: status ${response.status}`);
-    }
     return await response.json();
 }
 
@@ -157,10 +141,7 @@ export async function searchJobs(provider, query, department, contractType, tena
 
     const response = await fetch('/api/jobs/search', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -176,9 +157,7 @@ export async function searchJobs(provider, query, department, contractType, tena
  */
 export async function getJobDetail(provider, jobId, tenantId) {
     const response = await fetch(`/api/jobs/search/${provider}/${jobId}`, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -193,9 +172,7 @@ export async function getJobDetail(provider, jobId, tenantId) {
  */
 export async function listCandidates(tenantId) {
     const response = await fetch('/api/cv/candidates', {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -210,9 +187,7 @@ export async function listCandidates(tenantId) {
  */
 export async function getCandidateFile(candidateId, tenantId) {
     const response = await fetch(`/api/cv/candidates/${candidateId}/file`, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -223,15 +198,26 @@ export async function getCandidateFile(candidateId, tenantId) {
 }
 
 /**
+ * Permanently delete a saved candidate profile and its uploaded file
+ */
+export async function deleteCandidate(candidateId, tenantId) {
+    const response = await fetch(`/api/cv/candidates/${candidateId}`, {
+        method: 'DELETE',
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete candidate: status ${response.status}`);
+    }
+}
+
+/**
  * Create a new job application
  */
 export async function createApplication(applicationData, tenantId) {
     const response = await fetch('/api/applications', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(applicationData)
     });
 
@@ -255,9 +241,7 @@ export async function getApplications(filters = {}, tenantId) {
     const url = `/api/applications${queryString ? '?' + queryString : ''}`;
 
     const response = await fetch(url, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -272,9 +256,7 @@ export async function getApplications(filters = {}, tenantId) {
  */
 export async function getApplication(applicationId, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}`, {
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -290,10 +272,7 @@ export async function getApplication(applicationId, tenantId) {
 export async function updateApplication(applicationId, applicationData, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}`, {
         method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(applicationData)
     });
 
@@ -310,9 +289,7 @@ export async function updateApplication(applicationId, applicationData, tenantId
 export async function deleteApplication(applicationId, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}`, {
         method: 'DELETE',
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -331,9 +308,7 @@ export async function uploadApplicationFile(applicationId, fileType, file, tenan
     const response = await fetch(`/api/applications/${applicationId}/upload`, {
         method: 'POST',
         body: formData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -355,9 +330,7 @@ export async function uploadSpecialDocuments(applicationId, files, tenantId) {
     const response = await fetch(`/api/applications/${applicationId}/upload-special`, {
         method: 'POST',
         body: formData,
-        headers: {
-            'X-Tenant-ID': tenantId
-        }
+        headers: getHeaders(tenantId)
     });
 
     if (!response.ok) {
@@ -383,10 +356,7 @@ export async function generateTempPDF(cvData, jobPosition, companyType, language
 
     const response = await fetch('/api/motivation-letter/generate-temp-pdf', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -410,10 +380,7 @@ export async function finalizeTempPDF(pdfId, company, jobTitle, tenantId) {
 
     const response = await fetch('/api/motivation-letter/finalize', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
@@ -437,10 +404,7 @@ export async function compileVerbatim(cvData, jobPosition, content, tenantId) {
 
     const response = await fetch('/api/motivation-letter/compile-verbatim', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Tenant-ID': tenantId
-        },
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 

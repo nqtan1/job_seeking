@@ -4,9 +4,9 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from jobs.search.cache import JobCacheManager
-from jobs.search.schema import UnifiedJobSearchResponse, UnifiedJobSearchResult
-from jobs.search.providers.manager import JobProviderManager
+from infrastructure.jobs.search.cache import JobCacheManager
+from domain.jobs.search.schema import UnifiedJobSearchResponse, UnifiedJobSearchResult
+from infrastructure.jobs.search.providers.manager import JobProviderManager
 
 
 class TestJobCache(unittest.TestCase):

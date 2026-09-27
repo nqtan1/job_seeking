@@ -57,7 +57,13 @@ cp .env.example .env
 ```
 *(Open `.env` in any text editor and fill in your details).*
 
-### 3. Launch the Server!
+### 3. Run Database Migrations
+Before launching the server for the first time, or after pulling any new updates, run the database migrations to set up or update your SQLite schema:
+```bash
+uv run python -m db.migrations
+```
+
+### 4. Launch the Server!
 Start the backend server:
 ```bash
 uv run uvicorn main:app --reload --host 127.0.0.1 --port 8000

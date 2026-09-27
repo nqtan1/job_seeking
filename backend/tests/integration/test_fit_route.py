@@ -1,11 +1,11 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from agents.agent_config import AgentConfig
-from cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
+from infrastructure.agents.agent_config import AgentConfig
+from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
 from fastapi.testclient import TestClient
-from fit.schema import FitCheck, FitAnalysisResponse, FitAnalysisRequest, Recommendation
-from jobs.schema import JobPosition
+from domain.fit.schema import FitCheck, FitAnalysisResponse, FitAnalysisRequest, Recommendation
+from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 
 
 class FakeFitAgent:
@@ -27,11 +27,11 @@ class FakeFitAgent:
 
 
 def _build_client():
-    with patch("agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
         mock_llm.return_value = MagicMock()
 
         from main import app
-        import fit.route as fit_route
+        import api.fit as fit_route
 
         fit_route.agent = FakeFitAgent(
             AgentConfig(
@@ -54,10 +54,19 @@ def test_fit_analyze_endpoint_returns_fit_check():
             skills=[RawSkill(name="Python")],
         ),
         job_information=JobPosition(
-            job_title="AI Engineer",
-            company="Startup XYZ",
-            location="Paris",
-            contract_type="CDI",
+            title="AI Engineer",
+            company=CompanyInfo(name="Startup XYZ", type="employer"),
+            badges=Badges(
+                location="Paris",
+                contract_type="CDI",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=[],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(),
+            modalities=Modalities(),
+            source_meta=SourceMeta(),
         ),
         company_type="startup",
         recruiter_attend={"must_have": ["Python"]},

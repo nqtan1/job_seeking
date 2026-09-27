@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from agents.agent_config import AgentConfig
-from cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from jobs.schema import CompensationInfo, JobPosition, JobRequirements
-from motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
+from infrastructure.agents.agent_config import AgentConfig
+from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
+from domain.jobs.schema import CompensationInfo, JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
 
 
 class FakeResult:
@@ -64,26 +64,33 @@ class FakeJobAgent:
     def __init__(self, config: AgentConfig):
         self.config = config
 
+    def _extract_text_from_file(self, file_path):
+        return "file content"
+
     def extract_job(self, *args, **kwargs):
         return JobPosition(
-            job_title="Ingénieur en IA",
-            company="Tech Corp France",
-            location="Paris",
-            contract_type="CDI",
+            title="Ingénieur en IA",
+            company=CompanyInfo(name="Tech Corp France", type="employer"),
+            badges=Badges(
+                contract_type="CDI",
+                location="Paris",
+                experience_level="Mid-level",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=["Build ML systems"],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(
+                technical_skills=["Python", "Machine Learning"],
+            ),
+            modalities=Modalities(),
             compensation=CompensationInfo(
                 min_salary=45000,
                 max_salary=60000,
                 salary_currency="EUR",
                 benefits=["Health insurance"],
             ),
-            requirements=JobRequirements(
-                required_skills=["Python", "Machine Learning"],
-                experience_level="Mid-level",
-                years_of_experience=3,
-            ),
-            responsibilities=["Build ML systems"],
-            team_size="5-10 people",
-            industry="Technology",
+            source_meta=SourceMeta(industry="Technology"),
         )
 
     def analyze_job_for_candidate(self, *args, **kwargs):
@@ -127,24 +134,32 @@ class FakeMotivationLetterAgent:
 
 @pytest.fixture
 def client(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/fake-credentials.json")
     monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
 
-    with patch("agents.base_agents.ChatGoogleGenerativeAI") as mock_llm, \
-         patch("cv.agent.genai.Client") as mock_cv_client, \
-         patch("jobs.agent.genai.Client") as mock_jobs_client:
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm, \
+         patch("infrastructure.cv.agent.genai.Client") as mock_cv_client, \
+         patch("infrastructure.jobs.analysis.agent.genai.Client") as mock_jobs_client:
         mock_llm.return_value = MagicMock()
         mock_cv_client.return_value = MagicMock()
         mock_jobs_client.return_value = MagicMock()
 
         from main import app
-        import cv.route as cv_route
-        import jobs.route as jobs_route
-        import motivation_letter.route as ml_route
+        import api.cv as cv_route
+        import api.jobs as jobs_route
+        import api.motivation_letter as ml_route
 
-        config = AgentConfig(config_path=Path("config/agent_config.yaml"))
+        mock_data = {
+            "provider": "vertex",
+            "model_name": "gemini-2.5-flash",
+            "temperature": 0.7,
+            "max_history": 50,
+        }
+        with patch.object(AgentConfig, "_load_config_file", return_value=mock_data):
+            config = AgentConfig(config_path=Path("config/agent_config.yaml"))
 
         cv_route.agent = FakeCVAgent(config)
         jobs_route.agent = FakeJobAgent(config)
@@ -154,11 +169,19 @@ def client(monkeypatch):
 
 
 def test_agent_config_loads_from_yaml(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/fake-credentials.json")
 
-    config = AgentConfig(config_path="config/agent_config.yaml")
+    mock_data = {
+        "provider": "vertex",
+        "model_name": "gemini-2.5-flash",
+        "temperature": 0.7,
+        "max_history": 50,
+    }
+    with patch.object(AgentConfig, "_load_config_file", return_value=mock_data):
+        config = AgentConfig(config_path="config/agent_config.yaml")
 
     assert config.provider == "vertex"
     assert config.model_name == "gemini-2.5-flash"
@@ -208,24 +231,28 @@ def test_job_extract_uses_yaml_config(client):
 
 def test_job_analyze_uses_yaml_config(client):
     job_data = JobPosition(
-        job_title="Ingénieur en IA",
-        company="Tech Corp France",
-        location="Paris",
-        contract_type="CDI",
+        title="Ingénieur en IA",
+        company=CompanyInfo(name="Tech Corp France", type="employer"),
+        badges=Badges(
+            contract_type="CDI",
+            location="Paris",
+            experience_level="Mid-level",
+        ),
+        about_company=AboutCompany(summary=""),
+        missions=["Build ML systems"],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(
+            technical_skills=["Python", "Machine Learning"],
+        ),
+        modalities=Modalities(),
         compensation=CompensationInfo(
             min_salary=45000,
             max_salary=60000,
             salary_currency="EUR",
             benefits=["Health insurance"],
         ),
-        requirements=JobRequirements(
-            required_skills=["Python", "Machine Learning"],
-            experience_level="Mid-level",
-            years_of_experience=3,
-        ),
-        responsibilities=["Build ML systems"],
-        team_size="5-10 people",
-        industry="Technology",
+        source_meta=SourceMeta(industry="Technology"),
     ).model_dump_json()
 
     response = client.post("/api/jobs/analyze", data={"job_data": job_data})
@@ -257,11 +284,19 @@ def test_motivation_letter_generate_uses_yaml_config(client):
     )
 
     job = JobPosition(
-        job_title="AI Engineer",
-        company="Startup XYZ",
-        location="Paris, France",
-        description="Looking for AI expert",
-        contract_type="CDI",
+        title="AI Engineer",
+        company=CompanyInfo(name="Startup XYZ", type="employer"),
+        badges=Badges(
+            location="Paris, France",
+            contract_type="CDI",
+        ),
+        about_company=AboutCompany(summary="Looking for AI expert"),
+        missions=[],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(),
+        modalities=Modalities(),
+        source_meta=SourceMeta(),
     )
 
     payload = {

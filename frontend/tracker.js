@@ -14,6 +14,17 @@ import {
 import { showNotification, showError } from './utils.js';
 
 /**
+ * Helper to update iframe source securely by cloning the element, avoiding standard browser PDF caching bugs.
+ */
+function updateIframeSrc(iframeId, srcUrl) {
+    const iframe = document.getElementById(iframeId);
+    if (!iframe) return;
+    const newIframe = iframe.cloneNode(true);
+    newIframe.src = srcUrl;
+    iframe.parentElement.replaceChild(newIframe, iframe);
+}
+
+/**
  * Initialize Tracker View (setup defaults)
  */
 export function initTracker() {
@@ -52,14 +63,13 @@ export function initTracker() {
     if (dfCvFile) {
         dfCvFile.addEventListener('change', (e) => {
             const container = document.getElementById('df-cv-preview-container');
-            const preview = document.getElementById('df-cv-pdf-preview');
             if (e.target.files && e.target.files.length > 0) {
                 const url = URL.createObjectURL(e.target.files[0]);
-                preview.src = url;
+                updateIframeSrc('df-cv-pdf-preview', url);
                 container.classList.remove('hidden');
             } else {
                 container.classList.add('hidden');
-                preview.src = "";
+                updateIframeSrc('df-cv-pdf-preview', '');
             }
         });
     }
@@ -68,14 +78,13 @@ export function initTracker() {
     if (dfLetterFile) {
         dfLetterFile.addEventListener('change', (e) => {
             const container = document.getElementById('df-letter-self-preview-container');
-            const preview = document.getElementById('df-letter-self-pdf-preview');
             if (e.target.files && e.target.files.length > 0) {
                 const url = URL.createObjectURL(e.target.files[0]);
-                preview.src = url;
+                updateIframeSrc('df-letter-self-pdf-preview', url);
                 container.classList.remove('hidden');
             } else {
                 container.classList.add('hidden');
-                preview.src = "";
+                updateIframeSrc('df-letter-self-pdf-preview', '');
             }
         });
     }
@@ -543,7 +552,7 @@ export async function triggerApplyFlow() {
         document.getElementById('df-ai-letter-placeholder').classList.remove('hidden');
         document.getElementById('df-ai-letter-active-container').classList.add('hidden');
         document.getElementById('df-ai-letter-text').value = '';
-        document.getElementById('df-ai-letter-pdf-preview').src = '';
+        updateIframeSrc('df-ai-letter-pdf-preview', '');
 
         // Open Modal
         const modal = document.getElementById('decision-flow-modal');
@@ -600,7 +609,7 @@ export async function generateDecisionFlowLetterPDF() {
 
         // Load preview and raw text editor
         aiTextarea.value = result.content;
-        iframePreview.src = result.pdf_url;
+        updateIframeSrc('df-ai-letter-pdf-preview', result.pdf_url);
 
         // Toggle views
         document.getElementById('df-ai-letter-placeholder').classList.add('hidden');
@@ -633,7 +642,6 @@ export async function submitDecisionFlowLetterFeedback() {
 
     const tenantId = state.tenantId || 'default-tenant';
     const aiTextarea = document.getElementById('df-ai-letter-text');
-    const iframePreview = document.getElementById('df-ai-letter-pdf-preview');
     const revisionSpinner = document.getElementById('df-letter-revision-spinner');
     const revisionBtn = document.getElementById('df-btn-letter-revision');
 
@@ -659,7 +667,7 @@ export async function submitDecisionFlowLetterFeedback() {
         state.dfPdfContent = result.content;
 
         aiTextarea.value = result.content;
-        iframePreview.src = result.pdf_url;
+        updateIframeSrc('df-ai-letter-pdf-preview', result.pdf_url);
         feedbackInput.value = ''; // clear input on success
         showNotification("AI Agent has successfully revised and re-compiled your PDF cover letter!");
     } catch (err) {
@@ -678,7 +686,6 @@ export async function submitDecisionFlowLetterFeedback() {
 export function toggleCVDocSource(value) {
     const wrapper = document.getElementById('df-cv-upload-wrapper');
     const container = document.getElementById('df-cv-preview-container');
-    const preview = document.getElementById('df-cv-pdf-preview');
     
     if (value === "") {
         wrapper.classList.remove('hidden');
@@ -686,17 +693,21 @@ export function toggleCVDocSource(value) {
         const fileInput = document.getElementById('df-cv-file');
         if (fileInput && fileInput.files && fileInput.files.length > 0) {
             const url = URL.createObjectURL(fileInput.files[0]);
-            preview.src = url;
+            updateIframeSrc('df-cv-pdf-preview', url);
             container.classList.remove('hidden');
         } else {
             container.classList.add('hidden');
-            preview.src = "";
+            updateIframeSrc('df-cv-pdf-preview', '');
         }
     } else {
         wrapper.classList.add('hidden');
         // Existing DB candidate selected. Set source to candidate's file route.
         const tenantId = state.tenantId || 'default-tenant';
-        preview.src = `/api/cv/candidates/${value}/file?tenant_id=${tenantId}`;
+        let srcUrl = `/api/cv/candidates/${value}/file?tenant_id=${tenantId}`;
+        if (state.apiKey) {
+            srcUrl += `&api_key=${encodeURIComponent(state.apiKey)}`;
+        }
+        updateIframeSrc('df-cv-pdf-preview', srcUrl);
         container.classList.remove('hidden');
     }
 }
@@ -708,7 +719,6 @@ export function toggleLetterDocSource(value) {
     const selfWrapper = document.getElementById('df-letter-self-wrapper');
     const aiWrapper = document.getElementById('df-letter-ai-wrapper');
     const selfContainer = document.getElementById('df-letter-self-preview-container');
-    const selfPreview = document.getElementById('df-letter-self-pdf-preview');
 
     if (value === 'self') {
         selfWrapper.classList.remove('hidden');
@@ -718,22 +728,22 @@ export function toggleLetterDocSource(value) {
         const fileInput = document.getElementById('df-letter-file');
         if (fileInput && fileInput.files && fileInput.files.length > 0) {
             const url = URL.createObjectURL(fileInput.files[0]);
-            selfPreview.src = url;
+            updateIframeSrc('df-letter-self-pdf-preview', url);
             selfContainer.classList.remove('hidden');
         } else {
             selfContainer.classList.add('hidden');
-            selfPreview.src = "";
+            updateIframeSrc('df-letter-self-pdf-preview', '');
         }
     } else if (value === 'ai') {
         selfWrapper.classList.add('hidden');
         aiWrapper.classList.remove('hidden');
         selfContainer.classList.add('hidden');
-        selfPreview.src = "";
+        updateIframeSrc('df-letter-self-pdf-preview', '');
     } else { // 'none'
         selfWrapper.classList.add('hidden');
         aiWrapper.classList.add('hidden');
         selfContainer.classList.add('hidden');
-        selfPreview.src = "";
+        updateIframeSrc('df-letter-self-pdf-preview', '');
     }
 }
 
@@ -982,25 +992,32 @@ export function previewTrackerFile(fileUrl, title) {
 
     const modal = document.getElementById('zoom-modal');
     const modalTitle = document.getElementById('zoom-modal-title');
-    const iframe = document.getElementById('zoom-iframe');
     const img = document.getElementById('zoom-img');
     const txt = document.getElementById('zoom-txt');
 
     modalTitle.innerText = title;
 
     // Reset visibility
-    iframe.classList.add('hidden');
+    updateIframeSrc('zoom-iframe', '');
+    document.getElementById('zoom-iframe').classList.add('hidden');
     img.classList.add('hidden');
     txt.classList.add('hidden');
 
-    const ext = fileUrl.split('.').pop().split('?')[0].toLowerCase();
+    // Automatically append tenant authentication parameters to internal API routes
+    let activeUrl = fileUrl;
+    if (activeUrl.startsWith('/api/') && state.apiKey) {
+        const separator = activeUrl.includes('?') ? '&' : '?';
+        activeUrl += `${separator}tenant_id=${encodeURIComponent(state.tenantId || 'default-tenant')}&api_key=${encodeURIComponent(state.apiKey)}`;
+    }
+
+    const ext = activeUrl.split('.').pop().split('?')[0].toLowerCase();
     
     if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
-        img.src = fileUrl;
+        img.src = activeUrl;
         img.classList.remove('hidden');
     } else {
-        iframe.src = fileUrl;
-        iframe.classList.remove('hidden');
+        updateIframeSrc('zoom-iframe', activeUrl);
+        document.getElementById('zoom-iframe').classList.remove('hidden');
     }
 
     // Show Modal with beautiful smooth transition
@@ -1036,11 +1053,10 @@ export function zoomDecisionFlowDoc(docType) {
     if (fileUrl && fileUrl !== window.location.href && !fileUrl.endsWith('#') && fileUrl !== '') {
         const container = document.getElementById('decision-flow-modal-container');
         const sidePane = document.getElementById('df-preview-pane');
-        const sideIframe = document.getElementById('df-side-preview-iframe');
         const sideTitle = document.getElementById('df-side-preview-title');
         
         // Load content inside sidebar preview
-        sideIframe.src = fileUrl;
+        updateIframeSrc('df-side-preview-iframe', fileUrl);
         sideTitle.innerHTML = `<i class="fa-solid fa-eye text-emerald-400"></i> ${title}`;
         
         // Smoothly expand modal and slide-in sidebar pane side-by-side
@@ -1058,7 +1074,6 @@ export function zoomDecisionFlowDoc(docType) {
 export function closeDecisionFlowSidePreview() {
     const container = document.getElementById('decision-flow-modal-container');
     const sidePane = document.getElementById('df-preview-pane');
-    const sideIframe = document.getElementById('df-side-preview-iframe');
     
     if (sidePane) {
         sidePane.classList.add('hidden');
@@ -1067,7 +1082,5 @@ export function closeDecisionFlowSidePreview() {
         container.classList.remove('max-w-5xl');
         container.classList.add('max-w-lg');
     }
-    if (sideIframe) {
-        sideIframe.src = '';
-    }
+    updateIframeSrc('df-side-preview-iframe', '');
 }
