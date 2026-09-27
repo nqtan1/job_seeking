@@ -51,6 +51,7 @@ window.clearCV = clearCV;
 window.clearJDFile = clearJDFile;
 
 window.loadDbCandidate = loadDbCandidate;
+window.populateDbCandidates = populateDbCandidates;
 window.triggerJobSearch = triggerJobSearch;
 window.selectSearchJob = selectSearchJob;
 window.clearSelectedSearchJob = clearSelectedSearchJob;
