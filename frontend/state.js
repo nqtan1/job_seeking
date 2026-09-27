@@ -14,6 +14,7 @@ export const state = {
     motivationLetter: null,
     interviewKit: null,
     activeKitTab: 'tech',
+    careerChatHistory: [],
     
     // DB Candidates list
     dbCandidates: [],

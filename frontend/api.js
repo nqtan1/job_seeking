@@ -84,6 +84,25 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 }
 
 /**
+ * Send a message to the Career Chat coach, grounded in the candidate's current
+ * CV / job / fit analysis / interview kit context
+ */
+export async function sendCareerChatMessage(payload, tenantId) {
+    const response = await fetch('/api/career-chat/message', {
+        method: 'POST',
+        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Career chat failed: status ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
  * Screen and rank a list of candidates against a target Job Requisition
  */
 export async function rankCandidates(candidates, targetJob, tenantId) {
@@ -174,6 +193,20 @@ export async function getCandidateFile(candidateId, tenantId) {
     }
 
     return await response.blob();
+}
+
+/**
+ * Permanently delete a saved candidate profile and its uploaded file
+ */
+export async function deleteCandidate(candidateId, tenantId) {
+    const response = await fetch(`/api/cv/candidates/${candidateId}`, {
+        method: 'DELETE',
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete candidate: status ${response.status}`);
+    }
 }
 
 /**

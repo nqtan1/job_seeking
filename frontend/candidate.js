@@ -2,7 +2,7 @@
  * RecruitAI Console Client - Candidate Sandbox Logic Module
  */
 import { state } from './state.js';
-import { extractCV, extractJob, analyzeFit, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF } from './api.js';
+import { extractCV, extractJob, analyzeFit, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF, deleteCandidate } from './api.js';
 import { showNotification, showError } from './utils.js';
 import { renderCVPreview, renderJDPreview } from './preview.js';
 
@@ -347,6 +347,11 @@ export function copySimulationPrompt() {
 export function resetOutputs() {
     document.getElementById('candidate-output').classList.add('hidden');
     document.getElementById('candidate-placeholder').classList.remove('hidden');
+
+    // A new CV/job means the previous chat's context is stale; start fresh.
+    state.careerChatHistory = [];
+    const chatMessages = document.getElementById('career-chat-messages');
+    if (chatMessages) chatMessages.innerHTML = '';
 }
 
 export function clearCV() {
@@ -368,6 +373,36 @@ export function clearCV() {
     
     resetOutputs();
     renderCVPreview();
+}
+
+export async function removeCV() {
+    const candidateId = state.candidateId;
+
+    // No saved DB profile behind the current form (e.g. a freshly dropped file
+    // that hasn't been extracted yet) — nothing to delete server-side.
+    if (!candidateId) {
+        clearCV();
+        return;
+    }
+
+    const confirmed = window.confirm(
+        'Permanently delete this saved candidate profile and its uploaded file? This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    try {
+        await deleteCandidate(candidateId, state.tenantId);
+        showNotification('Candidate profile deleted.');
+    } catch (e) {
+        console.error('Failed to delete candidate:', e);
+        showError(`Failed to delete candidate: ${e.message}`);
+        return;
+    }
+
+    clearCV();
+    if (window.populateDbCandidates) {
+        await window.populateDbCandidates();
+    }
 }
 
 export function showCandidateLoader(show) {
