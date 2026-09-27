@@ -52,6 +52,7 @@ export const state = {
     ],
     batchRankings: null,
     activeOutreachCandidate: null,
+    activeRequisition: null,
 
     // Job Tracker State
     applications: [],

@@ -71,6 +71,7 @@ export async function runBatchScreening() {
 }
 
 export function renderRecruiterOutput(title, company) {
+    state.activeRequisition = { title, company };
     showRecruiterLoader(false);
     document.getElementById('recruiter-placeholder').classList.add('hidden');
     document.getElementById('recruiter-output').classList.remove('hidden');
@@ -129,27 +130,29 @@ export function viewCandidateOutreach(candidateId) {
     if (!rankedCandidate) return;
 
     state.activeOutreachCandidate = rankedCandidate;
-    
+
     const decision = rankedCandidate.decision || rankedCandidate.recommendation || 'maybe';
     const isGo = decision.toLowerCase().includes('go') && !decision.toLowerCase().includes('no');
-    
+
     const badge = document.getElementById('email-mode-badge');
     const label = document.getElementById('outreach-recipient-label');
     const textarea = document.getElementById('outreach-text-output');
 
     label.textContent = `Email Draft for ${rankedCandidate.name}:`;
 
+    const { title: jobTitle, company } = state.activeRequisition || { title: 'the role', company: 'our company' };
+
     if (isGo) {
         badge.textContent = 'Invitation to Interview';
         badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-        
-        textarea.value = `Subject: Invitation to Interview: Senior Backend Engineer - RecruitAI Inc.
+
+        textarea.value = `Subject: Invitation to Interview: ${jobTitle} - ${company}
 
 Dear ${rankedCandidate.name},
 
-I hope this email finds you well. 
+I hope this email finds you well.
 
-My name is Recruitment Team at RecruitAI Inc. We recently reviewed your profile and resume against our Senior Backend Engineer requisition. 
+My name is Recruitment Team at ${company}. We recently reviewed your profile and resume against our ${jobTitle} requisition.
 
 Our team was highly impressed by your expertise, particularly around:
 - ${rankedCandidate.reasoning || "Your strong overlapping technical alignment."}
@@ -158,24 +161,24 @@ We would love to schedule a brief 30-minute introductory Google Meet to discuss 
 
 Sincerely,
 Outreach Desk
-RecruitAI Inc.`;
+${company}`;
     } else {
         badge.textContent = 'Polite Rejection';
         badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20';
 
-        textarea.value = `Subject: Update on your application: Senior Backend Engineer - RecruitAI Inc.
+        textarea.value = `Subject: Update on your application: ${jobTitle} - ${company}
 
 Dear ${rankedCandidate.name},
 
-Thank you very much for your interest in the Senior Backend Engineer role at RecruitAI Inc. and for taking the time to share your resume with us.
+Thank you very much for your interest in the ${jobTitle} role at ${company} and for taking the time to share your resume with us.
 
-After careful evaluation against our immediate requirements, we have decided to proceed with other candidates whose profiles align more closely with our direct tech stacks. 
+After careful evaluation against our immediate requirements, we have decided to proceed with other candidates whose profiles align more closely with our direct tech stacks.
 
 We will keep your structured profile on file in our talent pool for future opportunities that match your background. We wish you the absolute best in your job search.
 
 Warm regards,
 Recruiting Desk
-RecruitAI Inc.`;
+${company}`;
     }
 }
 
