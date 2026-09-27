@@ -1,6 +1,6 @@
 # RecruitAI: Target Architecture
 
-**Status:** Proposal, v1 · **Scope:** full system redesign done before any more feature work
+**Status:** Proposal, v2 (product decisions resolved, see §8) · **Scope:** full system redesign done before any more feature work · **Focus:** individual job seekers first
 
 This document looks at the current codebase, lists the problems that block it
 from being production-grade, and defines the target architecture and stack.
@@ -134,7 +134,7 @@ flowchart LR
 2. **Tenant from the token, never from input.** `org_id` is resolved from the
    authenticated user and the active membership. Clients cannot choose it.
 3. **Long work goes async.** Anything that can take more than about 10 s, or
-   fans out (batch screening, PDF compile, job search with an LLM), becomes a
+   fans out (PDF compile, job search with an LLM, data export), becomes a
    task. The API returns `202` with a task id. Single-document extraction may
    stay synchronous.
 4. **One module per feature.** Modules talk to each other only through their
@@ -177,8 +177,9 @@ backend/
 │       ├── candidates/       # CV → CandidateProfile extraction & CRUD
 │       ├── jobs/             # job postings: manual/file extraction + external search
 │       │   └── providers/    # JobProvider protocol, france_travail.py
-│       ├── matching/         # fit analysis (candidate side) & batch screening (recruiter side)
-│       ├── letters/          # letter generation, drafts, LaTeX → PDF (Tectonic)
+│       ├── matching/         # fit analysis (v1); recruiter batch screening later
+│       ├── letters/          # writing studio: structured letters, versions, templates → PDF (§10)
+│       ├── privacy/          # data export, account deletion, retention sweeps (§11)
 │       └── applications/     # application tracker + status history
 └── tests/
     ├── unit/                 # services with fake repos / fake LLM
@@ -205,9 +206,9 @@ modules/<feature>/
 
 ### 4.2 API conventions
 - Prefix every route with `/api/v1`. Routes are resource nouns
-  (`/candidates`, `/jobs`, `/fit-analyses`, `/screenings`, `/letters`,
+  (`/profile`, `/documents`, `/jobs`, `/fit-analyses`, `/letters`,
   `/applications`).
-- Async operations: `POST /api/v1/screenings` returns
+- Async operations: `POST /api/v1/letters/{id}/render` returns
   `202 {task_id, status_url}`, and clients poll `GET /api/v1/tasks/{id}`.
   Server-sent events can be added later.
 - Errors use `application/problem+json` (RFC 9457) with a stable `code` field.
@@ -227,15 +228,15 @@ are UUIDv7 (time-sortable).
 | Table | Key columns | Notes |
 |---|---|---|
 | `organizations` | id, name, kind (`personal` \| `company`) | A candidate gets a personal org automatically at sign-up |
-| `users` | id, firebase_uid, email, display_name | |
+| `users` | id, firebase_uid, email, display_name, last_active_at, deletion_warned_at | |
 | `memberships` | org_id, user_id, role (`owner` \| `recruiter` \| `member`) | Unique on (org_id, user_id) |
 | `documents` | id, org_id, kind (`cv` \| `jd` \| `letter_pdf` \| `attachment`), storage_key, mime, size, sha256, uploaded_by | The file bytes live in GCS |
 | `candidate_profiles` | id, org_id, document_id, name, email, data JSONB, schema_version | `data` holds `CVInformation` |
 | `job_postings` | id, org_id, source (`manual` \| `file` \| `france_travail`), external_id, title, company, data JSONB | Unique on (org_id, source, external_id) |
 | `fit_analyses` | id, org_id, candidate_id, job_id, score, verdict, data JSONB, model, prompt_version | |
-| `screenings` | id, org_id, job_id, status | One recruiter batch |
-| `screening_results` | screening_id, candidate_id, fit_analysis_id, rank | |
-| `letters` | id, org_id, candidate_id, job_id, language, tone, body, latex, pdf_document_id, status (`draft` \| `final`) | |
+| `screenings`, `screening_results` | *(later, B2B module)* | Not built in v1 |
+| `letters` | id, org_id, candidate_id, job_id, kind, template, content JSONB, latex_override, language, tone, length, status (`draft` \| `final`) | See §10.3 |
+| `letter_versions` | letter_id, n, content JSONB, created_at | Version history |
 | `applications` | id, org_id, job_id NULL, company_name, source, status, applied_at, notes | |
 | `application_events` | id, application_id, from_status, to_status, at, note | Status history for the tracker timeline |
 | `job_search_cache` | key, provider, payload JSONB, expires_at | Replaces the second SQLite DB |
@@ -282,7 +283,7 @@ defence behind the repository filters.
 
 ### 4.6 Background tasks
 - **Procrastinate** tasks are defined per module in `tasks.py`, for example
-  `matching.run_screening`, `letters.render_pdf`, `jobs.search_external`.
+  `letters.render_pdf`, `jobs.search_external`, `privacy.export_user_data`, `privacy.retention_sweep`.
 - The worker runs as a separate process (`procrastinate worker`), deployed as
   its own Cloud Run service with CPU always allocated and min instances = 1.
 - The task is enqueued **in the same DB transaction** as the row that tracks
@@ -340,7 +341,8 @@ frontend/
 │   ├── components/ui/      # shadcn/ui primitives
 │   └── features/
 │       ├── candidate/      # upload CV, pick job, fit report, interview kit
-│       ├── recruiter/      # requisitions, bulk upload, screening table, outreach drafts
+│       ├── settings/       # account, privacy: export / delete
+│       ├── (recruiter/)    # later: B2B module
 │       ├── letters/        # split-screen editor + PDF preview
 │       ├── tracker/        # applications board/table + timeline
 │       └── job-search/     # France Travail search
@@ -400,9 +402,10 @@ with a green CI run and a working app.
 |---|---|---|
 | **0. Foundations** | New `backend/src/recruitai` skeleton, `Settings`, fixed `pyproject.toml` (remove `genai` / `vertexai` / `dotenv` / `path`; add `google-genai`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `procrastinate`, `pydantic-settings`, `firebase-admin`, `google-cloud-storage`; move pytest to a dev group), ruff, mypy, pre-commit, GitHub Actions, `docker compose` with Postgres | `create_app()` boots, `/health` is green, CI runs |
 | **1. Core platform** | `core/db` + first Alembic migration (identity tables), Firebase auth + `OrgContext`, `Storage`, error handling, logging, `LLMGateway` + `ai_calls`, Procrastinate worker + `/tasks/{id}` | Sign in, create an org, upload a file, run a dummy task end to end, with tests |
-| **2. Port features** | In order: `documents` + `candidates` → `jobs` (incl. France Travail, cache table) → `matching` (fit + screenings) → `letters` (Tectonic) → `applications`. Each one moves its prompts and schemas and gets a cross-tenant test | Every old endpoint has a `/api/v1` equivalent with tests |
+| **2. Port features (B2C)** | In order: `documents` + `candidates` (Master profile) → `jobs` (job inbox, France Travail, cache table) → `matching` (fit only) → `letters` (studio v1, §10) → `applications` (tracker) → `privacy` (export/delete/sweeps, §11). Each one moves its prompts and schemas and gets a cross-tenant test | The whole v1 individual journey (§8.1) works end to end through `/api/v1` with tests |
 | **3. Frontend rebuild** | Vite/React app, auth, generated client. Screens in the same order as phase 2 | Feature parity with the current UI |
-| **4. Production** | GCP project setup (Cloud SQL, GCS, Secret Manager, Cloud Run ×2, Firebase Hosting), CD pipeline, alerts on 5xx rate and task failures | Deployed from `main` with no manual steps |
+| **4. Production** | GCP project in an EU region with Terraform (§9): Cloud SQL, GCS + lifecycle rules, Secret Manager, Cloud Run ×2, Firebase Hosting + Auth + App Check, Cloud Scheduler, budget alerts. CD pipeline, alerts on 5xx rate and task failures. Privacy policy page | Deployed from `main` with no manual steps |
+| **6. Later: recruiter (B2B)** | Company orgs + `recruiter` role, screenings, outreach. Check EU AI Act high-risk obligations first (§8.1) | — |
 | **5. Cleanup** | Delete `api/`, `application/`, `domain/`, `infrastructure/`, `workers/`, `migrations/`, old `frontend/*.js`, and the old Dockerfile | Only the new structure remains |
 
 Existing SQLite data is dev-only, so no data migration is planned. If some of
@@ -410,24 +413,186 @@ it must be kept, a one-off import script can go in phase 2.
 
 ---
 
-## 8. Open questions (decide before phase 1)
+## 8. Product decisions (resolved)
 
-1. **Who is the primary customer:** job seekers (B2C), recruiting teams (B2B),
-   or both from day one? The design supports both through personal and company
-   organizations. The answer decides which half of the UI gets built first.
-2. **Auth provider:** Firebase Auth is recommended because the rest of the
-   stack is on GCP. The self-hosted alternative is `fastapi-users` with JWT,
-   which means no vendor but you own password resets, email verification,
-   and OAuth.
-3. **Letters:** keep LaTeX as the editable format (recommended; it keeps the
-   co-writing feature), or move to a simpler Markdown-to-PDF flow?
-4. **Data retention for CVs (GDPR):** how long uploads and extracted profiles
-   are kept, and whether candidates can delete their own data. This affects
-   the storage lifecycle rules and adds a `DELETE /me` flow.
+| # | Question | Decision |
+|---|---|---|
+| 1 | Primary customer | **Individual job seekers (B2C) first.** Recruiter features (bulk screening, outreach) are postponed to a later phase |
+| 2 | Auth / platform | **Google-native end to end:** Firebase Auth → upgrade to Identity Platform when needed, Cloud Run, Cloud SQL, GCS, Vertex AI, all in an **EU region** |
+| 3 | Letters | Keep LaTeX as the rendering engine, but make letters a **structured, multi-format writing studio** (§10) |
+| 4 | Data retention | A **privacy-first retention policy** based on GDPR / CNIL practice and how comparable products work (§11) |
 
----
+### 8.1 What "individual first" changes
 
-## 9. Architecture decision records
+- **Tenancy stays, but users don't see it.** Every user gets a `personal`
+  organization at sign-up, and every row still carries `org_id`. The UI never
+  shows organizations. Company orgs and recruiter roles can be added later
+  without a data migration.
+- **`memberships.role`** starts with only `owner`. `recruiter` is added when
+  the B2B module ships.
+- **Scope for v1:** the `matching` module does fit analysis only. The
+  `screenings` / `screening_results` tables and the `features/recruiter` UI are
+  **not built** in v1. The old `/api/hr/*` endpoints are not ported. Their
+  prompts are archived under `ai/prompts/_archive/` for later use.
+- **A regulatory reason to wait on recruiter features:** the EU AI Act lists AI
+  used by employers to *filter, rank or evaluate candidates* as **high-risk**
+  (Annex III). That brings risk management, logging, human oversight, and
+  conformity duties. A tool a job seeker uses on their *own* documents is not
+  in that category. Check the current enforcement dates before building the
+  B2B module; the high-risk timeline was under revision in 2025–26.
+
+**v1 journey for an individual user** (this sets the build order):
+
+```
+Sign in with Google
+  → Build "Master profile" (upload CV once → structured, editable profile)
+  → Collect jobs (paste JD text/URL, upload file, or search France Travail) → "Job inbox"
+  → For a job: Fit report (score, strengths, gaps, advice)
+  → Generate application kit: tailored letter (§10) + interview prep
+  → Track the application (tracker board + status timeline + reminders)
+```
+
+## 9. Auth and deployment on Google Cloud
+
+**Auth: Firebase Authentication**
+- Sign-in methods: **Google** (one click, likely the main path), plus
+  **email + password with email verification**. Magic link can come later.
+- Upgrade to **Identity Platform** (same SDK, one-click upgrade in the
+  console) only when you need MFA, blocking functions (for example, to reject
+  disposable emails), or an SLA.
+- The backend verifies ID tokens with `firebase-admin`. There is no password
+  storage anywhere in our code.
+- **Firebase App Check** (reCAPTCHA Enterprise) protects the AI endpoints from
+  scripted abuse, since each call costs money.
+- Local dev uses the **Firebase Local Emulator Suite**, so no real accounts are
+  needed in tests.
+
+**Google Cloud services**
+
+| Need | Service | Notes |
+|---|---|---|
+| API + worker | **Cloud Run** (`europe-west1` or `europe-west9` Paris) | Scale to zero for the API; the worker runs with min 1 instance |
+| Database | **Cloud SQL for PostgreSQL 16** | Smallest shared-core tier for the MVP; this is the main fixed monthly cost |
+| Files | **Cloud Storage** (same region) | Lifecycle rules enforce retention (§11) |
+| LLM | **Vertex AI Gemini** (EU region) | Use **Vertex, not the free AI Studio tier**, for user data. See §11.4 |
+| Secrets | **Secret Manager** | France Travail credentials and similar |
+| Frontend | **Firebase Hosting** | Global CDN; `/api/**` rewrites to Cloud Run |
+| Scheduled jobs | **Cloud Scheduler → Cloud Run jobs** | Retention sweeps, reminder emails |
+| Email | Firebase Auth for auth emails; transactional email (reminders) through a provider such as Brevo or SendGrid | GCP has no native email-sending service |
+| Observability | Cloud Logging, Error Reporting, Cloud Monitoring alerts | Plus **budget alerts** on the billing account from day one |
+| IaC | **Terraform** (`infra/`) | Added in phase 4, so the environment can be rebuilt |
+
+Service accounts use **workload identity**: Cloud Run runs as a dedicated
+service account with least-privilege roles (`roles/aiplatform.user`,
+`roles/cloudsql.client`, bucket-scoped `roles/storage.objectAdmin`). No JSON
+key files exist anywhere.
+
+## 10. Letters: writing studio
+
+The goal is to go from "generate one letter" to a studio that covers every
+format a job seeker actually has to write.
+
+### 10.1 Model: structured content, rendered by templates
+- A letter is stored as **structured blocks** (`header`, `recipient`,
+  `subject`, `salutation`, `opening`, `body[]`, `closing`, `signature`) in
+  `letters.content JSONB`. It is not stored as raw LaTeX.
+- **Templates** are Jinja-rendered LaTeX files (`letters/templates/*.tex.j2`),
+  compiled by Tectonic in the worker. Changing the template never needs the
+  AI to run again.
+- **Advanced mode:** a user can "eject" to raw LaTeX (the current co-writing
+  feature). Ejected letters store `latex_override` and skip templating.
+
+### 10.2 Features (v1 → later)
+
+| Feature | What it does | Phase |
+|---|---|---|
+| **Templates** | Classic, Modern, Compact, and a **French "lettre de motivation"** layout (sender/recipient blocks, *Objet :*, *formule de politesse*) | v1 |
+| **Languages & tones** | FR / EN first (current); tones: professional, warm, confident, academic, formal. Length: short / standard / detailed | v1 |
+| **Paragraph-level regenerate** | Regenerate or edit one block without touching the rest | v1 |
+| **Inline AI actions** | Select text → *shorten, more formal, more concrete, add a metric, fix grammar* | v1 |
+| **Grounding check** | Every claim is checked against the Master profile. Unsupported claims are highlighted so the AI can't invent experience | v1 |
+| **Quality panel** | JD keyword coverage, length, clichés detected, readability, repeated words | v1 |
+| **Versions** | Autosave versions, compare two versions, restore | v1 |
+| **Multi-format outputs** from one letter | PDF, **DOCX**, plain text for web forms, **email-body version**, **LinkedIn / recruiter message** (≤300 chars), and a **follow-up email** after applying | v1 (PDF, text, email) / v2 (DOCX, LinkedIn, follow-up) |
+| **Company personalization** | The user pastes notes about the company (or later a URL fetch), and the "why this company" paragraph uses them | v2 |
+| **Snippet library** | Save reusable paragraphs (for example "my career change story") and insert them into any letter | v2 |
+| **Other letter types** | Spontaneous application, internship/alternance, thank-you after interview, offer acceptance/decline | v2 |
+
+### 10.3 Data
+`letters` gains:
+- `kind` (`cover` \| `spontaneous` \| `follow_up` \| `thank_you` …)
+- `template`, `content JSONB`, `latex_override`
+- `language`, `tone`, `length`
+- `status` (`draft` \| `final`)
+
+A new `letter_versions (letter_id, n, content, created_at)` table holds the
+version history. Rendered outputs are `documents` rows (`kind='letter_pdf'` /
+`'letter_docx'`), so they follow the retention rules below.
+
+## 11. Data and privacy: market practice → our policy
+
+*This is product guidance, not legal advice. Have the privacy policy reviewed
+before public launch.*
+
+### 11.1 What the market does
+- **Consumer career tools** (resume builders, job trackers, cover-letter
+  generators, e.g. Teal, Huntr, Kickresume, Jobscan) usually:
+  - keep data **for as long as the account exists**
+  - offer **self-service delete account** and **data export**
+  - delete **inactive accounts** after a stated period
+  - say in their policies whether user content is used to train AI
+  
+  Users increasingly check that last point.
+- **Recruiters in France (CNIL guidance)** keep an unsuccessful candidate's
+  data **at most 2 years after last contact**, unless the candidate agrees to
+  longer. This matters for the future B2B module, not for v1.
+- **CNIL on inactive accounts:** delete or anonymize data after a defined
+  inactivity period, and warn the user before doing it.
+- **CVs often contain personal data beyond what's needed:** photos, birth
+  dates, nationality, sometimes health or religion (special-category data under
+  GDPR Art. 9). Good practice is **data minimization**. Don't extract or keep
+  fields the product doesn't use.
+
+### 11.2 Our retention policy
+
+| Data | Kept for | How it's enforced |
+|---|---|---|
+| Account, Master profile, jobs, letters, applications | While the account is active | — |
+| **Inactive account** (no sign-in) | **Deleted after 24 months**, with warning emails at 30 and 7 days | Monthly Cloud Scheduler job |
+| Uploaded original files (CV, JD) | While the account is active; the user can delete any file at any time | Deleting a file removes it from GCS; the extracted profile stays unless also deleted |
+| Letter **drafts** / temporary previews | **7 days** | GCS lifecycle rule on the `tmp/` prefix + DB sweep |
+| Guest / not-signed-in trial uploads (if we add a trial) | **24 hours** | GCS lifecycle rule |
+| Job search cache (public job ads) | 24 hours | `expires_at` + sweep |
+| `ai_calls` usage records | 13 months, **metadata only**: tokens, model, latency. Never prompt or CV content | Sweep job |
+| Application logs | 30 days (Cloud Logging default). **Never log CV/letter content or emails** | Logging filter + code review rule |
+| Database backups | 7 days (Cloud SQL automated backups + PITR) | Deleted data is gone from backups within 7 days |
+| **Account deletion** | Hard delete of DB rows and GCS objects **immediately**; backups age out within 7 days | `DELETE /api/v1/me`, which runs a worker task |
+
+### 11.3 User rights built into the product (v1)
+- **Export my data** (GDPR Art. 20): a ZIP with JSON (profile, jobs, letters,
+  applications) plus the original files. Built by a worker task and delivered
+  as a signed URL that expires in 24 h.
+- **Delete my account**, and delete individual files or letters, from Settings.
+- **Minimization at extraction:** the CV schema does **not** keep photo, date
+  of birth, gender, nationality, or marital status, even if they're in the CV.
+  An optional "privacy check" warns the user when their CV includes them. In
+  France these are best left out of a CV anyway.
+- **Consent and transparency:** a clear privacy notice at sign-up saying data
+  is processed in the EU by Google Cloud as processor, and that **user content
+  is never used to train AI models**.
+
+### 11.4 AI and data location
+- Use **Vertex AI** in an EU region. Google's Vertex terms state that customer
+  data isn't used to train its models. The **free Gemini API (AI Studio) tier
+  may use inputs to improve Google products**, so it must never receive real
+  user CVs. Keep API-key mode for local development with fake data only.
+- Keep Cloud SQL, GCS, Cloud Run, and Vertex in the **same EU region**, so data
+  stays in the EU and cross-region egress costs are avoided.
+- Paperwork to put in place: Google Cloud's Data Processing Addendum (accept
+  it in the console), a short **record of processing activities**, and a
+  privacy policy page.
+
+## 12. Architecture decision records
 
 When a decision in this document changes, add a short ADR to `adr/NNNN-title.md`
-(context → decision → consequences). The initial set is the rows in §1.
+(context → decision → consequences). The initial set is the rows in §1 and §8.
