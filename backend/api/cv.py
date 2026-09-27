@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends, status
 from fastapi.responses import FileResponse
 from typing import Optional
 from dotenv import load_dotenv
@@ -449,3 +449,31 @@ async def get_candidate_file_route(
         return FileResponse(temp_file.name, media_type="text/plain", filename=f"{_sanitize_filename(candidate['name'])}_fallback.txt")
 
     return FileResponse(filepath)
+
+
+@router.delete("/candidates/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_candidate_route(
+    candidate_id: str,
+    tenant: TenantContext = Depends(get_tenant_context)
+):
+    """Permanently delete a candidate profile and its uploaded file, if any."""
+    logger.info("Deleting candidate %s for tenant %s", candidate_id, tenant.tenant_id)
+    manager = get_background_job_manager()
+    candidate = manager.get_candidate(candidate_id)
+    if not candidate or candidate["tenant_id"] != tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    file_path_str = candidate.get("file_path")
+    if file_path_str:
+        filepath = Path(file_path_str)
+        if filepath.exists():
+            try:
+                filepath.unlink()
+                logger.info("Deleted uploaded CV file: %s", filepath)
+            except Exception as exc:
+                logger.warning("Failed to delete uploaded CV file %s: %s", filepath, str(exc))
+
+    deleted = manager.delete_candidate(candidate_id, tenant.tenant_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return

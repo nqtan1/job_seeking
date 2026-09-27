@@ -404,6 +404,17 @@ class BackgroundJobManager:
                 for row in rows
             ]
 
+    def delete_candidate(self, candidate_id: str, tenant_id: str) -> bool:
+        """Delete a candidate profile by ID, scoped to the owning tenant."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM candidates WHERE candidate_id = ? AND tenant_id = ?",
+                (candidate_id, tenant_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
     # ==========================================
     # Jobs DAL Methods
     # ==========================================
