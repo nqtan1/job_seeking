@@ -55,3 +55,12 @@ motivation_letter:
   model_name: "gemini-2.5-flash-lite"
   temperature: 0.8          # Higher temperature for professional and organic phrasing
   max_history: 10
+
+# ==============================================================================
+# 6. Career Chat Agent (used in /api/career-chat/message)
+# ==============================================================================
+career_chat:
+  provider: "qwen"
+  model_name: "qwen2.5-coder-14b"
+  temperature: 0.6          # Conversational but still grounded
+  max_history: 20           # Longer than the extraction agents since chat runs longer

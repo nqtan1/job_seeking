@@ -9,6 +9,7 @@ from api.hr import router as hr_router
 from api.motivation_letter import router as motivation_letter_router
 from api.jobs import router as jobs_router
 from api.applications import router as applications_router
+from api.career_chat import router as career_chat_router
 
 from utils.logger import get_logger, request_id_var, tenant_id_var
 
@@ -89,6 +90,9 @@ app.include_router(motivation_letter_router, prefix="/api/motivation-letter", ta
 
 # Include Applications routes
 app.include_router(applications_router, prefix="/api/applications", tags=["Applications"])
+
+# Include Career Chat routes
+app.include_router(career_chat_router, prefix="/api/career-chat", tags=["Career Chat"])
 
 
 @app.get("/api/jobs/metrics")
