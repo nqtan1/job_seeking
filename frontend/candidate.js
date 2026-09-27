@@ -70,6 +70,7 @@ export async function runCandidateAnalysis() {
         // Step 3: Fit Analysis & Interview Kit Generation
         updateLoaderBubble("Analyzing profile alignment and skills... 🧠");
         const customContext = document.getElementById('fit-custom-context').value.trim();
+        console.log("Job position going to analyzeFit:", JSON.stringify(jobPosition, null, 2));
         const fitResult = await analyzeFit(cvData, jobPosition, state.companyType, customContext, state.tenantId);
         
         state.fitCheck = fitResult.fit_check;

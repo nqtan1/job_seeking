@@ -56,7 +56,9 @@ export async function extractJob(inputType, file, text, tenantId) {
         throw new Error(`Job extraction failed: status ${response.status}`);
     }
 
-    return await response.json();
+    const jobResult = await response.json();
+    console.log("Job extraction result:", JSON.stringify(jobResult, null, 2));
+    return jobResult;
 }
 
 /**
