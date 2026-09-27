@@ -10,7 +10,6 @@ dependencies = [
     "langchain>=1.2.15",
     "langchain-google-genai>=4.2.2",
     "langchain-openai>=1.6.3",
-    "path>=17.1.1",
     "pdfplumber>=0.11.9",
     "pydantic[email]>=2.13.3",
     "pylatex>=1.4.2",
