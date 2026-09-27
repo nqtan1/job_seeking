@@ -103,21 +103,30 @@ class JobService:
             return str(saved_path), file.filename
 
         if file_path:
-            path = Path(file_path)
-            if not path.exists():
+            # Resolve and contain the path under db_base_dir so a client-supplied
+            # file_path cannot read arbitrary files on disk (path traversal /
+            # cross-tenant file access).
+            resolved_path = Path(file_path).resolve()
+            try:
+                resolved_path.relative_to(self.db_base_dir.resolve())
+            except ValueError:
+                self.logger.warning("Rejected file_path outside of db_base_dir: %s", file_path)
+                raise HTTPException(status_code=403, detail="File path is not allowed")
+
+            if not resolved_path.exists():
                 raise HTTPException(status_code=404, detail="File not found")
 
-            file_extension = path.suffix.lower()
+            file_extension = resolved_path.suffix.lower()
             if file_extension not in self.allowed_extensions:
                 raise HTTPException(status_code=400, detail="File type not allowed (PDF, TXT, JPG, PNG, IMG)")
 
-            if path.stat().st_size > self.max_file_size:
+            if resolved_path.stat().st_size > self.max_file_size:
                 raise HTTPException(
                     status_code=413,
                     detail=f"File size exceeds {self.max_file_size // (1024 * 1024)} MB limit",
                 )
 
-            return file_path, path.name
+            return str(resolved_path), resolved_path.name
 
         raise HTTPException(status_code=400, detail="Provide either 'file' (upload), 'file_path', or 'job_text' (raw text)")
 
