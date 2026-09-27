@@ -100,7 +100,7 @@ async def generate_temp_pdf_endpoint(
         }
     except Exception as e:
         logger.error(f"Error generating temporary PDF: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to compile PDF draft: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to compile PDF draft")
 
 
 @router.get("/temp/{pdf_id}/file")
@@ -144,7 +144,7 @@ async def compile_verbatim_endpoint(
         }
     except Exception as e:
         logger.error(f"Error compiling verbatim PDF: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to compile verbatim PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to compile verbatim PDF")
 
 
 @router.post("/finalize")
@@ -161,7 +161,7 @@ async def finalize_temp_pdf_endpoint(
         }
     except Exception as e:
         logger.error(f"Error finalizing temporary PDF: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save PDF permanently: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save PDF permanently")
 
 
 @router.get("/formats")

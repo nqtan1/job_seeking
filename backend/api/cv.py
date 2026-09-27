@@ -276,7 +276,7 @@ async def extract_cv(
         raise
     except Exception as e:
         logger.error(f"CV extraction failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="CV extraction failed")
 
 # ==========================================
 # API 2: ANALYZE
@@ -393,7 +393,7 @@ async def analyze_cv(
         raise
     except Exception as e:
         logger.error(f"CV analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="CV analysis failed")
 
 
 @router.get("/candidates")

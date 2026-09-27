@@ -54,7 +54,7 @@ async def extract_job(
         raise
     except Exception as e:
         logger.error(f"Job extraction failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Job extraction failed")
 
 
 # ==========================================
@@ -91,7 +91,7 @@ async def analyze_job_candidate(
         raise
     except Exception as e:
         logger.error(f"Candidate analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Candidate analysis failed")
 
 
 # ==========================================
@@ -128,7 +128,7 @@ async def analyze_job_recruiter(
         raise
     except Exception as e:
         logger.error(f"Recruiter analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Recruiter analysis failed")
 
 
 # ==========================================
@@ -161,7 +161,7 @@ async def analyze_job(
         raise
     except Exception as e:
         logger.error(f"Job analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Job analysis failed")
 
 
 # ==========================================
@@ -212,8 +212,8 @@ async def search_jobs(
         )
         return results
     except Exception as e:
-        logger.error(f"Provider search failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        logger.error(f"Provider search failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Provider search failed")
 
 
 @router.get("/search/{provider}/{job_id}")
@@ -236,8 +236,8 @@ async def get_job_detail(
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to fetch job detail: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
+        logger.error(f"Failed to fetch job detail: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch job detail")
 
 
 @router.post("/search/chat")
@@ -263,5 +263,5 @@ async def search_chat(
             "history": search_agent.get_history_dict()
         }
     except Exception as e:
-        logger.error(f"Search chat agent failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Chat agent failed: {str(e)}")
+        logger.error(f"Search chat agent failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Search chat agent failed")
