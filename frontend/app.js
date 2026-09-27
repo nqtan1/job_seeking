@@ -8,8 +8,9 @@ import {
     generateMotivationLetter, 
     copyMotivationLetter, 
     switchKitTab, 
-    copySimulationPrompt, 
+    copySimulationPrompt,
     clearCV,
+    removeCV,
     resetOutputs,
     loadDbCandidate,
     triggerJobSearch,
@@ -27,6 +28,7 @@ import {
 import { showNotification, showError } from './utils.js';
 import { listCandidates } from './api.js';
 import { initTracker, renderTracker } from './tracker.js';
+import { sendCareerChatMessage, clearCareerChat } from './careerChat.js';
 
 // Initialize App Immediately (ES6 Modules are deferred by default, meaning DOM is guaranteed to be parsed)
 initTenantSelector();
@@ -48,9 +50,11 @@ window.copyMotivationLetter = copyMotivationLetter;
 window.switchKitTab = switchKitTab;
 window.copySimulationPrompt = copySimulationPrompt;
 window.clearCV = clearCV;
+window.removeCV = removeCV;
 window.clearJDFile = clearJDFile;
 
 window.loadDbCandidate = loadDbCandidate;
+window.populateDbCandidates = populateDbCandidates;
 window.triggerJobSearch = triggerJobSearch;
 window.selectSearchJob = selectSearchJob;
 window.clearSelectedSearchJob = clearSelectedSearchJob;
@@ -62,6 +66,9 @@ window.runBatchScreening = runBatchScreening;
 window.clearBulkGroup = clearBulkGroup;
 window.viewCandidateOutreach = viewCandidateOutreach;
 window.copyOutreachEmail = copyOutreachEmail;
+
+window.sendCareerChatMessage = sendCareerChatMessage;
+window.clearCareerChat = clearCareerChat;
 
 // ==========================================
 // 1. Navigation & Configurations

@@ -7,6 +7,7 @@ from utils.logger import get_logger
 from infrastructure.jobs.analysis.agent import JobExtractionAgent
 from infrastructure.agents.agent_config import AgentConfig
 from application.jobs.analysis.service import JobService
+from domain.jobs.analysis.schema import JobPosition # Import JobPosition
 from core.auth import TenantContext, get_tenant_context
 
 logger = get_logger(name="jobs.route", log_file="jobs_api.log", level="INFO")
@@ -21,7 +22,7 @@ def _get_service() -> JobService:
     global agent
     active_agent = agent
     if active_agent is None:
-        active_agent = JobExtractionAgent(config=AgentConfig(config_path=CONFIG_PATH))
+        active_agent = JobExtractionAgent(config=AgentConfig(config_path=CONFIG_PATH, section="jobs"))
     return JobService(agent=active_agent)
 
 
@@ -33,20 +34,42 @@ async def extract_job(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to job description file"),
     job_text: Optional[str] = Form(None, description="Raw job description text"),
+    job_id: Optional[str] = Query(None, description="Optional: Job ID from a search result to pre-fill/prioritize data"),
+    provider_name: Optional[str] = Query(None, description="Provider name for the job_id, e.g., 'france_travail'"),
     tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Extract job information from French job description."""
     
-    # logger.info("Starting job extraction")
+    logger.info("Starting job extraction")
     logger.info(
-        "extract_job called with file_present=%s file_path_present=%s job_text_present=%s",
+        "extract_job called with file_present=%s file_path_present=%s job_text_present=%s job_id_present=%s",
         bool(file),
         bool(file_path),
         bool(job_text),
+        bool(job_id),
     )
     
+    existing_job_position = None
+    if job_id and provider_name:
+        from infrastructure.jobs.search.providers.manager import JobProviderManager
+        manager = JobProviderManager()
+        try:
+            # Retrieve detailed job position from provider
+            job_detail_response = await manager.get_job_detail(provider_name=provider_name, job_id=job_id)
+            existing_job_position = job_detail_response.job_position_data # This is already a JobPosition object
+            logger.info(f"Fetched existing job position from provider {provider_name} for job_id {job_id}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch job detail for job_id {job_id} from {provider_name}: {str(e)}")
+            # Continue without existing_job_position if fetch fails
+            
     try:
-        response = await _get_service().extract_job_from_input(file, file_path, job_text, tenant_id=tenant.tenant_id)
+        response = await _get_service().extract_job_from_input(
+            file, 
+            file_path, 
+            job_text, 
+            tenant_id=tenant.tenant_id,
+            existing_job_position=existing_job_position # Pass new parameter
+        )
         logger.info("Job extraction response prepared successfully")
         return response
     
@@ -54,7 +77,7 @@ async def extract_job(
         raise
     except Exception as e:
         logger.error(f"Job extraction failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Job extraction failed")
 
 
 # ==========================================
@@ -91,7 +114,7 @@ async def analyze_job_candidate(
         raise
     except Exception as e:
         logger.error(f"Candidate analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Candidate analysis failed")
 
 
 # ==========================================
@@ -128,7 +151,7 @@ async def analyze_job_recruiter(
         raise
     except Exception as e:
         logger.error(f"Recruiter analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Recruiter analysis failed")
 
 
 # ==========================================
@@ -161,7 +184,7 @@ async def analyze_job(
         raise
     except Exception as e:
         logger.error(f"Job analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Job analysis failed")
 
 
 # ==========================================
@@ -212,8 +235,8 @@ async def search_jobs(
         )
         return results
     except Exception as e:
-        logger.error(f"Provider search failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        logger.error(f"Provider search failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Provider search failed")
 
 
 @router.get("/search/{provider}/{job_id}")
@@ -236,8 +259,8 @@ async def get_job_detail(
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Failed to fetch job detail: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Fetch failed: {str(e)}")
+        logger.error(f"Failed to fetch job detail: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch job detail")
 
 
 @router.post("/search/chat")
@@ -263,5 +286,5 @@ async def search_chat(
             "history": search_agent.get_history_dict()
         }
     except Exception as e:
-        logger.error(f"Search chat agent failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Chat agent failed: {str(e)}")
+        logger.error(f"Search chat agent failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Search chat agent failed")

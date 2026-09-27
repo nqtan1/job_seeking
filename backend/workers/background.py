@@ -162,6 +162,19 @@ class BackgroundJobManager:
             payload=payload,
         )
 
+    def _safe_json_loads(self, json_string: str) -> Any:
+        """Safely loads a JSON string, returning the raw string if parsing fails with a warning."""
+        if json_string is None:
+            return None
+        try:
+            return json.loads(json_string)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"Failed to decode JSON from database: {e}. Returning raw string.",
+                extra={"json_string": json_string[:200]} # Log first 200 chars
+            )
+            return json_string
+
     def _polling_worker_loop(self) -> None:
         """Background thread loop that polls SQLite for queued jobs and executes them atomically."""
         import time
@@ -376,7 +389,7 @@ class BackgroundJobManager:
                 "name": row[2],
                 "email": row[3],
                 "phone": row[4],
-                "extracted_data": json.loads(row[5]),
+                "extracted_data": self._safe_json_loads(row[5]),
                 "file_path": row[6],
                 "created_at": row[7],
             }
@@ -397,15 +410,26 @@ class BackgroundJobManager:
                     "name": row[2],
                     "email": row[3],
                     "phone": row[4],
-                    "extracted_data": json.loads(row[5]),
+                    "extracted_data": self._safe_json_loads(row[5]),
                     "file_path": row[6],
                     "created_at": row[7],
-                }
-                for row in rows
-            ]
+                    }
+                    for row in rows
+                    ]
 
-    # ==========================================
-    # Jobs DAL Methods
+    def delete_candidate(self, candidate_id: str, tenant_id: str) -> bool:
+        """Delete a candidate profile by ID, scoped to the owning tenant."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM candidates WHERE candidate_id = ? AND tenant_id = ?",
+                (candidate_id, tenant_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+                    # ==========================================
+                    # Jobs DAL Methods
     # ==========================================
     def save_job(
         self,
@@ -428,13 +452,13 @@ class BackgroundJobManager:
             conn.commit()
         return job_id
 
-    def get_job(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve job description by ID."""
+    def get_job(self, job_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve job description by ID, scoped to the owning tenant."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT job_id, tenant_id, job_title, company, extracted_data, created_at FROM jobs WHERE job_id = ?",
-                (job_id,),
+                "SELECT job_id, tenant_id, job_title, company, extracted_data, created_at FROM jobs WHERE job_id = ? AND tenant_id = ?",
+                (job_id, tenant_id),
             )
             row = cursor.fetchone()
             if row is None:
@@ -444,7 +468,7 @@ class BackgroundJobManager:
                 "tenant_id": row[1],
                 "job_title": row[2],
                 "company": row[3],
-                "extracted_data": json.loads(row[4]),
+                "extracted_data": self._safe_json_loads(row[4]),
                 "created_at": row[5],
             }
 
@@ -463,7 +487,7 @@ class BackgroundJobManager:
                     "tenant_id": row[1],
                     "job_title": row[2],
                     "company": row[3],
-                    "extracted_data": json.loads(row[4]),
+                    "extracted_data": self._safe_json_loads(row[4]),
                     "created_at": row[5],
                 }
                 for row in rows
@@ -494,13 +518,13 @@ class BackgroundJobManager:
             conn.commit()
         return analysis_id
 
-    def get_fit_analysis(self, analysis_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve fit analysis by ID."""
+    def get_fit_analysis(self, analysis_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve fit analysis by ID, scoped to the owning tenant."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT analysis_id, tenant_id, candidate_id, job_id, fit_score, fit_data, created_at FROM fit_analyses WHERE analysis_id = ?",
-                (analysis_id,),
+                "SELECT analysis_id, tenant_id, candidate_id, job_id, fit_score, fit_data, created_at FROM fit_analyses WHERE analysis_id = ? AND tenant_id = ?",
+                (analysis_id, tenant_id),
             )
             row = cursor.fetchone()
             if row is None:

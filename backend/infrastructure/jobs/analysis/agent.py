@@ -9,7 +9,13 @@ from google import genai
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from domain.jobs.schema import JobPosition
+from domain.jobs.analysis.schema import JobPosition
+from infrastructure.jobs.analysis.prompt import (
+    SYSTEM_PROMPT_JOB_EXTRACTION,
+    SYSTEM_PROMPT_JOB_ANALYSIS,
+    SYSTEM_PROMPT_JOB_CANDIDATE,
+    SYSTEM_PROMPT_JOB_RECRUITER,
+)
 
 
 class JobExtractionAgent(BaseAgent):
@@ -30,7 +36,7 @@ class JobExtractionAgent(BaseAgent):
         self.logger.info(
             "JobExtractionAgent initialized with provider=%s api_key_set=%s",
             self.config.provider,
-            bool(self.config.api_key),
+            self.config.is_api_key_set,
         )
         self.client = genai.Client(api_key=self.config.api_key) if self.config.provider == "api_key" else None
 
@@ -139,65 +145,113 @@ class JobExtractionAgent(BaseAgent):
             return self._build_gemini_file_message(file_paths, message)
         return self._build_vertex_file_message(file_paths, message)
 
-    def extract_job(
-        self,
-        file_path: Optional[Union[str, Path, Sequence[Union[str, Path]]]] = None,
-        job_text: Optional[str] = None,
-        message: Optional[str] = None,
-        output_schema: Optional[BaseModel] = None,
-        system_prompt: Optional[str] = None,
-        **kwargs,
-    ) -> BaseModel:
-        """
-        Extract job information from file(s) or string.
+    def _extract_text_from_file(self, file_path: Union[str, Path]) -> str:
+        file_path = Path(file_path)
+        ext = file_path.suffix.lower()
+        if ext == ".pdf":
+            try:
+                import pdfplumber
+                self.logger.info("Extracting text from PDF locally: %s", file_path)
+                with pdfplumber.open(file_path) as pdf:
+                    text_content = []
+                    for i, page in enumerate(pdf.pages):
+                        page_text = page.extract_text()
+                        if page_text:
+                            text_content.append(page_text)
+                        else:
+                            self.logger.warning("No text extracted from page %d of %s", i + 1, file_path)
+                    full_text = "\n\n".join(text_content)
+                    if not full_text or not full_text.strip():
+                        raise RuntimeError(
+                            f"The PDF file '{file_path.name}' is empty or scanned (contains images only). "
+                            "Text-only LLM providers like Qwen require digital PDFs with selectable text. "
+                            "Please upload a digital PDF, or use a multimodal provider like Gemini."
+                        )
+                    self.logger.info("Successfully extracted %d characters from PDF: %s", len(full_text), file_path)
+                    return full_text
+            except Exception as e:
+                self.logger.error("Failed to extract text from PDF %s: %s", file_path, str(e), exc_info=True)
+                raise RuntimeError(f"Failed to parse PDF file: {str(e)}")
+        elif ext == ".txt":
+            try:
+                self.logger.info("Reading text from TXT file locally: %s", file_path)
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read()
+            except Exception as e:
+                self.logger.error("Failed to read TXT file %s: %s", file_path, str(e), exc_info=True)
+                raise RuntimeError(f"Failed to read TXT file: {str(e)}")
+        else:
+            self.logger.warning("Unsupported file format for local text extraction: %s", ext)
+            raise ValueError(f"File type {ext} is not supported for text extraction on provider '{self.config.provider}'")
 
-        Args:
-            file_path: Path to job description file (PDF, TXT, IMG) or list of paths
-            job_text: Raw job description as string
-            message: Extraction instruction
-            output_schema: Schema for structured output
-            system_prompt: Custom system prompt
+    def extract_job_to_job_position(
+        self,
+        full_description: str,
+        output_schema: BaseModel = JobPosition,
+        system_prompt: Optional[str] = None,
+        message: Optional[str] = None
+    ) -> JobPosition:
+        """
+        Uses LLM to extract job information from a full job description text
+        directly into the JobPosition schema.
         """
         if system_prompt is None:
-            self.logger.info("No system prompt provided, using the default job extraction prompt.")
-            system_prompt = """You are an expert recruiter assistant specializing in French job market.
-            Extract and structure all job information comprehensively. Identify contract types:
-            CDI (Contrat à Durée Indéterminée), CDD (Contrat à Durée Déterminée),
-            Stage (Internship), Freelance, or Alternance (Work-study)."""
-
+            system_prompt = SYSTEM_PROMPT_JOB_EXTRACTION
         if message is None:
-            self.logger.info("No message provided, using the default job extraction message.")
-            message = "Extract all job information in structured format"
+            message = "Extract all job information in structured format from the provided Job Description. Ensure the output strictly adheres to the JobPosition schema."
 
-        model = self.model.with_structured_output(output_schema) if output_schema else self.model
-        # self.logger.info("Starting job extraction")
-        self.logger.info(
-            "extract_job called with file_path=%s job_text_present=%s output_schema=%s",
-            file_path,
-            bool(job_text),
-            getattr(output_schema, "__name__", str(output_schema)),
-        )
+        model = self.model.with_structured_output(output_schema)
 
-        if job_text:
-            message_obj = self._build_text_message(message, job_text)
-        elif file_path:
-            file_paths = self._normalize_file_paths(file_path)
-            self.logger.info(
-                "Job extraction using file input count=%s provider=%s",
-                len(file_paths),
-                self.config.provider,
-            )
-            message_obj = self._build_file_message(file_paths, message)
-        else:
-            raise ValueError("Provide either 'file_path' or 'job_text'")
-
+        self.logger.info("Calling LLM for structured job extraction.")
         response = model.invoke(
             [
                 SystemMessage(content=system_prompt),
-                message_obj,
+                HumanMessage(content=f"Job Description:\n{full_description}"),
             ]
         )
-        self.logger.info("Job extraction completed and response type=%s", type(response).__name__)
+        self.logger.info("LLM job extraction completed. Response type=%s", type(response).__name__)
+        return response
+
+    def extract_job(
+        self,
+        job_text: str,
+        output_schema: Optional[BaseModel] = None,
+        system_prompt: Optional[str] = None,
+        message: Optional[str] = None
+    ) -> JobPosition:
+        """
+        Extract job information from raw text using the LLM directly into the JobPosition schema.
+
+        Args:
+            job_text: Raw job description as string.
+            output_schema: Schema for structured output (defaults to JobPosition).
+            system_prompt: Custom system prompt.
+            message: Extraction instruction.
+        """
+        if not job_text:
+            raise ValueError("'job_text' must be provided for LLM extraction.")
+
+        if output_schema is None:
+            output_schema = JobPosition
+
+        if system_prompt is None:
+            self.logger.info("No system prompt provided for extraction, using default.")
+            system_prompt = SYSTEM_PROMPT_JOB_EXTRACTION
+
+        if message is None:
+            self.logger.info("No message provided for extraction, using default.")
+            message = "Extract all job information in structured format from the provided Job Description. Ensure the output strictly adheres to the JobPosition schema."
+
+        model = self.model.with_structured_output(output_schema)
+
+        self.logger.info("Calling LLM for structured job extraction with output_schema=%s", getattr(output_schema, "__name__", str(output_schema)))
+        response = model.invoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"{message}\n\nJOB DESCRIPTION:\n{job_text}"),
+            ]
+        )
+        self.logger.info("LLM job extraction completed. Response type=%s", type(response).__name__)
         return response
 
     def analyze_job(
@@ -219,9 +273,7 @@ class JobExtractionAgent(BaseAgent):
         )
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default job analysis prompt.")
-            system_prompt = """You are an expert recruiter specializing in French job market.
-            Analyze job postings to provide strategic insights about role requirements,
-            difficulty level, market competitiveness, and candidate profile recommendations."""
+            system_prompt = SYSTEM_PROMPT_JOB_ANALYSIS
 
         if message is None:
             self.logger.info("No message provided, using the default job analysis message.")
@@ -268,14 +320,7 @@ JOB INFORMATION:
         )
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default candidate-perspective prompt.")
-            system_prompt = """You are an expert career coach specializing in the French job market.
-            Analyze job postings from a candidate perspective to help job seekers understand:
-            - Career growth and learning opportunities
-            - Work-life balance indicators
-            - Compensation and benefits analysis
-            - Whether this role would be a good fit for their career
-            - Pros and cons of the position
-            Focus on what matters to candidates, not recruiters."""
+            system_prompt = SYSTEM_PROMPT_JOB_CANDIDATE
 
         if message is None:
             self.logger.info("No message provided, using the default candidate-perspective message.")
@@ -321,14 +366,7 @@ JOB INFORMATION:
         )
         if system_prompt is None:
             self.logger.info("No system prompt provided, using the default recruiter-perspective prompt.")
-            system_prompt = """You are an expert recruiter specializing in the French job market.
-            Analyze job postings to provide strategic insights about:
-            - Role complexity and seniority level
-            - Critical skills and their market value
-            - Market competitiveness and hiring difficulty
-            - Ideal candidate profiles and requirements
-            - Time to fill estimates and hiring risks
-            Focus on what matters to recruiters and hiring managers."""
+            system_prompt = SYSTEM_PROMPT_JOB_RECRUITER
 
         if message is None:
             self.logger.info("No message provided, using the default recruiter-perspective message.")

@@ -219,3 +219,59 @@ def test_candidate_file_strict_no_scanning(client, tmp_path):
 
     finally:
         bg._BACKGROUND_JOB_MANAGER = old_manager
+
+
+def test_delete_candidate(client, tmp_path):
+    import workers.background as bg
+
+    temp_db = tmp_path / "test_cv_delete.db"
+    old_manager = bg._BACKGROUND_JOB_MANAGER
+    bg._BACKGROUND_JOB_MANAGER = bg.BackgroundJobManager(db_path=str(temp_db))
+
+    try:
+        mock_cv_file = tmp_path / "delete_me_resume.pdf"
+        mock_cv_file.write_bytes(b"Delete me CV contents")
+
+        candidate_id = bg._BACKGROUND_JOB_MANAGER.save_candidate(
+            tenant_id="test-tenant-cv",
+            name="Delete Me",
+            email="delete.me@example.com",
+            phone="00000",
+            extracted_data_json='{}',
+            file_path=str(mock_cv_file)
+        )
+
+        # 1. Cross-tenant delete attempt -> 404, nothing deleted
+        response = client.delete(
+            f"/api/cv/candidates/{candidate_id}",
+            headers={"X-Tenant-ID": "different-tenant"}
+        )
+        assert response.status_code == 404
+        assert bg._BACKGROUND_JOB_MANAGER.get_candidate(candidate_id) is not None
+        assert mock_cv_file.exists()
+
+        # 2. Owning tenant deletes successfully -> 204, DB row and file both gone
+        response = client.delete(
+            f"/api/cv/candidates/{candidate_id}",
+            headers={"X-Tenant-ID": "test-tenant-cv"}
+        )
+        assert response.status_code == 204
+        assert bg._BACKGROUND_JOB_MANAGER.get_candidate(candidate_id) is None
+        assert not mock_cv_file.exists()
+
+        # 3. Deleting again -> 404 (already gone)
+        response = client.delete(
+            f"/api/cv/candidates/{candidate_id}",
+            headers={"X-Tenant-ID": "test-tenant-cv"}
+        )
+        assert response.status_code == 404
+
+        # 4. Deleting an unknown candidate id -> 404
+        response = client.delete(
+            "/api/cv/candidates/does-not-exist",
+            headers={"X-Tenant-ID": "test-tenant-cv"}
+        )
+        assert response.status_code == 404
+
+    finally:
+        bg._BACKGROUND_JOB_MANAGER = old_manager

@@ -28,8 +28,8 @@ class HRRankingService:
 
     def _get_result_folder(self, request: HRBatchRankingRequest, tenant_context: TenantContext) -> Path:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        company = self._sanitize_filename(request.job_information.company or "company")
-        job_title = self._sanitize_filename(request.job_information.job_title or "job")
+        company = self._sanitize_filename(request.job_information.company.name or "company")
+        job_title = self._sanitize_filename(request.job_information.title or "job")
         tenant_id = self._sanitize_filename(tenant_context.tenant_id or "tenant")
         folder_name = f"{timestamp}_{tenant_id}_{company}_{job_title}"
         result_dir = self.result_base_dir / folder_name
@@ -47,7 +47,7 @@ class HRRankingService:
         self.logger.info(
             "Starting HR batch ranking tenant=%s company=%s candidates=%s",
             tenant_context.tenant_id,
-            request.job_information.company,
+            request.job_information.company.name,
             len(request.candidates),
         )
 
@@ -92,8 +92,8 @@ class HRRankingService:
             message="HR batch ranking successful",
             tenant_id=tenant_context.tenant_id,
             company_type=request.company_type,
-            job_title=request.job_information.job_title,
-            company=request.job_information.company,
+            job_title=request.job_information.title,
+            company=request.job_information.company.name,
             total_candidates=len(ranked_candidates),
             shortlisted_count=shortlisted_count,
             summary=summary,

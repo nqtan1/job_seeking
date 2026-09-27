@@ -2,7 +2,7 @@
  * RecruitAI Console Client - Candidate Sandbox Logic Module
  */
 import { state } from './state.js';
-import { extractCV, extractJob, analyzeFit, generateLetter, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF } from './api.js';
+import { extractCV, extractJob, analyzeFit, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF, deleteCandidate } from './api.js';
 import { showNotification, showError } from './utils.js';
 import { renderCVPreview, renderJDPreview } from './preview.js';
 
@@ -26,7 +26,7 @@ export async function runCandidateAnalysis() {
         showError('Please upload a Job Description document first!');
         return;
     }
-    if (state.jdInputType === 'search' && !state.jobPosition) {
+    if (state.jdInputType === 'search' && !state.selectedSearchJob) {
         showError('Please search and select a job from the search engine first!');
         return;
     }
@@ -60,7 +60,7 @@ export async function runCandidateAnalysis() {
             updateLoaderBubble("Parsing Job Description requirements... 📑");
             console.log("Extracting Job description...");
             const jobResult = await extractJob(state.jdInputType, state.jdFile, jdText, state.tenantId);
-            jobPosition = jobResult.data || jobResult.extracted_data || jobResult;
+            jobPosition = jobResult.data;
             state.jobPosition = jobPosition;
             console.log("Parsed Job description successfully:", state.jobPosition);
         } else {
@@ -70,6 +70,7 @@ export async function runCandidateAnalysis() {
         // Step 3: Fit Analysis & Interview Kit Generation
         updateLoaderBubble("Analyzing profile alignment and skills... 🧠");
         const customContext = document.getElementById('fit-custom-context').value.trim();
+        console.log("Job position going to analyzeFit:", JSON.stringify(jobPosition, null, 2));
         const fitResult = await analyzeFit(cvData, jobPosition, state.companyType, customContext, state.tenantId);
         
         state.fitCheck = fitResult.fit_check;
@@ -97,9 +98,9 @@ export function renderCandidateOutput() {
     document.getElementById('candidate-output').classList.remove('hidden');
 
     // Profile Details
-    const name = state.cvData?.personal_info?.name || "Jane Doe";
-    const email = state.cvData?.personal_info?.email || "unknown@email.com";
-    const phone = state.cvData?.personal_info?.phone || "+1-555-0100";
+    const name = state.cvData?.personal_info?.name || "N/A";
+    const email = state.cvData?.personal_info?.email || "N/A";
+    const phone = state.cvData?.personal_info?.phone || "N/A";
     
     document.getElementById('profile-name').textContent = name;
     document.getElementById('profile-email-phone').textContent = `${email} | ${phone}`;
@@ -131,33 +132,47 @@ export function renderCandidateOutput() {
     badge.textContent = state.fitCheck?.recommendation?.toUpperCase().replace('_', ' ') || 'MAYBE';
 
     // Summary
-    document.getElementById('score-voice-summary').textContent = state.fitCheck?.summary || "A highly aligned fit matching primary requirements.";
+    document.getElementById('score-voice-summary').textContent = state.fitCheck?.summary || "No fit summary compiled.";
     document.getElementById('analysis-confidence').textContent = state.fitCheck?.confidence ? `${Math.round(state.fitCheck.confidence * 100)}%` : '90%';
 
     // Strengths
     const strengthsUl = document.getElementById('strengths-list');
     strengthsUl.innerHTML = '';
-    const strengths = state.fitCheck?.strengths || ["Highly skilled Python backend development background."];
-    strengths.forEach(st => {
+    const strengths = state.fitCheck?.strengths || [];
+    if (strengths.length === 0) {
         const li = document.createElement('li');
-        li.className = 'flex items-start gap-2 leading-relaxed';
-        li.innerHTML = `<i class="fa-solid fa-chevron-right text-emerald-500 text-[10px] mt-1 shrink-0"></i> <span>${st}</span>`;
+        li.className = 'text-slate-500 italic text-[11px]';
+        li.textContent = 'No strengths compiled.';
         strengthsUl.appendChild(li);
-    });
+    } else {
+        strengths.forEach(st => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start gap-2 leading-relaxed';
+            li.innerHTML = `<i class="fa-solid fa-chevron-right text-emerald-500 text-[10px] mt-1 shrink-0"></i> <span>${st}</span>`;
+            strengthsUl.appendChild(li);
+        });
+    }
 
     // Gaps
     const gapsUl = document.getElementById('gaps-list');
     gapsUl.innerHTML = '';
-    const gaps = state.fitCheck?.gaps || ["Minor experience containerization gaps shown on paper."];
-    gaps.forEach(gp => {
+    const gaps = state.fitCheck?.gaps || [];
+    if (gaps.length === 0) {
         const li = document.createElement('li');
-        li.className = 'flex items-start gap-2 leading-relaxed';
-        li.innerHTML = `<i class="fa-solid fa-circle-minus text-rose-400 text-[10px] mt-1 shrink-0"></i> <span>${gp}</span>`;
+        li.className = 'text-slate-500 italic text-[11px]';
+        li.textContent = 'No gaps or critical risks flagged.';
         gapsUl.appendChild(li);
-    });
+    } else {
+        gaps.forEach(gp => {
+            const li = document.createElement('li');
+            li.className = 'flex items-start gap-2 leading-relaxed';
+            li.innerHTML = `<i class="fa-solid fa-circle-minus text-rose-400 text-[10px] mt-1 shrink-0"></i> <span>${gp}</span>`;
+            gapsUl.appendChild(li);
+        });
+    }
 
     // Constructive Feedback
-    document.getElementById('constructive-feedback').textContent = state.fitCheck?.constructive_feedback || "Optimize your summary line to highlight containerized architectures, Docker experience, or microservices deployment grids matching requirements.";
+    document.getElementById('constructive-feedback').textContent = state.fitCheck?.constructive_feedback || "No coaching advice is available for this match.";
 
     // Show/Hide Mock Interview Preparation Kit
     const kitCard = document.getElementById('interview-kit-card');
@@ -333,6 +348,11 @@ export function copySimulationPrompt() {
 export function resetOutputs() {
     document.getElementById('candidate-output').classList.add('hidden');
     document.getElementById('candidate-placeholder').classList.remove('hidden');
+
+    // A new CV/job means the previous chat's context is stale; start fresh.
+    state.careerChatHistory = [];
+    const chatMessages = document.getElementById('career-chat-messages');
+    if (chatMessages) chatMessages.innerHTML = '';
 }
 
 export function clearCV() {
@@ -354,6 +374,36 @@ export function clearCV() {
     
     resetOutputs();
     renderCVPreview();
+}
+
+export async function removeCV() {
+    const candidateId = state.candidateId;
+
+    // No saved DB profile behind the current form (e.g. a freshly dropped file
+    // that hasn't been extracted yet) — nothing to delete server-side.
+    if (!candidateId) {
+        clearCV();
+        return;
+    }
+
+    const confirmed = window.confirm(
+        'Permanently delete this saved candidate profile and its uploaded file? This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    try {
+        await deleteCandidate(candidateId, state.tenantId);
+        showNotification('Candidate profile deleted.');
+    } catch (e) {
+        console.error('Failed to delete candidate:', e);
+        showError(`Failed to delete candidate: ${e.message}`);
+        return;
+    }
+
+    clearCV();
+    if (window.populateDbCandidates) {
+        await window.populateDbCandidates();
+    }
 }
 
 export function showCandidateLoader(show) {
@@ -509,18 +559,24 @@ export async function selectSearchJob(jobId) {
     try {
         const result = await getJobDetail(state.searchProvider, jobId, state.tenantId);
         const positionData = result.job_position_data;
-        
-        state.jobPosition = positionData;
+        const rawText = positionData.job_description_text || '';
+
+        // Show the posting immediately from the search provider's own (older, flat)
+        // mapping — the user should be able to read the JD right away, without
+        // waiting on an LLM call. state.jobPosition is deliberately left unset here:
+        // runCandidateAnalysis() already knows how to extract a schema-correct
+        // JobPosition from raw text (same path used for pasted/uploaded JDs), and
+        // will run it exactly once, when the user actually starts an analysis,
+        // instead of duplicating that call on every job selected in the list.
         state.selectedSearchJob = result;
+        state.jobPosition = null;
 
-        // Auto fill pasted text as backup
-        document.getElementById('jd-text').value = positionData.job_description_text || '';
+        document.getElementById('jd-text').value = rawText;
 
-        // Render card
         document.getElementById('selected-job-title').textContent = positionData.job_title;
         document.getElementById('selected-job-meta').textContent = `${positionData.company} | ${positionData.location} | ${positionData.contract_type}`;
-        document.getElementById('selected-job-snippet').textContent = (positionData.job_description_text || '').substring(0, 120) + '...';
-        
+        document.getElementById('selected-job-snippet').textContent = rawText.substring(0, 120) + '...';
+
         document.getElementById('selected-job-info').classList.remove('hidden');
         resultsContainer.classList.add('hidden');
 
@@ -529,7 +585,6 @@ export async function selectSearchJob(jobId) {
         statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider';
 
         // Set up local file preview in-memory for detail recheck zoom
-        const rawText = positionData.job_description_text || '';
         state.jdFile = new File([rawText], `job_posting_${jobId}.txt`, {type: "text/plain"});
         renderJDPreview();
 
@@ -553,6 +608,12 @@ export function clearSelectedSearchJob() {
     statusBadge.textContent = 'Empty';
     statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded bg-slate-950 border border-slate-850 text-slate-500 uppercase tracking-wider';
     
+    // Restore the search results list visibility if we had search results previously loaded
+    const resultsContainer = document.getElementById('search-results-list');
+    if (state.searchResults && state.searchResults.length > 0) {
+        resultsContainer.classList.remove('hidden');
+    }
+
     renderJDPreview();
 }
 

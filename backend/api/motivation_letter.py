@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, HTTPException, Query, status, Depends
 from fastapi.responses import FileResponse
 from pathlib import Path
@@ -40,7 +42,17 @@ def _get_agent() -> MotivationLetterAgent:
     global agent
     if agent is not None:
         return agent
-    return MotivationLetterAgent(config=AgentConfig(config_path=CONFIG_PATH))
+    return MotivationLetterAgent(config=AgentConfig(config_path=CONFIG_PATH, section="motivation_letter"))
+
+
+def _build_temp_pdf_url(pdf_id: str, tenant: TenantContext) -> str:
+    """
+    Build the temp-PDF file URL used as an <iframe>/<img> src, which can't carry
+    custom headers — so tenant_id AND api_key both have to be in the query string
+    for get_tenant_context to authorize the follow-up GET request.
+    """
+    query = urlencode({"tenant_id": tenant.tenant_id, "api_key": tenant.api_key})
+    return f"/api/motivation-letter/temp/{pdf_id}/file?{query}"
 
 
 @router.post("/generate", response_model=MotivationLetter)
@@ -95,12 +107,12 @@ async def generate_temp_pdf_endpoint(
         
         return {
             "pdf_id": pdf_id,
-            "pdf_url": f"/api/motivation-letter/temp/{pdf_id}/file?tenant_id={tenant.tenant_id}",
+            "pdf_url": _build_temp_pdf_url(pdf_id, tenant),
             "content": letter.content
         }
     except Exception as e:
         logger.error(f"Error generating temporary PDF: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to compile PDF draft: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to compile PDF draft")
 
 
 @router.get("/temp/{pdf_id}/file")
@@ -139,12 +151,12 @@ async def compile_verbatim_endpoint(
         pdf_path = service.generate_temp_pdf(dummy_req, request.content, pdf_id)
         return {
             "pdf_id": pdf_id,
-            "pdf_url": f"/api/motivation-letter/temp/{pdf_id}/file?tenant_id={tenant.tenant_id}",
+            "pdf_url": _build_temp_pdf_url(pdf_id, tenant),
             "content": request.content
         }
     except Exception as e:
         logger.error(f"Error compiling verbatim PDF: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to compile verbatim PDF: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to compile verbatim PDF")
 
 
 @router.post("/finalize")
@@ -161,7 +173,7 @@ async def finalize_temp_pdf_endpoint(
         }
     except Exception as e:
         logger.error(f"Error finalizing temporary PDF: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to save PDF permanently: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save PDF permanently")
 
 
 @router.get("/formats")

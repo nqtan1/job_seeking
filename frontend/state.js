@@ -14,6 +14,7 @@ export const state = {
     motivationLetter: null,
     interviewKit: null,
     activeKitTab: 'tech',
+    careerChatHistory: [],
     
     // DB Candidates list
     dbCandidates: [],
@@ -52,6 +53,7 @@ export const state = {
     ],
     batchRankings: null,
     activeOutreachCandidate: null,
+    activeRequisition: null,
 
     // Job Tracker State
     applications: [],

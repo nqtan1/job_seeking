@@ -56,7 +56,9 @@ export async function extractJob(inputType, file, text, tenantId) {
         throw new Error(`Job extraction failed: status ${response.status}`);
     }
 
-    return await response.json();
+    const jobResult = await response.json();
+    console.log("Job extraction result:", JSON.stringify(jobResult, null, 2));
+    return jobResult;
 }
 
 /**
@@ -84,26 +86,19 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 }
 
 /**
- * Generate Motivation Letter Draft
+ * Send a message to the Career Chat coach, grounded in the candidate's current
+ * CV / job / fit analysis / interview kit context
  */
-export async function generateLetter(cvData, jobPosition, companyType, language, tone, format, tenantId) {
-    const payload = {
-        cv_info: cvData,
-        job_info: jobPosition,
-        job_type: companyType,
-        language: language,
-        tone: tone,
-        return_format: format
-    };
-
-    const response = await fetch('/api/motivation-letter/generate', {
+export async function sendCareerChatMessage(payload, tenantId) {
+    const response = await fetch('/api/career-chat/message', {
         method: 'POST',
         headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-        throw new Error(`Letter generation failed: status ${response.status}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Career chat failed: status ${response.status}`);
     }
 
     return await response.json();
@@ -128,17 +123,6 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
         throw new Error(`Screening failed: status ${response.status}`);
     }
 
-    return await response.json();
-}
-
-/**
- * Get active job search providers
- */
-export async function getProviders() {
-    const response = await fetch('/api/jobs/providers');
-    if (!response.ok) {
-        throw new Error(`Failed to fetch providers: status ${response.status}`);
-    }
     return await response.json();
 }
 
@@ -211,6 +195,20 @@ export async function getCandidateFile(candidateId, tenantId) {
     }
 
     return await response.blob();
+}
+
+/**
+ * Permanently delete a saved candidate profile and its uploaded file
+ */
+export async function deleteCandidate(candidateId, tenantId) {
+    const response = await fetch(`/api/cv/candidates/${candidateId}`, {
+        method: 'DELETE',
+        headers: getHeaders(tenantId)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete candidate: status ${response.status}`);
+    }
 }
 
 /**

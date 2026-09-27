@@ -2,13 +2,15 @@ from pathlib import Path
 import uuid
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from api.cv import router as cv_router
 from api.fit import router as fit_router
 from api.hr import router as hr_router
 from api.motivation_letter import router as motivation_letter_router
 from api.jobs import router as jobs_router
 from api.applications import router as applications_router
+from api.career_chat import router as career_chat_router
 
 from utils.logger import get_logger, request_id_var, tenant_id_var
 
@@ -19,6 +21,18 @@ app = FastAPI(
     description="API to upload CV files and extract job descriptions",
     version="0.2.0"
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Avoid logging extremely large validation payloads — truncate for observability
+    errors = exc.errors()
+    errors_str = str(errors)
+    truncated = errors_str[:200] + ("..." if len(errors_str) > 200 else "")
+    main_logger.error(f"Validation error: {truncated}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
 
 
 @app.middleware("http")
@@ -89,6 +103,9 @@ app.include_router(motivation_letter_router, prefix="/api/motivation-letter", ta
 
 # Include Applications routes
 app.include_router(applications_router, prefix="/api/applications", tags=["Applications"])
+
+# Include Career Chat routes
+app.include_router(career_chat_router, prefix="/api/career-chat", tags=["Career Chat"])
 
 
 @app.get("/api/jobs/metrics")

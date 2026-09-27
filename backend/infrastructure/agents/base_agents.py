@@ -2,6 +2,8 @@ from abc import ABC
 from typing import Optional, Dict, List
 
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import (
     HumanMessage,
     AIMessage,
@@ -72,11 +74,24 @@ class BaseAgent(ABC):
 
         return model_kwargs
 
-    def _create_model(self) -> ChatGoogleGenerativeAI:
+    def _create_model(self) -> BaseChatModel:
         # self.logger.info("Creating model for provider=%s", self.config.provider)
+        if self.config.provider == "qwen":
+            return self._init_qwen()
         if self.config.provider == "vertex":
             return self._init_gemini_by_vertex_ai()
         return self._init_gemini_by_api_key()
+
+    def _init_qwen(self) -> ChatOpenAI:
+        # self.logger.info("Initializing ChatOpenAI for Qwen")
+        api_key = self.config.qwen_api_key or "placeholder"
+        return ChatOpenAI(
+            base_url=self.config.qwen_base_url,
+            api_key=api_key,
+            model=self.config.model_name,
+            temperature=self.config.temperature,
+            **self.config.optional_params,
+        )
 
     def _init_gemini_by_api_key(self) -> ChatGoogleGenerativeAI:
         # self.logger.info("Initializing ChatGoogleGenerativeAI in api_key mode")

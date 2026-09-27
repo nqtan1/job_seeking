@@ -20,7 +20,7 @@ def _get_service() -> FitService:
 	global agent
 	active_agent = agent
 	if active_agent is None:
-		active_agent = FitAgent(config=AgentConfig(config_path=CONFIG_PATH))
+		active_agent = FitAgent(config=AgentConfig(config_path=CONFIG_PATH, section="fit"))
 	return FitService(agent=active_agent)
 
 
@@ -35,7 +35,8 @@ async def analyze_fit(request: FitAnalysisRequest, tenant: TenantContext = Depen
 
 	try:
 		return await _get_service().analyze_fit(request, tenant_id=tenant.tenant_id)
-	except HTTPException:
+	except HTTPException as exc:
+		logger.error(f"HTTPException in analyze_fit: {exc.detail}")
 		raise
 	except Exception as exc:
 		logger.error("Fit analysis failed: %s", str(exc), exc_info=True)

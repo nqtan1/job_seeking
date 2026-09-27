@@ -83,9 +83,12 @@ LANGUAGE_INSTRUCTIONS : Dict[str, str] = {
 FORMAT_INSTRUCTIONS : Dict[str, str] = {
     "txt" : """
 OUTPUT STRUCTURE CONTRACT (PLAIN TEXT / BODY ONLY):
-- Your output MUST start directly with the opening salutation (e.g., 'Dear Hiring Manager,' or 'Madame, Monsieur,').
-- Your output MUST end with the closing salutation (e.g., 'Sincerely,' or 'Je vous prie d'agréer...').
+- Your output MUST start directly with the opening salutation (e.g., 'Dear Hiring Manager,' or 'Madame, Monsieur,'), in the language specified above.
+- Your output MUST end with the closing salutation phrase only (e.g., 'Sincerely,' or 'Je vous prie d'agréer, l'expression de mes salutations distinguées.'), in the language specified above. Do NOT repeat the candidate's name after it — it is added automatically.
+- Write the entire letter — opening, body, and closing — in one single language only: the language specified above. Never mix languages within the letter.
 - STRICTLY DO NOT generate any headers, sender coordinates, company address, date, or subject line. These are formatted programmatically by the parent wrapper.
+- Use the exact company name given in TARGET JOB. If it is generic, unknown, or confidential (e.g. "Notre client", empty, "Confidential"), refer to the organization generically instead (e.g. "your organization" / "votre entreprise"). NEVER write a bracket placeholder such as "[Company Name]" or "[Your Company Name]" — that text must never appear in your output.
+- Only mention contact details (email, phone, LinkedIn, GitHub, address) that are explicitly present and non-empty in CANDIDATE CV. Never invent a value, and never copy one field's value into a different field's label.
 - Do not wrap your response in markdown blocks (such as ```txt). Output clean raw text only.
 """,
     "latex" : """

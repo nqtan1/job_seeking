@@ -22,7 +22,7 @@ def _get_service() -> HRRankingService:
     global fit_agent
     active_agent = fit_agent
     if active_agent is None:
-        active_agent = FitAgent(config=AgentConfig(config_path=CONFIG_PATH))
+        active_agent = FitAgent(config=AgentConfig(config_path=CONFIG_PATH, section="hr"))
     return HRRankingService(agent=HRRankingAgent(fit_agent=active_agent))
 
 

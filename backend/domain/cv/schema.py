@@ -16,6 +16,17 @@ class PersonalInfo(BaseModel):
     github: Optional[str] = Field(None, description="Github profile url")
     website: Optional[str] = Field(None, description="Personal website/portfolio")
 
+
+class Reference(BaseModel):
+    """Reference information from the CV"""
+    name: str = Field(..., description="Name of the reference")
+    title: Optional[str] = Field(None, description="Title or position of the reference")
+    company: Optional[str] = Field(None, description="Company of the reference")
+    email: Optional[EmailStr] = Field(None, description="Email address of the reference")
+    phone: Optional[str] = Field(None, description="Phone number of the reference")
+    relationship: Optional[str] = Field(None, description="Relationship to the candidate (e.g., Professor, Manager)")
+
+
 class Formation(BaseModel):
     """Raw educational history"""
     degree: str = Field(..., description="Degree type (e.g., Bachelor, Master, PhD)")
@@ -47,6 +58,7 @@ class CVInformation(BaseModel):
     experiences: List[Experience] = Field(default_factory=list)
     skills: List[RawSkill] = Field(default_factory=list)
     summary: Optional[str] = Field(None, description="Professional summary or cover letter text")
+    references: Optional[List[Reference]] = Field(default_factory=list, description="Professional references")
 
 # ==========================================
 # PHASE 2: ANALYSIS SCHEMA (Recruiter Intelligence)

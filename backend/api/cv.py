@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Form, Depends, status
 from fastapi.responses import FileResponse
 from typing import Optional
 from dotenv import load_dotenv
@@ -28,8 +28,8 @@ def _get_agent() -> CVAnalysisAgent:
     global agent
     if agent is not None:
         return agent
-    return CVAnalysisAgent(config=AgentConfig(config_path=CONFIG_PATH))
-
+    agent = CVAnalysisAgent(config=AgentConfig(config_path=CONFIG_PATH, section="cv"))
+    return agent
 # Allowed file extensions 
 ALLOWED_EXTENSIONS = {".pdf", ".img", ".txt", ".jpg", ".jpeg"}
 MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -158,28 +158,37 @@ async def _validate_and_get_file_path(
         return str(saved_path), file.filename
     
     elif file_path:
-        # Use existing file path
+        # Use existing file path. Resolve and contain it under DB_BASE_DIR so a
+        # client-supplied file_path cannot read arbitrary files on disk (path
+        # traversal / cross-tenant file access).
         logger.info(f"{operation}: Using file path: {file_path}")
-        
-        if not Path(file_path).exists():
+
+        resolved_path = Path(file_path).resolve()
+        try:
+            resolved_path.relative_to(DB_BASE_DIR.resolve())
+        except ValueError:
+            logger.warning(f"Rejected file_path outside of DB_BASE_DIR: {file_path}")
+            raise HTTPException(status_code=403, detail="File path is not allowed")
+
+        if not resolved_path.exists():
             logger.warning(f"File not found: {file_path}")
             raise HTTPException(status_code=404, detail="File not found")
-        
-        file_extension = Path(file_path).suffix.lower()
+
+        file_extension = resolved_path.suffix.lower()
         if file_extension not in ALLOWED_EXTENSIONS:
             logger.warning(f"Invalid file extension: {file_extension}")
             raise HTTPException(status_code=400, detail="File type not allowed")
-        
-        file_size = Path(file_path).stat().st_size
+
+        file_size = resolved_path.stat().st_size
         if file_size > MAX_FILE_SIZE:
             logger.warning(f"File size exceeded: {file_size} bytes")
             raise HTTPException(
                 status_code=413,
                 detail=f"File size exceeds {MAX_FILE_SIZE // (1024 * 1024)} MB limit"
             )
-        
+
         logger.info("%s validation completed using file path", operation)
-        return file_path, Path(file_path).name
+        return str(resolved_path), resolved_path.name
     
     else:
         logger.warning(f"{operation}: Neither file nor file_path provided")
@@ -267,7 +276,7 @@ async def extract_cv(
         raise
     except Exception as e:
         logger.error(f"CV extraction failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="CV extraction failed")
 
 # ==========================================
 # API 2: ANALYZE
@@ -384,7 +393,7 @@ async def analyze_cv(
         raise
     except Exception as e:
         logger.error(f"CV analysis failed: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="CV analysis failed")
 
 
 @router.get("/candidates")
@@ -440,3 +449,31 @@ async def get_candidate_file_route(
         return FileResponse(temp_file.name, media_type="text/plain", filename=f"{_sanitize_filename(candidate['name'])}_fallback.txt")
 
     return FileResponse(filepath)
+
+
+@router.delete("/candidates/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_candidate_route(
+    candidate_id: str,
+    tenant: TenantContext = Depends(get_tenant_context)
+):
+    """Permanently delete a candidate profile and its uploaded file, if any."""
+    logger.info("Deleting candidate %s for tenant %s", candidate_id, tenant.tenant_id)
+    manager = get_background_job_manager()
+    candidate = manager.get_candidate(candidate_id)
+    if not candidate or candidate["tenant_id"] != tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    file_path_str = candidate.get("file_path")
+    if file_path_str:
+        filepath = Path(file_path_str)
+        if filepath.exists():
+            try:
+                filepath.unlink()
+                logger.info("Deleted uploaded CV file: %s", filepath)
+            except Exception as exc:
+                logger.warning("Failed to delete uploaded CV file %s: %s", filepath, str(exc))
+
+    deleted = manager.delete_candidate(candidate_id, tenant.tenant_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return

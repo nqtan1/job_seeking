@@ -31,8 +31,8 @@ class FitService:
     def _get_result_folder(self, request: FitAnalysisRequest) -> Path:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         candidate_name = self._sanitize_filename(request.candidate_cv.personal_info.name or "candidate")
-        job_title = self._sanitize_filename(request.job_information.job_title or "job")
-        company = self._sanitize_filename(request.job_information.company or "company")
+        job_title = self._sanitize_filename(request.job_information.title or "job")
+        company = self._sanitize_filename(request.job_information.company.name or "company")
         folder_name = f"{timestamp}_{request.company_type}_{company}_{job_title}_{candidate_name}"
         result_dir = self.result_base_dir / folder_name
         result_dir.mkdir(parents=True, exist_ok=True)
@@ -42,7 +42,7 @@ class FitService:
         self.logger.info(
             "Persisting fit analysis candidate=%s company=%s company_type=%s",
             request.candidate_cv.personal_info.name,
-            request.job_information.company,
+            request.job_information.company.name,
             request.company_type,
         )
 
@@ -81,8 +81,8 @@ class FitService:
         # 2. Save Job structured description to SQLite
         job_id = get_background_job_manager().save_job(
             tenant_id=tenant_id,
-            job_title=request.job_information.job_title or "Unknown",
-            company=request.job_information.company or "Unknown",
+            job_title=request.job_information.title or "Unknown",
+            company=request.job_information.company.name or "Unknown",
             extracted_data_json=request.job_information.model_dump_json(),
         )
 

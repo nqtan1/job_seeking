@@ -1,6 +1,42 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 
+# --- New Schemas for JobPosition ---
+
+class CompanyInfo(BaseModel):
+    name: str
+    type: Literal["employer", "cabinet_recrutement", "esn", None] = Field(None, description="Employer, recruiting agency, or ESN")
+    logo_url: Optional[str] = None
+
+class Badges(BaseModel):
+    contract_type: Optional[str] = None
+    location: Optional[str] = Field(None, description="Short form location, e.g. Paris 1er")
+    location_full: Optional[str] = Field(None, description="Full form location, e.g. 75 - Paris 1er Arrondissement")
+    remote_policy: Optional[str] = None
+    experience_level: Optional[str] = None
+    salary: Optional[str] = Field(None, description="e.g. 40k-50k EUR/year")
+
+class AboutCompany(BaseModel):
+    summary: Optional[str] = None
+    truncate_at_chars: int = 180 # Default value as per schema
+
+class Profile(BaseModel):
+    experience: Optional[str] = None
+    education: Optional[str] = None
+    technical_skills: List[str] = Field(default_factory=list)
+    soft_skills: List[str] = Field(default_factory=list)
+    nice_to_have: List[str] = Field(default_factory=list)
+
+class Modalities(BaseModel):
+    location_detail: Optional[str] = None
+    start_date: Optional[str] = None
+    duration: Optional[str] = None
+
+class SourceMeta(BaseModel):
+    industry: Optional[str] = None
+    raw_description_hash: Optional[str] = None # Changed to Optional
+
+# --- Existing CompensationInfo (retained) ---
 class CompensationInfo(BaseModel):
     """
     Salary and benefits information
@@ -14,58 +50,29 @@ class CompensationInfo(BaseModel):
     has_13th_month: bool = Field(default=False, description="Is there a 13ème mois?")
     rtt_days: Optional[int] = Field(None, description="Number of RTT days per year")
     meal_vouchers: Optional[bool] = Field(None, description="Tickets Restaurant / Swile")
-    
-class JobRequirements(BaseModel):
-    """
-    Required skills and experience
-    """
-    required_skills: List[str] = Field(default_factory=list, description="Required technical skills")
-    preferred_skills: Optional[List[str]] = Field(None, description="Nice-to-have skills")
-    experience_level: Optional[str] = Field(None, description="Junior, Mid-level, Senior, or years of experience")
-    languages: Optional[List[str]] = Field(None, description="Required languages (e.g., French B2, English B1)")
-    certifications: Optional[List[str]] = Field(None, description="Certifications or degrees required")
-    education_level: Optional[str] = Field(None, description="Minimum degree: Bac+2, Bac+5, Grande École, etc.")
-    years_of_experience: Optional[int] = Field(None, description="Specific number of years requested")
-    soft_skills: Optional[List[str]] = Field(None, description="Leadership, Communication, etc.")
 
-
+# --- Updated JobPosition ---
 class JobPosition(BaseModel):
     """
-    Basic information for job position (in French)
+    Structured information for a job position.
     """
-    # Basic information
-    job_title: str = Field(..., description="Job position")
-    company: str = Field(..., description="Company name")
-    laboratory: Optional[str] = Field(None, description="Laboratory name")
-    location: str = Field(..., description="City and ZIP code if available (e.g., Paris 75008)")
-    remote_policy: Optional[str] = Field(None, description="e.g., '2 jours/semaine', 'Full Remote'")
-    
-    # Contract details
-    contract_type: Literal["CDI", "CDD", "Stage", "Alternance", "Freelance", "PhD"] = Field(...)
-    contract_duration: Optional[str] = Field(None, description="For CDD: duration or end date")
-    start_date: Optional[str] = Field(None, description="Expected start date")
-    
-    # Compensation 
-    compensation: Optional[CompensationInfo] = Field(None, description="Salary and benefits")
-    
-    # Requirements
-    requirements: JobRequirements = Field(default_factory=JobRequirements, description="Skills and experience")
-    
-    # Responsibilities
-    responsibilities: Optional[List[str]] = Field(None, description="Main duties and responsibilities")
-    
-    # Additional Info
-    team_size: Optional[str] = Field(None, description="Team or department size")
-    reporting_to: Optional[str] = Field(None, description="Position they report to")
-    job_description_text: Optional[str] = Field(None, description="Full original job description")
-    is_cadre: Optional[bool] = Field(None, description="Executive status (Statut Cadre)")
-    convention_collective: Optional[str] = Field(None, description="Applicable collective agreement (e.g., Syntec, Metallurgy)")
-    trial_period: Optional[str] = Field(None, description="Période d'essai duration")
-    company_description: Optional[str] = Field(None, description="About the company")
-    industry: Optional[str] = Field(None, description="Industry/sector")
+    job_id: Optional[str] = None # Added as per requested schema
+    title: str = Field(..., description="Job position title, preserving (H/F) if present")
+    company: CompanyInfo
+    badges: Badges
+    about_company: AboutCompany
+    missions: List[str] = Field(default_factory=list, description="Array of individual mission bullets, full sentences")
+    tech_stack: List[str] = Field(default_factory=list, description="Short tags/keywords only, no sentences")
+    working_methods: List[str] = Field(default_factory=list, description="e.g. Agile, Travail collaboratif")
+    profile: Profile
+    modalities: Modalities
+    compensation: Optional[CompensationInfo] = None # Retained, as it's detailed
+    source_meta: SourceMeta
+    job_description_text: Optional[str] = Field(None, description="The full, raw job description text") # Added field
+
 
 # ==========================================
-# PHASE 2: JOB ANALYSIS SCHEMA
+# PHASE 2: JOB ANALYSIS SCHEMA (retained as is)
 # ==========================================
 
 class SkillDemand(BaseModel):
