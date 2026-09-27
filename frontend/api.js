@@ -84,32 +84,6 @@ export async function analyzeFit(cvData, jobPosition, companyType, customContext
 }
 
 /**
- * Generate Motivation Letter Draft
- */
-export async function generateLetter(cvData, jobPosition, companyType, language, tone, format, tenantId) {
-    const payload = {
-        cv_info: cvData,
-        job_info: jobPosition,
-        job_type: companyType,
-        language: language,
-        tone: tone,
-        return_format: format
-    };
-
-    const response = await fetch('/api/motivation-letter/generate', {
-        method: 'POST',
-        headers: getHeaders(tenantId, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        throw new Error(`Letter generation failed: status ${response.status}`);
-    }
-
-    return await response.json();
-}
-
-/**
  * Screen and rank a list of candidates against a target Job Requisition
  */
 export async function rankCandidates(candidates, targetJob, tenantId) {
@@ -128,17 +102,6 @@ export async function rankCandidates(candidates, targetJob, tenantId) {
         throw new Error(`Screening failed: status ${response.status}`);
     }
 
-    return await response.json();
-}
-
-/**
- * Get active job search providers
- */
-export async function getProviders() {
-    const response = await fetch('/api/jobs/providers');
-    if (!response.ok) {
-        throw new Error(`Failed to fetch providers: status ${response.status}`);
-    }
     return await response.json();
 }
 

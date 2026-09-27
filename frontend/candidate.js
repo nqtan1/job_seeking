@@ -2,7 +2,7 @@
  * RecruitAI Console Client - Candidate Sandbox Logic Module
  */
 import { state } from './state.js';
-import { extractCV, extractJob, analyzeFit, generateLetter, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF } from './api.js';
+import { extractCV, extractJob, analyzeFit, listCandidates, searchJobs, getJobDetail, getCandidateFile, generateTempPDF } from './api.js';
 import { showNotification, showError } from './utils.js';
 import { renderCVPreview, renderJDPreview } from './preview.js';
 
