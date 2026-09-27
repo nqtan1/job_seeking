@@ -2,7 +2,8 @@ from pathlib import Path
 import uuid
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse
 from api.cv import router as cv_router
 from api.fit import router as fit_router
 from api.hr import router as hr_router
@@ -20,6 +21,18 @@ app = FastAPI(
     description="API to upload CV files and extract job descriptions",
     version="0.2.0"
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # Avoid logging extremely large validation payloads — truncate for observability
+    errors = exc.errors()
+    errors_str = str(errors)
+    truncated = errors_str[:200] + ("..." if len(errors_str) > 200 else "")
+    main_logger.error(f"Validation error: {truncated}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
 
 
 @app.middleware("http")

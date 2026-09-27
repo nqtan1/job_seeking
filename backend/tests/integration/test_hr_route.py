@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from infrastructure.agents.agent_config import AgentConfig
 from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
 from domain.hr.schema import HRBatchRankingRequest, HRCandidateInput
-from domain.jobs.schema import JobPosition
+from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 from workers.background import get_background_job_manager
 from core.auth import get_tenant_registry
 
@@ -23,7 +23,7 @@ class FakeFitAgent:
             is_fit=True,
             fit_score=fit_score,
             recommendation="go" if fit_score >= 80 else "maybe",
-            strengths=[f"Strong match for {job_information.job_title}"],
+            strengths=[f"Strong match for {job_information.title}"],
             gaps=["No direct domain experience"],
             reasons=["Core skills align", "Reasonable seniority match"],
             key_missing_requirements=["French C1"],
@@ -61,10 +61,19 @@ def client(monkeypatch):
 def _build_hr_request() -> HRBatchRankingRequest:
     return HRBatchRankingRequest(
         job_information=JobPosition(
-            job_title="AI Engineer",
-            company="Startup XYZ",
-            location="Paris",
-            contract_type="CDI",
+            title="AI Engineer",
+            company=CompanyInfo(name="Startup XYZ", type="employer"),
+            badges=Badges(
+                location="Paris",
+                contract_type="CDI",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=[],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(),
+            modalities=Modalities(),
+            source_meta=SourceMeta(),
         ),
         company_type="startup",
         shortlist_size=1,

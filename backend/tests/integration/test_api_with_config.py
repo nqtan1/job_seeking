@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from infrastructure.agents.agent_config import AgentConfig
 from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from domain.jobs.schema import CompensationInfo, JobPosition, JobRequirements
+from domain.jobs.schema import CompensationInfo, JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
 
 
@@ -64,26 +64,33 @@ class FakeJobAgent:
     def __init__(self, config: AgentConfig):
         self.config = config
 
+    def _extract_text_from_file(self, file_path):
+        return "file content"
+
     def extract_job(self, *args, **kwargs):
         return JobPosition(
-            job_title="Ingénieur en IA",
-            company="Tech Corp France",
-            location="Paris",
-            contract_type="CDI",
+            title="Ingénieur en IA",
+            company=CompanyInfo(name="Tech Corp France", type="employer"),
+            badges=Badges(
+                contract_type="CDI",
+                location="Paris",
+                experience_level="Mid-level",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=["Build ML systems"],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(
+                technical_skills=["Python", "Machine Learning"],
+            ),
+            modalities=Modalities(),
             compensation=CompensationInfo(
                 min_salary=45000,
                 max_salary=60000,
                 salary_currency="EUR",
                 benefits=["Health insurance"],
             ),
-            requirements=JobRequirements(
-                required_skills=["Python", "Machine Learning"],
-                experience_level="Mid-level",
-                years_of_experience=3,
-            ),
-            responsibilities=["Build ML systems"],
-            team_size="5-10 people",
-            industry="Technology",
+            source_meta=SourceMeta(industry="Technology"),
         )
 
     def analyze_job_for_candidate(self, *args, **kwargs):
@@ -224,24 +231,28 @@ def test_job_extract_uses_yaml_config(client):
 
 def test_job_analyze_uses_yaml_config(client):
     job_data = JobPosition(
-        job_title="Ingénieur en IA",
-        company="Tech Corp France",
-        location="Paris",
-        contract_type="CDI",
+        title="Ingénieur en IA",
+        company=CompanyInfo(name="Tech Corp France", type="employer"),
+        badges=Badges(
+            contract_type="CDI",
+            location="Paris",
+            experience_level="Mid-level",
+        ),
+        about_company=AboutCompany(summary=""),
+        missions=["Build ML systems"],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(
+            technical_skills=["Python", "Machine Learning"],
+        ),
+        modalities=Modalities(),
         compensation=CompensationInfo(
             min_salary=45000,
             max_salary=60000,
             salary_currency="EUR",
             benefits=["Health insurance"],
         ),
-        requirements=JobRequirements(
-            required_skills=["Python", "Machine Learning"],
-            experience_level="Mid-level",
-            years_of_experience=3,
-        ),
-        responsibilities=["Build ML systems"],
-        team_size="5-10 people",
-        industry="Technology",
+        source_meta=SourceMeta(industry="Technology"),
     ).model_dump_json()
 
     response = client.post("/api/jobs/analyze", data={"job_data": job_data})
@@ -273,11 +284,19 @@ def test_motivation_letter_generate_uses_yaml_config(client):
     )
 
     job = JobPosition(
-        job_title="AI Engineer",
-        company="Startup XYZ",
-        location="Paris, France",
-        description="Looking for AI expert",
-        contract_type="CDI",
+        title="AI Engineer",
+        company=CompanyInfo(name="Startup XYZ", type="employer"),
+        badges=Badges(
+            location="Paris, France",
+            contract_type="CDI",
+        ),
+        about_company=AboutCompany(summary="Looking for AI expert"),
+        missions=[],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(),
+        modalities=Modalities(),
+        source_meta=SourceMeta(),
     )
 
     payload = {

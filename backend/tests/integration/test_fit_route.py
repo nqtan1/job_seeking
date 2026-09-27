@@ -5,7 +5,7 @@ from infrastructure.agents.agent_config import AgentConfig
 from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
 from fastapi.testclient import TestClient
 from domain.fit.schema import FitCheck, FitAnalysisResponse, FitAnalysisRequest, Recommendation
-from domain.jobs.schema import JobPosition
+from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 
 
 class FakeFitAgent:
@@ -54,10 +54,19 @@ def test_fit_analyze_endpoint_returns_fit_check():
             skills=[RawSkill(name="Python")],
         ),
         job_information=JobPosition(
-            job_title="AI Engineer",
-            company="Startup XYZ",
-            location="Paris",
-            contract_type="CDI",
+            title="AI Engineer",
+            company=CompanyInfo(name="Startup XYZ", type="employer"),
+            badges=Badges(
+                location="Paris",
+                contract_type="CDI",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=[],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(),
+            modalities=Modalities(),
+            source_meta=SourceMeta(),
         ),
         company_type="startup",
         recruiter_attend={"must_have": ["Python"]},

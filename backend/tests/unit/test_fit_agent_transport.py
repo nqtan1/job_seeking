@@ -4,7 +4,7 @@ from infrastructure.agents.agent_config import AgentConfig
 from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
 from infrastructure.fit.agent import FitAgent
 from domain.fit.schema import FitCheck
-from domain.jobs.schema import JobPosition
+from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 
 
 def _build_model_mock():
@@ -33,10 +33,19 @@ def test_analyze_fit_uses_structured_prompt_and_payload():
             skills=[RawSkill(name="Python")],
         )
         job_information = JobPosition(
-            job_title="AI Engineer",
-            company="Startup XYZ",
-            location="Paris",
-            contract_type="CDI",
+            title="AI Engineer",
+            company=CompanyInfo(name="Startup XYZ", type="employer"),
+            badges=Badges(
+                location="Paris",
+                contract_type="CDI",
+            ),
+            about_company=AboutCompany(summary=""),
+            missions=[],
+            tech_stack=[],
+            working_methods=[],
+            profile=Profile(),
+            modalities=Modalities(),
+            source_meta=SourceMeta(),
         )
 
         result = agent.analyze_fit(

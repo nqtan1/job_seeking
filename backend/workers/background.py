@@ -162,6 +162,19 @@ class BackgroundJobManager:
             payload=payload,
         )
 
+    def _safe_json_loads(self, json_string: str) -> Any:
+        """Safely loads a JSON string, returning the raw string if parsing fails with a warning."""
+        if json_string is None:
+            return None
+        try:
+            return json.loads(json_string)
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"Failed to decode JSON from database: {e}. Returning raw string.",
+                extra={"json_string": json_string[:200]} # Log first 200 chars
+            )
+            return json_string
+
     def _polling_worker_loop(self) -> None:
         """Background thread loop that polls SQLite for queued jobs and executes them atomically."""
         import time
@@ -376,7 +389,7 @@ class BackgroundJobManager:
                 "name": row[2],
                 "email": row[3],
                 "phone": row[4],
-                "extracted_data": json.loads(row[5]),
+                "extracted_data": self._safe_json_loads(row[5]),
                 "file_path": row[6],
                 "created_at": row[7],
             }
@@ -397,12 +410,12 @@ class BackgroundJobManager:
                     "name": row[2],
                     "email": row[3],
                     "phone": row[4],
-                    "extracted_data": json.loads(row[5]),
+                    "extracted_data": self._safe_json_loads(row[5]),
                     "file_path": row[6],
                     "created_at": row[7],
-                }
-                for row in rows
-            ]
+                    }
+                    for row in rows
+                    ]
 
     def delete_candidate(self, candidate_id: str, tenant_id: str) -> bool:
         """Delete a candidate profile by ID, scoped to the owning tenant."""
@@ -415,8 +428,8 @@ class BackgroundJobManager:
             conn.commit()
             return cursor.rowcount > 0
 
-    # ==========================================
-    # Jobs DAL Methods
+                    # ==========================================
+                    # Jobs DAL Methods
     # ==========================================
     def save_job(
         self,
@@ -455,7 +468,7 @@ class BackgroundJobManager:
                 "tenant_id": row[1],
                 "job_title": row[2],
                 "company": row[3],
-                "extracted_data": json.loads(row[4]),
+                "extracted_data": self._safe_json_loads(row[4]),
                 "created_at": row[5],
             }
 
@@ -474,7 +487,7 @@ class BackgroundJobManager:
                     "tenant_id": row[1],
                     "job_title": row[2],
                     "company": row[3],
-                    "extracted_data": json.loads(row[4]),
+                    "extracted_data": self._safe_json_loads(row[4]),
                     "created_at": row[5],
                 }
                 for row in rows

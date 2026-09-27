@@ -149,5 +149,5 @@ def test_agent_config_section_loading(monkeypatch):
         # Load cv section
         config_cv = AgentConfig(config_path="dummy.yaml", section="cv")
         assert config_cv.provider == "qwen"
-        assert config_cv.model_name == "qwen2.5-coder-14b"
+        assert config_cv.model_name == "Qwen/Qwen2.5-7B-Instruct"
         assert config_cv.temperature == 0.2

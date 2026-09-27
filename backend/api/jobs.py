@@ -7,6 +7,7 @@ from utils.logger import get_logger
 from infrastructure.jobs.analysis.agent import JobExtractionAgent
 from infrastructure.agents.agent_config import AgentConfig
 from application.jobs.analysis.service import JobService
+from domain.jobs.analysis.schema import JobPosition # Import JobPosition
 from core.auth import TenantContext, get_tenant_context
 
 logger = get_logger(name="jobs.route", log_file="jobs_api.log", level="INFO")
@@ -33,20 +34,42 @@ async def extract_job(
     file: Optional[UploadFile] = File(None),
     file_path: Optional[str] = Query(None, description="Path to job description file"),
     job_text: Optional[str] = Form(None, description="Raw job description text"),
+    job_id: Optional[str] = Query(None, description="Optional: Job ID from a search result to pre-fill/prioritize data"),
+    provider_name: Optional[str] = Query(None, description="Provider name for the job_id, e.g., 'france_travail'"),
     tenant: TenantContext = Depends(get_tenant_context),
 ):
     """Extract job information from French job description."""
     
-    # logger.info("Starting job extraction")
+    logger.info("Starting job extraction")
     logger.info(
-        "extract_job called with file_present=%s file_path_present=%s job_text_present=%s",
+        "extract_job called with file_present=%s file_path_present=%s job_text_present=%s job_id_present=%s",
         bool(file),
         bool(file_path),
         bool(job_text),
+        bool(job_id),
     )
     
+    existing_job_position = None
+    if job_id and provider_name:
+        from infrastructure.jobs.search.providers.manager import JobProviderManager
+        manager = JobProviderManager()
+        try:
+            # Retrieve detailed job position from provider
+            job_detail_response = await manager.get_job_detail(provider_name=provider_name, job_id=job_id)
+            existing_job_position = job_detail_response.job_position_data # This is already a JobPosition object
+            logger.info(f"Fetched existing job position from provider {provider_name} for job_id {job_id}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch job detail for job_id {job_id} from {provider_name}: {str(e)}")
+            # Continue without existing_job_position if fetch fails
+            
     try:
-        response = await _get_service().extract_job_from_input(file, file_path, job_text, tenant_id=tenant.tenant_id)
+        response = await _get_service().extract_job_from_input(
+            file, 
+            file_path, 
+            job_text, 
+            tenant_id=tenant.tenant_id,
+            existing_job_position=existing_job_position # Pass new parameter
+        )
         logger.info("Job extraction response prepared successfully")
         return response
     

@@ -1,7 +1,7 @@
 from domain.motivation_letter.schema import MotivationLetterRequest
 from infrastructure.motivation_letter.agent import MotivationLetterAgent
 from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from domain.jobs.schema import JobPosition
+from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 
 
 def create_mock_cv() -> CVInformation:
@@ -28,11 +28,19 @@ def create_mock_cv() -> CVInformation:
 def create_mock_job() -> JobPosition:
     """Create mock job data for testing"""
     return JobPosition(
-        job_title="AI Engineer",           
-        company="Startup XYZ",
-        location="Paris, France",          
-        description="Looking for AI expert",
-        contract_type="CDI"               
+        title="AI Engineer",
+        company=CompanyInfo(name="Startup XYZ", type="employer"),
+        badges=Badges(
+            location="Paris, France",
+            contract_type="CDI",
+        ),
+        about_company=AboutCompany(summary="Looking for AI expert"),
+        missions=[],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(),
+        modalities=Modalities(),
+        source_meta=SourceMeta(),
     )
 
 
@@ -161,7 +169,7 @@ def test_motivation_letter_pdf_rendering(tmp_path):
     assert "John Doe" in latex_content
 
     # 4. Compile PDF and verify on disk
-    result_folder = service._get_result_folder(job.company, job.job_title)
+    result_folder = service._get_result_folder(job.company.name, job.title)
     pdf_path = service.render_letter_pdf(latex_content, result_folder, "motivation_letter")
     
     assert pdf_path is not None, "PDF compilation failed"

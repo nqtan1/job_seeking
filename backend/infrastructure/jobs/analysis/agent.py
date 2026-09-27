@@ -9,7 +9,7 @@ from google import genai
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from domain.jobs.schema import JobPosition
+from domain.jobs.analysis.schema import JobPosition
 from infrastructure.jobs.analysis.prompt import (
     SYSTEM_PROMPT_JOB_EXTRACTION,
     SYSTEM_PROMPT_JOB_ANALYSIS,
@@ -184,73 +184,74 @@ class JobExtractionAgent(BaseAgent):
             self.logger.warning("Unsupported file format for local text extraction: %s", ext)
             raise ValueError(f"File type {ext} is not supported for text extraction on provider '{self.config.provider}'")
 
-    def extract_job(
+    def extract_job_to_job_position(
         self,
-        file_path: Optional[Union[str, Path, Sequence[Union[str, Path]]]] = None,
-        job_text: Optional[str] = None,
-        message: Optional[str] = None,
-        output_schema: Optional[BaseModel] = None,
+        full_description: str,
+        output_schema: BaseModel = JobPosition,
         system_prompt: Optional[str] = None,
-        **kwargs,
-    ) -> BaseModel:
+        message: Optional[str] = None
+    ) -> JobPosition:
         """
-        Extract job information from file(s) or string.
-
-        Args:
-            file_path: Path to job description file (PDF, TXT, IMG) or list of paths
-            job_text: Raw job description as string
-            message: Extraction instruction
-            output_schema: Schema for structured output
-            system_prompt: Custom system prompt
+        Uses LLM to extract job information from a full job description text
+        directly into the JobPosition schema.
         """
         if system_prompt is None:
-            self.logger.info("No system prompt provided, using the default job extraction prompt.")
             system_prompt = SYSTEM_PROMPT_JOB_EXTRACTION
-
         if message is None:
-            self.logger.info("No message provided, using the default job extraction message.")
-            message = "Extract all job information in structured format"
+            message = "Extract all job information in structured format from the provided Job Description. Ensure the output strictly adheres to the JobPosition schema."
 
-        model = self.model.with_structured_output(output_schema) if output_schema else self.model
-        # self.logger.info("Starting job extraction")
-        self.logger.info(
-            "extract_job called with file_path=%s job_text_present=%s output_schema=%s",
-            file_path,
-            bool(job_text),
-            getattr(output_schema, "__name__", str(output_schema)),
-        )
+        model = self.model.with_structured_output(output_schema)
 
-        if job_text:
-            message_obj = self._build_text_message(message, job_text)
-        elif file_path:
-            file_paths = self._normalize_file_paths(file_path)
-            self.logger.info(
-                "Job extraction using file input count=%s provider=%s",
-                len(file_paths),
-                self.config.provider,
-            )
-            if self.config.provider == "qwen":
-                # Extract text from file(s) locally
-                extracted_texts = []
-                for fpath in file_paths:
-                    text = self._extract_text_from_file(fpath)
-                    extracted_texts.append(f"--- FILE: {fpath.name} ---\n{text}\n--- END FILE ---")
-                full_extracted_text = "\n\n".join(extracted_texts)
-                message_obj = HumanMessage(
-                    content=f"{message}\n\n--- JOB DESCRIPTION CONTENT ---\n{full_extracted_text}\n--- END JOB DESCRIPTION CONTENT ---"
-                )
-            else:
-                message_obj = self._build_file_message(file_paths, message)
-        else:
-            raise ValueError("Provide either 'file_path' or 'job_text'")
-
+        self.logger.info("Calling LLM for structured job extraction.")
         response = model.invoke(
             [
                 SystemMessage(content=system_prompt),
-                message_obj,
+                HumanMessage(content=f"Job Description:\n{full_description}"),
             ]
         )
-        self.logger.info("Job extraction completed and response type=%s", type(response).__name__)
+        self.logger.info("LLM job extraction completed. Response type=%s", type(response).__name__)
+        return response
+
+    def extract_job(
+        self,
+        job_text: str,
+        output_schema: Optional[BaseModel] = None,
+        system_prompt: Optional[str] = None,
+        message: Optional[str] = None
+    ) -> JobPosition:
+        """
+        Extract job information from raw text using the LLM directly into the JobPosition schema.
+
+        Args:
+            job_text: Raw job description as string.
+            output_schema: Schema for structured output (defaults to JobPosition).
+            system_prompt: Custom system prompt.
+            message: Extraction instruction.
+        """
+        if not job_text:
+            raise ValueError("'job_text' must be provided for LLM extraction.")
+
+        if output_schema is None:
+            output_schema = JobPosition
+
+        if system_prompt is None:
+            self.logger.info("No system prompt provided for extraction, using default.")
+            system_prompt = SYSTEM_PROMPT_JOB_EXTRACTION
+
+        if message is None:
+            self.logger.info("No message provided for extraction, using default.")
+            message = "Extract all job information in structured format from the provided Job Description. Ensure the output strictly adheres to the JobPosition schema."
+
+        model = self.model.with_structured_output(output_schema)
+
+        self.logger.info("Calling LLM for structured job extraction with output_schema=%s", getattr(output_schema, "__name__", str(output_schema)))
+        response = model.invoke(
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=f"{message}\n\nJOB DESCRIPTION:\n{job_text}"),
+            ]
+        )
+        self.logger.info("LLM job extraction completed. Response type=%s", type(response).__name__)
         return response
 
     def analyze_job(

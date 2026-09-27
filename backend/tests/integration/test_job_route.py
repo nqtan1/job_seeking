@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 
-from domain.jobs.schema import JobPosition, CompensationInfo, JobRequirements, CandidateAnalysis, RecruiterAnalysis
+from domain.jobs.schema import JobPosition, CompensationInfo, CandidateAnalysis, RecruiterAnalysis, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 
 @pytest.fixture
 def client():
@@ -17,24 +17,28 @@ def mock_job_position():
     Pre-built mock job position extraction result
     """
     return JobPosition(
-        job_title="Ingénieur en IA",
-        company="Tech Corp France",
-        location="Paris 75008",
-        contract_type="CDI",
+        title="Ingénieur en IA",
+        company=CompanyInfo(name="Tech Corp France", type="employer"),
+        badges=Badges(
+            contract_type="CDI",
+            location="Paris 75008",
+            experience_level="Mid-level",
+        ),
+        about_company=AboutCompany(summary=""),
+        missions=["Develop ML models", "Optimize algorithms"],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(
+            technical_skills=["Python", "Machine Learning", "TensorFlow"],
+        ),
+        modalities=Modalities(),
         compensation=CompensationInfo(
             min_salary=45000,
             max_salary=60000,
             salary_currency="EUR",
             benefits=["Health insurance", "RTT"]
         ),
-        requirements=JobRequirements(
-            required_skills=["Python", "Machine Learning", "TensorFlow"],
-            experience_level="Mid-level",
-            years_of_experience=3
-        ),
-        responsibilities=["Develop ML models", "Optimize algorithms"],
-        team_size="5-10 people",
-        industry="Technology"
+        source_meta=SourceMeta(industry="Technology"),
     )
 
 @pytest.fixture
@@ -193,14 +197,22 @@ def test_analyze_job_from_job_data(client, mock_candidate_analysis, mock_recruit
     Test analysis from pre-extracted job data JSON
     """
     job_position = JobPosition(
-        job_title="Data Scientist",
-        company="AI Startup",
-        location="Lyon",
-        contract_type="CDI",
-        requirements=JobRequirements(
-            required_skills=["Python", "SQL"],
-            experience_level="Mid-level"
-        )
+        title="Data Scientist",
+        company=CompanyInfo(name="AI Startup", type="employer"),
+        badges=Badges(
+            contract_type="CDI",
+            location="Lyon",
+            experience_level="Mid-level",
+        ),
+        about_company=AboutCompany(summary=""),
+        missions=[],
+        tech_stack=[],
+        working_methods=[],
+        profile=Profile(
+            technical_skills=["Python", "SQL"],
+        ),
+        modalities=Modalities(),
+        source_meta=SourceMeta(),
     )
     job_data_json = job_position.model_dump_json()
     
@@ -242,3 +254,32 @@ def test_extract_job_file_size_limit(client):
     
     assert response.status_code == 413
     assert "exceeds" in response.json()["detail"]
+
+def test_extract_job_from_url(client, mock_job_position):
+    """
+    Test extraction from a URL.
+    """
+    mock_url = "https://example.com/job/123"
+    mock_url_content = "<h1>Ingénieur en IA</h1><p>Company: Tech Corp France</p><p>Location: Paris</p>"
+    
+    with patch("application.jobs.analysis.service.JobService._is_url") as mock_is_url, \
+         patch("application.jobs.analysis.service.JobService._fetch_url_content") as mock_fetch_url_content, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.extract_job") as mock_extract:
+        
+        mock_is_url.return_value = True
+        mock_fetch_url_content.return_value = mock_url_content
+        mock_extract.return_value = mock_job_position
+
+        response = client.post(
+            "/api/jobs/extract",
+            data={"job_text": mock_url}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Job extraction successful"
+        assert data["job_title"] == "Ingénieur en IA"
+        assert data["company"] == "Tech Corp France"
+        mock_is_url.assert_called_once_with(mock_url)
+        mock_fetch_url_content.assert_called_once_with(mock_url)
+        mock_extract.assert_called_once()

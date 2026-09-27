@@ -121,17 +121,12 @@ class AgentConfig:
                 section_data.pop("llm", None)
             file_data = section_data
 
-        # Determine active provider using LLM_PROVIDER env variable fallback
-        env_provider = os.getenv("LLM_PROVIDER")
+        # Determine active provider
         if provider is not None:
             self.provider = provider
-        elif env_provider == "qwen":
-            self.provider = "qwen"
-        elif env_provider == "gemini":
-            file_provider = file_data.get("provider", "vertex")
-            self.provider = file_provider if file_provider in ("vertex", "api_key") else "vertex"
         else:
-            self.provider = file_data.get("provider", "vertex")
+            # Prioritize config file, then environment variable, then default
+            self.provider = file_data.get("provider") or os.getenv("LLM_PROVIDER") or "vertex"
 
         # Set model_name: if provider is qwen, prioritize QWEN_MODEL_NAME env var, else use standard fallback
         if self.provider == "qwen":
