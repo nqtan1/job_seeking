@@ -6,7 +6,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends default-jre-headless curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g firebase-tools@13
+RUN npm install -g firebase-tools@15
 
 WORKDIR /emulator
 COPY firebase.json .firebaserc ./
