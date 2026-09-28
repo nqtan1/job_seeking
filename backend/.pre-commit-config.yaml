@@ -1,0 +1,34 @@
+# Run from the repo root: pre-commit run --config backend/.pre-commit-config.yaml
+# (backend/ is a uv project inside the main repo, not its own git root, so every
+# hook cds into it before invoking uv.)
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check (recruitai)
+        entry: bash -c 'cd backend && uv run ruff check .'
+        language: system
+        types: [python]
+        files: ^backend/src/recruitai/
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format --check (recruitai)
+        entry: bash -c 'cd backend && uv run ruff format --check .'
+        language: system
+        types: [python]
+        files: ^backend/src/recruitai/
+        pass_filenames: false
+      - id: mypy
+        name: mypy --strict (recruitai)
+        entry: bash -c 'cd backend && uv run mypy --strict src'
+        language: system
+        types: [python]
+        files: ^backend/src/recruitai/
+        pass_filenames: false
+      - id: lint-imports
+        name: import-linter
+        entry: bash -c 'cd backend && uv run lint-imports'
+        language: system
+        types: [python]
+        files: ^backend/src/recruitai/
+        pass_filenames: false

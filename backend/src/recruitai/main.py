@@ -4,7 +4,7 @@ from recruitai.config import Settings
 
 
 def create_app() -> FastAPI:
-    Settings()
+    Settings()  # type: ignore[call-arg]  # fields are populated from the environment, not passed here
 
     app = FastAPI(title="RecruitAI")
 
