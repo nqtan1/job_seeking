@@ -21,6 +21,16 @@ os.environ.setdefault(
     })
 )
 
+# Fake LLM provider config so AgentConfig() construction doesn't blow up in CI,
+# where there's no real GCP project/Qwen endpoint. Individual tests that need
+# other values still override these via monkeypatch.
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "test-project")
+os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "us-central1")
+os.environ.setdefault("GEMINI_API_KEY", "test-gemini-api-key")
+os.environ.setdefault("QWEN_BASE_URL", "http://localhost:8000/v1")
+os.environ.setdefault("QWEN_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
+os.environ.setdefault("QWEN_API_KEY", "test-qwen-api-key")
+
 
 # Monkeypatch TestClient.request to automatically inject tenant headers and API keys in tests
 original_request = TestClient.request
@@ -81,3 +91,23 @@ def clear_tenant_registry_cache():
     """Clear the tenant registry LRU cache to prevent state leakage across tests."""
     from core.auth import get_tenant_registry
     get_tenant_registry.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_module_level_agent_singletons():
+    """
+    api/{jobs,cv,motivation_letter}.py lazily cache their LLM agent in a
+    module-level `agent` global on first use, and some tests overwrite it
+    with a fake/mock. Without a reset, whichever test runs first "wins" for
+    the rest of the session, and other tests silently talk to that stale
+    agent instead of the real class their patches target.
+    """
+    import api.jobs as jobs_route
+    import api.cv as cv_route
+    import api.motivation_letter as ml_route
+
+    yield
+
+    jobs_route.agent = None
+    cv_route.agent = None
+    ml_route.agent = None

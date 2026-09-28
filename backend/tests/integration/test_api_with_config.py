@@ -232,6 +232,7 @@ def test_job_extract_uses_yaml_config(client):
 def test_job_analyze_uses_yaml_config(client):
     job_data = JobPosition(
         title="Ingénieur en IA",
+        job_description_text="Ingénieur en IA role at Tech Corp France in Paris.",
         company=CompanyInfo(name="Tech Corp France", type="employer"),
         badges=Badges(
             contract_type="CDI",

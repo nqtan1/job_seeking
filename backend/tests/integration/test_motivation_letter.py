@@ -1,3 +1,5 @@
+from unittest.mock import patch, MagicMock
+
 from domain.motivation_letter.schema import MotivationLetterRequest
 from infrastructure.motivation_letter.agent import MotivationLetterAgent
 from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
@@ -59,9 +61,18 @@ def test_motivation_letter_generation():
         return_format="txt"
     )
     
-    # Execute
-    agent = MotivationLetterAgent()
-    letter = agent.generate_letter(request)
+    # Execute — mock the underlying chat model so this doesn't require real
+    # Vertex AI credentials/network access.
+    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
+        mock_llm.return_value = MagicMock(
+            invoke=MagicMock(
+                return_value=MagicMock(
+                    content="Dear hiring team, this is a test motivation letter."
+                )
+            )
+        )
+        agent = MotivationLetterAgent()
+        letter = agent.generate_letter(request)
     
     # Verify
     assert letter.content is not None, "Letter content should not be empty"
