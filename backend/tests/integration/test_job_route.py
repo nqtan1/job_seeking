@@ -147,8 +147,10 @@ def test_analyze_job_from_file(client, mock_job_position, mock_candidate_analysi
     """
     with patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.extract_job") as mock_extract, \
          patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_candidate") as mock_candidate, \
-         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter:
-        
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent.analyze_job_for_recruiter") as mock_recruiter, \
+         patch("infrastructure.jobs.analysis.agent.JobExtractionAgent._extract_text_from_file") as mock_extract_text:
+
+        mock_extract_text.return_value = "Ingénieur en IA job posting text"
         mock_extract.return_value = mock_job_position
         mock_candidate.return_value = mock_candidate_analysis
         mock_recruiter.return_value = mock_recruiter_analysis
@@ -198,6 +200,7 @@ def test_analyze_job_from_job_data(client, mock_candidate_analysis, mock_recruit
     """
     job_position = JobPosition(
         title="Data Scientist",
+        job_description_text="Data Scientist role at AI Startup in Lyon.",
         company=CompanyInfo(name="AI Startup", type="employer"),
         badges=Badges(
             contract_type="CDI",
@@ -205,13 +208,14 @@ def test_analyze_job_from_job_data(client, mock_candidate_analysis, mock_recruit
             experience_level="Mid-level",
         ),
         about_company=AboutCompany(summary=""),
-        missions=[],
+        missions=["Build predictive models"],
         tech_stack=[],
         working_methods=[],
         profile=Profile(
             technical_skills=["Python", "SQL"],
         ),
         modalities=Modalities(),
+        compensation=CompensationInfo(benefits=["Health insurance"]),
         source_meta=SourceMeta(),
     )
     job_data_json = job_position.model_dump_json()

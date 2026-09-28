@@ -1,7 +1,9 @@
 import io
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, MagicMock, patch, AsyncMock
+
+import api.cv as cv_route
 
 from domain.cv.schema import CVInformation, PersonalInfo
 
@@ -104,6 +106,10 @@ def test_analyze_cv_prefers_file_when_cv_data_is_also_sent(client, mock_extracte
     mock_analysis = Mock()
     mock_analysis.model_dump.return_value = {"fit_score": 0.85}
     mock_analysis.model_dump_json.return_value = '{"fit_score": 0.85}'
+
+    # api/cv.py lazily caches its agent as a module global on first use; make
+    # sure a (mock) agent exists before patching its methods below.
+    cv_route.agent = MagicMock()
 
     with patch("api.cv.agent.extract_cv") as mock_extract, patch("api.cv.agent.analyze_cv") as mock_analyze:
         mock_extract.return_value = mock_extracted_cv

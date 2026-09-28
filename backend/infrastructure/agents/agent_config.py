@@ -126,7 +126,10 @@ class AgentConfig:
             self.provider = provider
         else:
             # Prioritize config file, then environment variable, then default
-            self.provider = file_data.get("provider") or os.getenv("LLM_PROVIDER") or "vertex"
+            env_provider = os.getenv("LLM_PROVIDER")
+            if env_provider == "gemini":
+                env_provider = "vertex"
+            self.provider = file_data.get("provider") or env_provider or "vertex"
 
         # Set model_name: if provider is qwen, prioritize QWEN_MODEL_NAME env var, else use standard fallback
         if self.provider == "qwen":
