@@ -1,80 +1,95 @@
 import io
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, MagicMock, patch, AsyncMock
 
 import api.cv as cv_route
-
 from domain.cv.schema import CVInformation, PersonalInfo
+
 
 @pytest.fixture
 def client():
     from main import app
+
     return TestClient(app)
+
 
 @pytest.fixture
 def mock_extracted_cv():
     """
     Pre-built mock extraction result
     """
-    
+
     return CVInformation(
         personal_info=PersonalInfo(
             name="Clement Suto",
             email="clement_suto@example.com",
-            phone="+33123456789", 
-            address="Paris, France"
+            phone="+33123456789",
+            address="Paris, France",
         ),
         formations=[],
         experiences=[],
-        skills=[]
+        skills=[],
     )
-    
+
+
 def test_extract_cv_success(client, mock_extracted_cv):
     """
     Test successful CV extraction endpoint
     """
     with patch("infrastructure.cv.agent.CVAnalysisAgent.extract_cv") as mock_extract:
         mock_extract.return_value = mock_extracted_cv
-        
-        # Create mock file 
+
+        # Create mock file
         response = client.post(
-            "/api/cv/extract", 
+            "/api/cv/extract",
             files={
-                "file": ("test.pdf", io.BytesIO(b"pdf content to test"), "application/pdf")
-            }
+                "file": (
+                    "test.pdf",
+                    io.BytesIO(b"pdf content to test"),
+                    "application/pdf",
+                )
+            },
         )
-        
-        assert response.status_code == 200 
+
+        assert response.status_code == 200
         data = response.json()
         assert data["message"] == "CV extraction successful"
         assert data["data"]["personal_info"]["name"] == "Clement Suto"
         assert "extract_path" in data
         assert "result_folder" in data
-    
+
+
 def test_extract_cv_invalid_file(client):
     """
     Test extraction with invalid file type
     """
     response = client.post(
-        "/api/cv/extract", 
+        "/api/cv/extract",
         files={
-            "file": ("text_api.exe", io.BytesIO(b"malicious"), "application/x-msdownload")
-        }
+            "file": (
+                "text_api.exe",
+                io.BytesIO(b"malicious"),
+                "application/x-msdownload",
+            )
+        },
     )
-    
+
     assert response.status_code == 400
     assert "not allowed" in response.json()["detail"]
-    
+
+
 def test_extract_cv_no_input(client):
     """
     Test extraction without file or file_path
     """
     response = client.post("/api/cv/extract")
-    
+
     assert response.status_code == 400
     assert "Provide either" in response.json()["detail"]
-    
+
+
 def test_analyze_cv_from_file(client, mock_extracted_cv):
     """
     Test analysis from uploaded file
@@ -82,20 +97,25 @@ def test_analyze_cv_from_file(client, mock_extracted_cv):
     mock_analysis = Mock()
     mock_analysis.model_dump.return_value = {"fit_score": 0.85}
     mock_analysis.model_dump_json.return_value = '{"fit_score": 0.85}'
-    
-    with patch("infrastructure.cv.agent.CVAnalysisAgent.extract_cv") as mock_extract, patch("infrastructure.cv.agent.CVAnalysisAgent.analyze_cv") as mock_analyze:
+
+    with (
+        patch("infrastructure.cv.agent.CVAnalysisAgent.extract_cv") as mock_extract,
+        patch("infrastructure.cv.agent.CVAnalysisAgent.analyze_cv") as mock_analyze,
+    ):
         mock_extract.return_value = mock_extracted_cv
         mock_analyze.return_value = mock_analysis
-            
+
         response = client.post(
-            "/api/cv/analyze", 
+            "/api/cv/analyze",
             files={
-                "file": ("test_analyze_cv.pdf",
-                         io.BytesIO(b"pdf content"),
-                         "application/pdf")
-            }
+                "file": (
+                    "test_analyze_cv.pdf",
+                    io.BytesIO(b"pdf content"),
+                    "application/pdf",
+                )
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["candidate"] == "Clement Suto"
@@ -111,14 +131,21 @@ def test_analyze_cv_prefers_file_when_cv_data_is_also_sent(client, mock_extracte
     # sure a (mock) agent exists before patching its methods below.
     cv_route.agent = MagicMock()
 
-    with patch("api.cv.agent.extract_cv") as mock_extract, patch("api.cv.agent.analyze_cv") as mock_analyze:
+    with (
+        patch("api.cv.agent.extract_cv") as mock_extract,
+        patch("api.cv.agent.analyze_cv") as mock_analyze,
+    ):
         mock_extract.return_value = mock_extracted_cv
         mock_analyze.return_value = mock_analysis
 
         response = client.post(
             "/api/cv/analyze",
             files={
-                "file": ("test_analyze_cv.pdf", io.BytesIO(b"pdf content"), "application/pdf")
+                "file": (
+                    "test_analyze_cv.pdf",
+                    io.BytesIO(b"pdf content"),
+                    "application/pdf",
+                )
             },
             data={"cv_data": "not-a-valid-json-payload"},
         )
@@ -132,6 +159,7 @@ def test_analyze_cv_prefers_file_when_cv_data_is_also_sent(client, mock_extracte
 
 def test_list_candidates_and_get_file(client, tmp_path):
     import workers.background as bg
+
     # Isolate DB
     temp_db = tmp_path / "test_cv_candidates.db"
     old_manager = bg._BACKGROUND_JOB_MANAGER
@@ -148,14 +176,13 @@ def test_list_candidates_and_get_file(client, tmp_path):
             name="John Doe",
             email="john.doe@example.com",
             phone="12345",
-            extracted_data_json='{}',
-            file_path=str(mock_cv_file)
+            extracted_data_json="{}",
+            file_path=str(mock_cv_file),
         )
 
         # 1. Test listing candidates
         response = client.get(
-            "/api/cv/candidates",
-            headers={"X-Tenant-ID": "test-tenant-cv"}
+            "/api/cv/candidates", headers={"X-Tenant-ID": "test-tenant-cv"}
         )
         assert response.status_code == 200
         data = response.json()
@@ -167,7 +194,7 @@ def test_list_candidates_and_get_file(client, tmp_path):
         # 2. Test fetching candidate CV file
         response = client.get(
             f"/api/cv/candidates/{candidate_id}/file",
-            headers={"X-Tenant-ID": "test-tenant-cv"}
+            headers={"X-Tenant-ID": "test-tenant-cv"},
         )
         assert response.status_code == 200
         assert response.content == b"John Doe CV file contents"
@@ -175,7 +202,7 @@ def test_list_candidates_and_get_file(client, tmp_path):
         # 3. Test multi-tenant isolation
         response = client.get(
             f"/api/cv/candidates/{candidate_id}/file",
-            headers={"X-Tenant-ID": "different-tenant"}
+            headers={"X-Tenant-ID": "different-tenant"},
         )
         assert response.status_code == 404
 
@@ -186,7 +213,7 @@ def test_list_candidates_and_get_file(client, tmp_path):
 def test_candidate_file_strict_no_scanning(client, tmp_path):
     import workers.background as bg
     from api.cv import UPLOAD_BASE_DIR
-    
+
     # Isolate DB
     temp_db = tmp_path / "test_cv_candidates_scanning.db"
     old_manager = bg._BACKGROUND_JOB_MANAGER
@@ -205,15 +232,15 @@ def test_candidate_file_strict_no_scanning(client, tmp_path):
             name="Jane Doe Scam Scan",
             email="jane.doe@example.com",
             phone="98765",
-            extracted_data_json='{}',
-            file_path=None
+            extracted_data_json="{}",
+            file_path=None,
         )
 
         # Fetch the candidate CV file. It should NOT find the unregistered file via scanning
         # and instead serve the dynamically generated compiler text fallback.
         response = client.get(
             f"/api/cv/candidates/{candidate_id}/file",
-            headers={"X-Tenant-ID": "test-tenant-cv"}
+            headers={"X-Tenant-ID": "test-tenant-cv"},
         )
         assert response.status_code == 200
         assert b"CANDIDATE RESUME PROFILE" in response.content
@@ -243,14 +270,14 @@ def test_delete_candidate(client, tmp_path):
             name="Delete Me",
             email="delete.me@example.com",
             phone="00000",
-            extracted_data_json='{}',
-            file_path=str(mock_cv_file)
+            extracted_data_json="{}",
+            file_path=str(mock_cv_file),
         )
 
         # 1. Cross-tenant delete attempt -> 404, nothing deleted
         response = client.delete(
             f"/api/cv/candidates/{candidate_id}",
-            headers={"X-Tenant-ID": "different-tenant"}
+            headers={"X-Tenant-ID": "different-tenant"},
         )
         assert response.status_code == 404
         assert bg._BACKGROUND_JOB_MANAGER.get_candidate(candidate_id) is not None
@@ -259,7 +286,7 @@ def test_delete_candidate(client, tmp_path):
         # 2. Owning tenant deletes successfully -> 204, DB row and file both gone
         response = client.delete(
             f"/api/cv/candidates/{candidate_id}",
-            headers={"X-Tenant-ID": "test-tenant-cv"}
+            headers={"X-Tenant-ID": "test-tenant-cv"},
         )
         assert response.status_code == 204
         assert bg._BACKGROUND_JOB_MANAGER.get_candidate(candidate_id) is None
@@ -268,14 +295,14 @@ def test_delete_candidate(client, tmp_path):
         # 3. Deleting again -> 404 (already gone)
         response = client.delete(
             f"/api/cv/candidates/{candidate_id}",
-            headers={"X-Tenant-ID": "test-tenant-cv"}
+            headers={"X-Tenant-ID": "test-tenant-cv"},
         )
         assert response.status_code == 404
 
         # 4. Deleting an unknown candidate id -> 404
         response = client.delete(
             "/api/cv/candidates/does-not-exist",
-            headers={"X-Tenant-ID": "test-tenant-cv"}
+            headers={"X-Tenant-ID": "test-tenant-cv"},
         )
         assert response.status_code == 404
 

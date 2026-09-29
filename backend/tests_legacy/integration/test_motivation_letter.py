@@ -1,18 +1,24 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
 from domain.motivation_letter.schema import MotivationLetterRequest
 from infrastructure.motivation_letter.agent import MotivationLetterAgent
-from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
 
 
 def create_mock_cv() -> CVInformation:
     """Create mock CV data for testing"""
     return CVInformation(
         personal_info=PersonalInfo(
-            name="John Doe",
-            email="john@example.com",
-            phone="+33612345678"
+            name="John Doe", email="john@example.com", phone="+33612345678"
         ),
         experiences=[
             Experience(
@@ -20,10 +26,10 @@ def create_mock_cv() -> CVInformation:
                 company="Tech Corp",
                 start_date="2022",
                 end_date="Present",
-                description="Built ML systems"
+                description="Built ML systems",
             )
         ],
-        skills=[RawSkill(name="Python"), RawSkill(name="ML")]
+        skills=[RawSkill(name="Python"), RawSkill(name="ML")],
     )
 
 
@@ -51,16 +57,16 @@ def test_motivation_letter_generation():
     # Setup
     cv = create_mock_cv()
     job = create_mock_job()
-    
+
     request = MotivationLetterRequest(
         cv_info=cv,
         job_info=job,
         job_type="startup",
         language="fr",
         tone="professional",
-        return_format="txt"
+        return_format="txt",
     )
-    
+
     # Execute — mock the underlying chat model so this doesn't require real
     # Vertex AI credentials/network access.
     with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
@@ -73,22 +79,22 @@ def test_motivation_letter_generation():
         )
         agent = MotivationLetterAgent()
         letter = agent.generate_letter(request)
-    
+
     # Verify
     assert letter.content is not None, "Letter content should not be empty"
     assert len(letter.content) > 0, "Letter content should have text"
     assert letter.metadata.job_type == "startup", "Job type should be startup"
     assert letter.metadata.language == "fr", "Language should be French"
     assert letter.metadata.format == "txt", "Format should be txt"
-    
+
     # Display results
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("MOTIVATION LETTER")
-    print("="*70)
+    print("=" * 70)
     print(letter.content)
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("METADATA")
-    print("="*70)
+    print("=" * 70)
     print(f"Job Type: {letter.metadata.job_type}")
     print(f"Language: {letter.metadata.language}")
     print(f"Tone: {letter.metadata.tone}")
@@ -137,9 +143,13 @@ def test_generate_letter_content_does_not_duplicate_llm_opening_and_closing():
 
 def test_motivation_letter_pdf_rendering(tmp_path):
     """Test that MotivationLetterService compiles and renders a PDF successfully"""
+    from datetime import UTC, datetime
+
     from application.motivation_letter.service import MotivationLetterService
-    from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
-    from datetime import datetime
+    from domain.motivation_letter.schema import (
+        MotivationLetter,
+        MotivationLetterMetadata,
+    )
 
     # 1. Setup mock data
     cv = create_mock_cv()
@@ -150,7 +160,7 @@ def test_motivation_letter_pdf_rendering(tmp_path):
         job_type="startup",
         language="fr",
         tone="professional",
-        return_format="txt"
+        return_format="txt",
     )
 
     letter = MotivationLetter(
@@ -160,10 +170,10 @@ def test_motivation_letter_pdf_rendering(tmp_path):
             language="fr",
             tone="professional",
             format="txt",
-            generated_at=datetime.now(),
+            generated_at=datetime.now(UTC),
             system_prompt_used="test_prompt",
-            llm_model="test_model"
-        )
+            llm_model="test_model",
+        ),
     )
 
     # 2. Instantiate service with temp directory db_base_dir
@@ -181,13 +191,14 @@ def test_motivation_letter_pdf_rendering(tmp_path):
 
     # 4. Compile PDF and verify on disk
     result_folder = service._get_result_folder(job.company.name, job.title)
-    pdf_path = service.render_letter_pdf(latex_content, result_folder, "motivation_letter")
-    
+    pdf_path = service.render_letter_pdf(
+        latex_content, result_folder, "motivation_letter"
+    )
+
     assert pdf_path is not None, "PDF compilation failed"
     assert pdf_path.exists(), "PDF should be saved on disk"
     assert pdf_path.stat().st_size > 0, "PDF should not be empty"
     print(f"Integration PDF test passed! PDF generated successfully at: {pdf_path}")
-
 
 
 if __name__ == "__main__":

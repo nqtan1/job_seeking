@@ -53,7 +53,7 @@ jobs:
       - name: import-linter
         run: uv run lint-imports
 
-      - name: pytest (tests_v2)
+      - name: pytest (tests)
         env:
           ENV: local
         run: uv run pytest
@@ -87,4 +87,4 @@ jobs:
         run: cp config/agent_config.yaml.example config/agent_config.yaml
 
       - name: Legacy pytest
-        run: uv run pytest tests/
+        run: uv run pytest tests_legacy/

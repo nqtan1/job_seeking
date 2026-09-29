@@ -1,23 +1,31 @@
-import io
-import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
 
-from infrastructure.agents.agent_config import AgentConfig
+from core.auth import get_tenant_registry
 from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
 from domain.hr.schema import HRBatchRankingRequest, HRCandidateInput
-from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
+from infrastructure.agents.agent_config import AgentConfig
 from workers.background import get_background_job_manager
-from core.auth import get_tenant_registry
 
 
 class FakeFitAgent:
     def __init__(self, config: AgentConfig):
         self.config = config
 
-    def analyze_fit(self, candidate_cv, job_information, company_type, output_schema=None, **kwargs):
+    def analyze_fit(
+        self, candidate_cv, job_information, company_type, output_schema=None, **kwargs
+    ):
         fit_score = 92 if candidate_cv.personal_info.name == "Alice Martin" else 78
         return output_schema(
             is_fit=True,
@@ -43,8 +51,8 @@ def client(monkeypatch):
     with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
         mock_llm.return_value = MagicMock()
 
-        from main import app
         import api.hr as hr_route
+        from main import app
 
         hr_route.fit_agent = FakeFitAgent(
             AgentConfig(
@@ -81,16 +89,34 @@ def _build_hr_request() -> HRBatchRankingRequest:
             HRCandidateInput(
                 candidate_id="cand-1",
                 candidate_cv=CVInformation(
-                    personal_info=PersonalInfo(name="Alice Martin", email="alice@example.com", phone="+33611111111"),
-                    experiences=[Experience(job_title="ML Engineer", company="Example Corp", description="Built ML systems")],
+                    personal_info=PersonalInfo(
+                        name="Alice Martin",
+                        email="alice@example.com",
+                        phone="+33611111111",
+                    ),
+                    experiences=[
+                        Experience(
+                            job_title="ML Engineer",
+                            company="Example Corp",
+                            description="Built ML systems",
+                        )
+                    ],
                     skills=[RawSkill(name="Python")],
                 ),
             ),
             HRCandidateInput(
                 candidate_id="cand-2",
                 candidate_cv=CVInformation(
-                    personal_info=PersonalInfo(name="Bob Dupont", email="bob@example.com", phone="+33622222222"),
-                    experiences=[Experience(job_title="Data Analyst", company="Example Corp", description="Built dashboards")],
+                    personal_info=PersonalInfo(
+                        name="Bob Dupont", email="bob@example.com", phone="+33622222222"
+                    ),
+                    experiences=[
+                        Experience(
+                            job_title="Data Analyst",
+                            company="Example Corp",
+                            description="Built dashboards",
+                        )
+                    ],
                     skills=[RawSkill(name="SQL")],
                 ),
             ),
@@ -106,15 +132,14 @@ def test_hr_rank_requires_tenant_auth(client):
 def test_hr_rank_rejects_unknown_tenant(client):
     response = client.get(
         "/api/hr/context",
-        headers={"X-Tenant-Id": "unknown-tenant", "X-API-Key": "some-key"}
+        headers={"X-Tenant-Id": "unknown-tenant", "X-API-Key": "some-key"},
     )
     assert response.status_code == 403
 
 
 def test_hr_rank_rejects_invalid_api_key(client):
     response = client.get(
-        "/api/hr/context",
-        headers={"X-Tenant-Id": "tenant-a", "X-API-Key": "wrong-key"}
+        "/api/hr/context", headers={"X-Tenant-Id": "tenant-a", "X-API-Key": "wrong-key"}
     )
     assert response.status_code == 403
 

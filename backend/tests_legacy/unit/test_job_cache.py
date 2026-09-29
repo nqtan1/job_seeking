@@ -1,11 +1,10 @@
 import os
-import unittest
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import unittest
+from unittest.mock import MagicMock
 
-from infrastructure.jobs.search.cache import JobCacheManager
 from domain.jobs.search.schema import UnifiedJobSearchResponse, UnifiedJobSearchResult
+from infrastructure.jobs.search.cache import JobCacheManager
 from infrastructure.jobs.search.providers.manager import JobProviderManager
 
 
@@ -59,18 +58,24 @@ class TestJobCache(unittest.TestCase):
                     salary_label="50k EUR",
                     metadata={},
                 )
-            ]
+            ],
         )
 
         # Cache miss initially
-        cached = self.cache_manager.get_cached_search(provider, query, dept, contract, page, limit)
+        cached = self.cache_manager.get_cached_search(
+            provider, query, dept, contract, page, limit
+        )
         self.assertIsNone(cached)
 
         # Save to cache
-        self.cache_manager.save_cached_search(provider, query, dept, contract, page, limit, response)
+        self.cache_manager.save_cached_search(
+            provider, query, dept, contract, page, limit, response
+        )
 
         # Cache hit
-        cached = self.cache_manager.get_cached_search(provider, query, dept, contract, page, limit)
+        cached = self.cache_manager.get_cached_search(
+            provider, query, dept, contract, page, limit
+        )
         self.assertIsNotNone(cached)
         self.assertEqual(cached.meta, response.meta)
         self.assertEqual(len(cached.results), 1)
@@ -86,10 +91,17 @@ class TestJobCache(unittest.TestCase):
                 "company": "Mock Corp",
                 "location": "Paris",
                 "contract_type": "CDI",
-                "compensation": {"min_salary": 50000.0, "max_salary": 60000.0, "salary_frequency": "Annuel"},
-                "requirements": {"required_skills": ["Python"], "years_of_experience": 2},
-                "company_description": "We do coding."
-            }
+                "compensation": {
+                    "min_salary": 50000.0,
+                    "max_salary": 60000.0,
+                    "salary_frequency": "Annuel",
+                },
+                "requirements": {
+                    "required_skills": ["Python"],
+                    "years_of_experience": 2,
+                },
+                "company_description": "We do coding.",
+            },
         }
 
         # Cache miss initially
@@ -113,8 +125,7 @@ class TestJobCache(unittest.TestCase):
         limit = 10
 
         response = UnifiedJobSearchResponse(
-            meta={"count": 1, "page": 1, "total": 1},
-            results=[]
+            meta={"count": 1, "page": 1, "total": 1}, results=[]
         )
 
         # Save with negative TTL (expired instantly)
@@ -123,7 +134,9 @@ class TestJobCache(unittest.TestCase):
         )
 
         # Check that it returns None (expired)
-        cached = self.cache_manager.get_cached_search(provider, query, dept, contract, page, limit)
+        cached = self.cache_manager.get_cached_search(
+            provider, query, dept, contract, page, limit
+        )
         self.assertIsNone(cached)
 
     def test_detail_cache_expiration(self):
@@ -132,7 +145,9 @@ class TestJobCache(unittest.TestCase):
         detail_data = {"key": "value"}
 
         # Save with negative TTL (expired instantly)
-        self.cache_manager.save_cached_detail(provider, job_id, detail_data, ttl_seconds=-5)
+        self.cache_manager.save_cached_detail(
+            provider, job_id, detail_data, ttl_seconds=-5
+        )
 
         # Check that it returns None (expired)
         cached = self.cache_manager.get_cached_detail(provider, job_id)
@@ -141,14 +156,14 @@ class TestJobCache(unittest.TestCase):
     def test_provider_manager_uses_cache(self):
         # We want to test that JobProviderManager actually calls cache_manager
         manager = JobProviderManager()
-        
+
         # Replace the real cache manager on the provider manager with our test cache manager
         manager.cache_manager = self.cache_manager
 
         # Let's register a mock provider to avoid hitting real APIs
         mock_provider = MagicMock()
         mock_provider.get_provider_name.return_value = "mock_provider"
-        
+
         response = UnifiedJobSearchResponse(
             meta={"count": 1, "page": 1, "total": 1},
             results=[
@@ -170,10 +185,10 @@ class TestJobCache(unittest.TestCase):
                     salary_label="50k EUR",
                     metadata={},
                 )
-            ]
+            ],
         )
         mock_provider.search_jobs.return_value = response
-        
+
         detail_data = {"provider": "mock_provider", "data": "yes"}
         mock_provider.get_job_detail.return_value = detail_data
 

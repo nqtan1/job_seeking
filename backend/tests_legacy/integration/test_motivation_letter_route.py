@@ -1,15 +1,25 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
 from domain.cv.schema import CVInformation, PersonalInfo
-from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
 from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
 
 
 def _cv():
-    return CVInformation(personal_info=PersonalInfo(name="Jane Doe", phone="0600000000")).model_dump()
+    return CVInformation(
+        personal_info=PersonalInfo(name="Jane Doe", phone="0600000000")
+    ).model_dump()
 
 
 def _job():
@@ -25,8 +35,8 @@ def _job():
 
 
 def _build_client(tmp_path):
-    from main import app
     import api.motivation_letter as ml_route
+    from main import app
 
     fake_agent = MagicMock()
     fake_agent.generate_letter.return_value = MotivationLetter(
@@ -36,7 +46,7 @@ def _build_client(tmp_path):
             language="en",
             tone="professional",
             format="txt",
-            generated_at=datetime.now(),
+            generated_at=datetime.now(UTC),
             system_prompt_used="test",
             llm_model="test",
         ),

@@ -1,20 +1,19 @@
-import os
-import sys
-from pathlib import Path
-import tempfile
+import importlib.util
 import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
 
 def test_latex_compile():
     print("Starting LaTeX French Letter compilation smoke test...")
-    
+
     # 1. Check if we can import pylatex
-    try:
-        import pylatex
-        print("Successfully imported pylatex!")
-    except ImportError as e:
-        print(f"Error: Failed to import pylatex: {e}")
+    if importlib.util.find_spec("pylatex") is None:
+        print("Error: Failed to import pylatex: module not found")
         return False
-        
+    print("Successfully imported pylatex!")
+
     # 2. Define our dummy French Letter LaTeX content using 'lettre' class and 'letter' environment
     latex_content = r"""\documentclass[11pt,francais]{lettre}
 \usepackage[T1]{fontenc}
@@ -44,28 +43,40 @@ Ceci est le corps de la lettre de motivation de test, rédigé en français et u
         tmp_path = Path(tmpdir)
         tex_file = tmp_path / "smoke_letter.tex"
         tex_file.write_text(latex_content, encoding="utf-8")
-        
+
         print(f"Created temporary .tex file: {tex_file}")
-        
+
         # Compile via latexmk (which we verified is available)
         print("Compiling via latexmk...")
         try:
             result = subprocess.run(
-                ["latexmk", "-pdf", "-interaction=nonstopmode", "-output-directory=" + str(tmp_path), str(tex_file)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
+                [
+                    "latexmk",
+                    "-pdf",
+                    "-interaction=nonstopmode",
+                    "-output-directory=" + str(tmp_path),
+                    str(tex_file),
+                ],
+                capture_output=True,
+                check=False,
             )
-            
-            stdout_str = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
-            stderr_str = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
-            
+
+            stdout_str = (
+                result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+            )
+            stderr_str = (
+                result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+            )
+
             if result.returncode == 0:
                 print("Compilation successful!")
                 pdf_file = tmp_path / "smoke_letter.pdf"
                 if pdf_file.exists():
-                    print(f"Verified: PDF successfully generated at {pdf_file} ({pdf_file.stat().st_size} bytes)")
-                    
-                    # Save a copy of the smoke test PDF to backend/tests/ for verification
+                    print(
+                        f"Verified: PDF successfully generated at {pdf_file} ({pdf_file.stat().st_size} bytes)"
+                    )
+
+                    # Save a copy of the smoke test PDF to backend/tests_legacy/ for verification
                     dest_dir = Path(__file__).resolve().parent
                     dest_pdf = dest_dir / "smoke_letter.pdf"
                     dest_pdf.write_bytes(pdf_file.read_bytes())
@@ -79,10 +90,11 @@ Ceci est le corps de la lettre de motivation de test, rédigé en français et u
                 print(f"STDOUT:\n{stdout_str}")
                 print(f"STDERR:\n{stderr_str}")
                 return False
-                
-        except Exception as e:
+
+        except (OSError, subprocess.SubprocessError) as e:
             print(f"Exception during compilation execution: {e}")
             return False
+
 
 if __name__ == "__main__":
     success = test_latex_compile()
