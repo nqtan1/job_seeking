@@ -25,34 +25,24 @@ async def test_commit_persists_business_row_and_job(
     assert (queue.business("commit"), queue.jobs("commit")) == (1, 1)
 
 
-async def test_rollback_leaves_neither(queue: Queue, queue_engine: AsyncEngine):
-    async with AsyncSession(queue_engine) as s:
-        await queue.enqueue_in_session(s, "rollback")
-        await s.rollback()
-
-    assert (queue.business("rollback"), queue.jobs("rollback")) == (0, 0)
-
-
-async def test_exception_inside_transaction_leaves_neither(
+async def test_anything_short_of_a_commit_leaves_neither_row_nor_job(
     queue: Queue, queue_engine: AsyncEngine
 ):
-    async with AsyncSession(queue_engine) as s:
+    async with AsyncSession(queue_engine) as s:  # explicit rollback
+        await queue.enqueue_in_session(s, "rollback")
+        await s.rollback()
+    async with AsyncSession(queue_engine) as s:  # exception inside the transaction
         with pytest.raises(RuntimeError):
             async with s.begin():
                 await queue.enqueue_in_session(s, "boom")
                 raise RuntimeError("failure after enqueue")
-
-    assert (queue.business("boom"), queue.jobs("boom")) == (0, 0)
-
-
-async def test_closing_session_without_commit_leaves_neither(
-    queue: Queue, queue_engine: AsyncEngine
-):
-    # get_db() never commits: a service that forgets to commit must not leave a job behind.
-    async with AsyncSession(queue_engine) as s:
+    async with AsyncSession(
+        queue_engine
+    ) as s:  # get_db() never commits: a forgotten commit leaves nothing
         await queue.enqueue_in_session(s, "no-commit")
 
-    assert (queue.business("no-commit"), queue.jobs("no-commit")) == (0, 0)
+    for label in ("rollback", "boom", "no-commit"):
+        assert (queue.business(label), queue.jobs(label)) == (0, 0), label
 
 
 async def test_savepoint_joined_session_leaves_nothing_after_outer_rollback(

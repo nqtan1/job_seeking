@@ -1,4 +1,4 @@
-"""P1-03: behaviour of the `documents` / `ai_calls` constraints, plus ORM insert/select smoke."""
+"""P1-03: behaviour of the `documents` / `ai_calls` constraints (one test per rule)."""
 
 import hashlib
 import uuid
@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.usage import AiCall
@@ -54,19 +54,29 @@ def _call(org: Organization, **over) -> AiCall:
     return AiCall(**{**values, **over})
 
 
-async def _fails(session: AsyncSession, obj, match: str | None = None) -> None:
-    with pytest.raises(IntegrityError, match=match):
+async def _accepts(session: AsyncSession, make, **over) -> None:
+    async with session.begin_nested():
+        session.add(make(**over))
+
+
+async def _rejects(
+    session: AsyncSession, make, match: str | None = None, **over
+) -> None:
+    """The DB must refuse this row. `over` names the offending value in a failed assertion."""
+    with pytest.raises((IntegrityError, DBAPIError), match=match) as _:
         async with session.begin_nested():
-            session.add(obj)
+            session.add(make(**over))
 
 
 # ------------------------------------------------------------------ documents
 
 
-async def test_document_round_trip(db_session: AsyncSession):
+async def test_document_round_trip_ids_defaults_and_bigint_size(
+    db_session: AsyncSession,
+):
     org, user = await _org(db_session), await _user(db_session)
     org_id = org.id
-    doc = _doc(org, uploaded_by=user.id)
+    doc = _doc(org, uploaded_by=user.id, size=10 * 1024**3)  # > 32 bits
     db_session.add(doc)
     await db_session.flush()
     doc_id = doc.id
@@ -80,134 +90,87 @@ async def test_document_round_trip(db_session: AsyncSession):
     assert (loaded.org_id, loaded.kind, loaded.size, loaded.sha256) == (
         org_id,
         "cv",
-        1234,
+        10 * 1024**3,
         SHA,
     )
-    assert loaded.created_at.tzinfo is not None
     assert abs(datetime.now(UTC) - loaded.created_at) < timedelta(minutes=1)
 
 
-async def test_document_size_can_exceed_32_bits(db_session: AsyncSession):
+async def test_document_kind_and_size_and_sha256_rules(db_session: AsyncSession):
     org = await _org(db_session)
-    doc = _doc(org, size=10 * 1024**3)
-    db_session.add(doc)
-
-    await db_session.flush()
-
-    assert doc.size == 10 * 1024**3
-
-
-@pytest.mark.parametrize("kind", ["", "CV", "docx", "resume"])
-async def test_document_rejects_unknown_kind(db_session: AsyncSession, kind: str):
-    await _fails(
-        db_session, _doc(await _org(db_session), kind=kind), "ck_documents_kind"
-    )
+    for kind in ("cv", "jd", "letter_pdf", "attachment"):
+        await _accepts(db_session, lambda **o: _doc(org, **o), kind=kind)
+    for bad in ("", "CV", "docx", "resume"):
+        await _rejects(
+            db_session, lambda **o: _doc(org, **o), "ck_documents_kind", kind=bad
+        )
+    await _rejects(db_session, lambda **o: _doc(org, **o), "ck_documents_size", size=-1)
+    for bad in ("", "abc", "A" * 64, "g" * 64, "a" * 63, "a" * 65):
+        await _rejects(db_session, lambda **o: _doc(org, **o), sha256=bad)
 
 
-@pytest.mark.parametrize("kind", ["cv", "jd", "letter_pdf", "attachment"])
-async def test_document_accepts_every_documented_kind(
-    db_session: AsyncSession, kind: str
+async def test_document_storage_key_is_unique_and_org_and_required_fields_enforced(
+    db_session: AsyncSession,
 ):
-    db_session.add(_doc(await _org(db_session), kind=kind))
-
-    await db_session.flush()
-
-
-async def test_document_rejects_negative_size(db_session: AsyncSession):
-    await _fails(db_session, _doc(await _org(db_session), size=-1), "ck_documents_size")
-
-
-@pytest.mark.parametrize("sha", ["", "abc", "A" * 64, "g" * 64, "a" * 63, "a" * 65])
-async def test_document_rejects_malformed_sha256(db_session: AsyncSession, sha: str):
     org = await _org(db_session)
-
-    with pytest.raises(Exception):  # noqa: B017  (too long -> DataError, else IntegrityError)
-        async with db_session.begin_nested():
-            db_session.add(_doc(org, sha256=sha))
-
-
-async def test_document_storage_key_is_unique(db_session: AsyncSession):
-    org = await _org(db_session)
-    db_session.add(_doc(org, storage_key="orgs/x/cv/1"))
-    await db_session.flush()
-
-    await _fails(
-        db_session, _doc(org, storage_key="orgs/x/cv/1"), "uq_documents_storage_key"
+    await _accepts(db_session, lambda **o: _doc(org, **o), storage_key="orgs/x/cv/1")
+    await _rejects(
+        db_session,
+        lambda **o: _doc(org, **o),
+        "uq_documents_storage_key",
+        storage_key="orgs/x/cv/1",
     )
-
-
-async def test_document_requires_an_existing_org(db_session: AsyncSession):
-    bogus = Organization(
+    ghost = Organization(
         id=uuid.uuid4(), name="ghost", kind="personal"
     )  # never persisted
-
-    await _fails(db_session, _doc(bogus), "fk_documents_org_id")
-
-
-@pytest.mark.parametrize("field", ["kind", "storage_key", "mime", "size", "sha256"])
-async def test_document_required_fields(db_session: AsyncSession, field: str):
-    await _fails(db_session, _doc(await _org(db_session), **{field: None}))
+    await _rejects(db_session, lambda **o: _doc(ghost, **o), "fk_documents_org_id")
+    for field in ("kind", "storage_key", "mime", "size", "sha256"):
+        await _rejects(db_session, lambda **o: _doc(org, **o), **{field: None})
 
 
-async def test_system_documents_may_have_no_uploader(db_session: AsyncSession):
-    doc = _doc(await _org(db_session), kind="letter_pdf", uploaded_by=None)
-    db_session.add(doc)
-
-    await db_session.flush()
-
-    assert doc.uploaded_by is None
-
-
-async def test_deleting_the_uploader_keeps_the_document(db_session: AsyncSession):
+async def test_document_uploader_is_optional_and_deleting_it_keeps_the_document(
+    db_session: AsyncSession,
+):
     org, user = await _org(db_session), await _user(db_session)
-    user_id = user.id
-    doc = _doc(org, uploaded_by=user_id)
-    db_session.add(doc)
+    system_doc = _doc(org, kind="letter_pdf", uploaded_by=None)  # e.g. a rendered PDF
+    owned = _doc(org, uploaded_by=user.id)
+    db_session.add_all([system_doc, owned])
     await db_session.flush()
-    doc_id = doc.id
+    owned_id, user_id = owned.id, user.id
 
     await db_session.execute(text("DELETE FROM users WHERE id = :i"), {"i": user_id})
     db_session.expire_all()
 
     kept = (
-        await db_session.execute(select(Document).where(Document.id == doc_id))
+        await db_session.execute(select(Document).where(Document.id == owned_id))
     ).scalar_one()
     assert kept.uploaded_by is None
 
 
-async def test_deleting_an_org_deletes_its_documents_only(db_session: AsyncSession):
-    a, b = await _org(db_session, "A"), await _org(db_session, "B")
-    db_session.add_all([_doc(a), _doc(b)])
-    await db_session.flush()
-
-    await db_session.execute(
-        text("DELETE FROM organizations WHERE id = :i"), {"i": a.id}
-    )
-
-    left = (await db_session.execute(select(Document.org_id))).scalars().all()
-    assert left == [b.id]
-
-
-async def test_documents_filtered_by_org_only_return_that_orgs_rows(
+async def test_deleting_an_org_deletes_only_its_documents_and_queries_filter_by_org(
     db_session: AsyncSession,
 ):
     a, b = await _org(db_session, "A"), await _org(db_session, "B")
     db_session.add_all([_doc(a), _doc(a), _doc(b)])
     await db_session.flush()
-
-    rows = (
+    only_a = (
         (await db_session.execute(select(Document).where(Document.org_id == a.id)))
         .scalars()
         .all()
     )
+    assert len(only_a) == 2 and {d.org_id for d in only_a} == {a.id}
 
-    assert len(rows) == 2 and {r.org_id for r in rows} == {a.id}
+    await db_session.execute(
+        text("DELETE FROM organizations WHERE id = :i"), {"i": a.id}
+    )
+
+    assert (await db_session.execute(select(Document.org_id))).scalars().all() == [b.id]
 
 
 # ------------------------------------------------------------------ ai_calls
 
 
-async def test_ai_call_round_trip_with_defaults(db_session: AsyncSession):
+async def test_ai_call_round_trip_and_db_defaults(db_session: AsyncSession):
     org, user = await _org(db_session), await _user(db_session)
     call = _call(org, user_id=user.id)
     db_session.add(call)
@@ -220,7 +183,7 @@ async def test_ai_call_round_trip_with_defaults(db_session: AsyncSession):
     ).scalar_one()
 
     assert loaded.id.version == 7
-    assert (loaded.input_tokens, loaded.output_tokens) == (0, 0)  # DB defaults
+    assert (loaded.input_tokens, loaded.output_tokens) == (0, 0)
     assert (loaded.feature, loaded.model, loaded.prompt_version) == (
         "cv_extraction",
         "gemini-2.5-flash",
@@ -229,74 +192,50 @@ async def test_ai_call_round_trip_with_defaults(db_session: AsyncSession):
     assert loaded.created_at.tzinfo is not None
 
 
-@pytest.mark.parametrize("status", ["ok", "error"])
-async def test_ai_call_accepts_documented_statuses(
-    db_session: AsyncSession, status: str
-):
-    db_session.add(_call(await _org(db_session), status=status))
-
-    await db_session.flush()
-
-
-@pytest.mark.parametrize("status", ["", "OK", "failed", "blocked"])
-async def test_ai_call_rejects_unknown_status(db_session: AsyncSession, status: str):
-    await _fails(
-        db_session, _call(await _org(db_session), status=status), "ck_ai_calls_status"
-    )
-
-
-@pytest.mark.parametrize("field", ["input_tokens", "output_tokens"])
-async def test_ai_call_rejects_negative_tokens(db_session: AsyncSession, field: str):
-    await _fails(
-        db_session, _call(await _org(db_session), **{field: -1}), "ck_ai_calls_tokens"
-    )
-
-
-async def test_ai_call_rejects_negative_latency(db_session: AsyncSession):
-    await _fails(
-        db_session, _call(await _org(db_session), latency_ms=-5), "ck_ai_calls_latency"
-    )
-
-
-@pytest.mark.parametrize(
-    "field", ["feature", "model", "prompt_version", "latency_ms", "status"]
-)
-async def test_ai_call_required_fields(db_session: AsyncSession, field: str):
-    await _fails(db_session, _call(await _org(db_session), **{field: None}))
-
-
-async def test_ai_call_requires_an_existing_org(db_session: AsyncSession):
-    bogus = Organization(id=uuid.uuid4(), name="ghost", kind="personal")
-
-    await _fails(db_session, _call(bogus), "fk_ai_calls_org_id")
-
-
-async def test_deleting_a_user_keeps_their_ai_calls_as_anonymous_metadata(
+async def test_ai_call_status_counts_latency_and_required_fields(
     db_session: AsyncSession,
 ):
-    org, user = await _org(db_session), await _user(db_session)
-    user_id = user.id
-    call = _call(org, user_id=user_id)
-    db_session.add(call)
+    org = await _org(db_session)
+    for ok in ("ok", "error"):
+        await _accepts(db_session, lambda **o: _call(org, **o), status=ok)
+    for bad in ("", "OK", "failed", "blocked"):
+        await _rejects(
+            db_session, lambda **o: _call(org, **o), "ck_ai_calls_status", status=bad
+        )
+    for field in ("input_tokens", "output_tokens"):
+        await _rejects(
+            db_session, lambda **o: _call(org, **o), "ck_ai_calls_tokens", **{field: -1}
+        )
+    await _rejects(
+        db_session, lambda **o: _call(org, **o), "ck_ai_calls_latency", latency_ms=-5
+    )
+    for field in ("feature", "model", "prompt_version", "latency_ms", "status"):
+        await _rejects(db_session, lambda **o: _call(org, **o), **{field: None})
+    ghost = Organization(id=uuid.uuid4(), name="ghost", kind="personal")
+    await _rejects(db_session, lambda **o: _call(ghost, **o), "fk_ai_calls_org_id")
+
+
+async def test_ai_calls_survive_user_deletion_anonymously_and_die_with_their_org(
+    db_session: AsyncSession,
+):
+    a, b, user = (
+        await _org(db_session, "A"),
+        await _org(db_session, "B"),
+        await _user(db_session),
+    )
+    call = _call(a, user_id=user.id)
+    db_session.add_all([call, _call(b)])
     await db_session.flush()
-    call_id = call.id
+    call_id, user_id, a_id, b_id = call.id, user.id, a.id, b.id
 
     await db_session.execute(text("DELETE FROM users WHERE id = :i"), {"i": user_id})
     db_session.expire_all()
-
     kept = (
         await db_session.execute(select(AiCall).where(AiCall.id == call_id))
     ).scalar_one()
-    assert kept.user_id is None
-
-
-async def test_deleting_an_org_deletes_its_ai_calls_only(db_session: AsyncSession):
-    a, b = await _org(db_session, "A"), await _org(db_session, "B")
-    db_session.add_all([_call(a), _call(b)])
-    await db_session.flush()
+    assert kept.user_id is None  # metadata kept, person gone
 
     await db_session.execute(
-        text("DELETE FROM organizations WHERE id = :i"), {"i": a.id}
+        text("DELETE FROM organizations WHERE id = :i"), {"i": a_id}
     )
-
-    assert (await db_session.execute(select(AiCall.org_id))).scalars().all() == [b.id]
+    assert (await db_session.execute(select(AiCall.org_id))).scalars().all() == [b_id]

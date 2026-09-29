@@ -11,10 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recruitai.config import Settings
 from recruitai.core.db import close_db, get_db, init_db
 from recruitai.core.error_handlers import install_error_handlers
+from recruitai.core.logging import configure_logging
+from recruitai.core.middleware import RequestContextMiddleware
 
 
 def create_app() -> FastAPI:
     settings = Settings()  # type: ignore[call-arg]  # fields are populated from the environment, not passed here
+    configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -26,6 +29,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="RecruitAI", lifespan=lifespan)
     install_error_handlers(app)
+    app.add_middleware(RequestContextMiddleware)
 
     @app.get("/health")
     def health() -> dict[str, str]:

@@ -1,10 +1,10 @@
-"""P1-02: the identity constraints actually reject bad data (behaviour, not just shape)."""
+"""P1-02: the identity constraints actually reject bad data (one test per rule)."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,163 +15,118 @@ def _user(uid: str = "fb-1") -> User:
     return User(firebase_uid=uid, email=f"{uid}@example.test")
 
 
-async def _persisted(session: AsyncSession, *objs):
+async def _persist(session: AsyncSession, *objs):
     session.add_all(objs)
     await session.flush()
+
+
+async def _rejects(session: AsyncSession, obj, match: str | None = None) -> None:
+    with pytest.raises(IntegrityError, match=match):
+        async with session.begin_nested():
+            session.add(obj)
+
+
+async def _count(session: AsyncSession, table: str) -> int:
+    return (await session.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one()
 
 
 async def test_ids_are_uuid7_and_created_at_is_set_by_the_database(
     db_session: AsyncSession,
 ):
     org, user = Organization(name="Ada", kind="personal"), _user()
-    await _persisted(db_session, org, user)
+    await _persist(db_session, org, user)
 
     assert org.id.version == 7 and user.id.version == 7
-    assert org.created_at.tzinfo is not None
     assert abs(datetime.now(UTC) - org.created_at) < timedelta(minutes=1)
 
 
-async def test_firebase_uid_must_be_unique(db_session: AsyncSession):
-    await _persisted(db_session, _user("dup"))
-
-    with pytest.raises(IntegrityError, match="uq_users_firebase_uid"):
-        async with db_session.begin_nested():
-            db_session.add(_user("dup"))
-
-
-async def test_membership_is_unique_per_org_and_user(db_session: AsyncSession):
-    org, user = Organization(name="Ada", kind="personal"), _user()
-    await _persisted(db_session, org, user)
-    await _persisted(
-        db_session, Membership(org_id=org.id, user_id=user.id, role="owner")
-    )
-
-    with pytest.raises(IntegrityError, match="uq_memberships_org_id_user_id"):
-        async with db_session.begin_nested():
-            db_session.add(Membership(org_id=org.id, user_id=user.id, role="member"))
-
-
-async def test_one_user_can_belong_to_two_orgs_and_one_org_to_two_users(
+async def test_user_rules_unique_firebase_uid_required_fields_and_upsert_shape(
     db_session: AsyncSession,
 ):
+    await _persist(db_session, _user("dup"))
+    await _rejects(db_session, _user("dup"), "uq_users_firebase_uid")
+    await _rejects(db_session, User(email="a@example.test"))  # no firebase_uid
+    await _rejects(db_session, User(firebase_uid="x"))  # no email
+
+    # P1-07 provisions with INSERT ... ON CONFLICT (firebase_uid): it must be possible.
+    upsert = text(
+        "INSERT INTO users (id, firebase_uid, email) VALUES (:id, 'same', 'a@example.test') "
+        "ON CONFLICT (firebase_uid) DO UPDATE SET email = EXCLUDED.email RETURNING id"
+    )
+    first = (await db_session.execute(upsert, {"id": uuid.uuid4()})).scalar_one()
+    second = (await db_session.execute(upsert, {"id": uuid.uuid4()})).scalar_one()
+    assert first == second
+
+
+async def test_organization_kind_and_required_fields(db_session: AsyncSession):
+    for bad in ("", "Personal", "team", "PERSONAL"):
+        await _rejects(
+            db_session, Organization(name="x", kind=bad), "ck_organizations_kind"
+        )
+    await _rejects(db_session, Organization(name=None, kind="personal"))  # type: ignore[arg-type]
+    await _rejects(db_session, Organization(name="x", kind=None))  # type: ignore[arg-type]
+
+
+async def test_membership_uniqueness_role_and_references(db_session: AsyncSession):
     o1, o2 = (
         Organization(name="A", kind="personal"),
         Organization(name="B", kind="company"),
     )
     u1, u2 = _user("u1"), _user("u2")
-    await _persisted(db_session, o1, o2, u1, u2)
-
-    await _persisted(
+    await _persist(db_session, o1, o2, u1, u2)
+    # a user can be in two orgs and an org can have two users
+    await _persist(
         db_session,
         Membership(org_id=o1.id, user_id=u1.id, role="owner"),
         Membership(org_id=o2.id, user_id=u1.id, role="member"),
         Membership(org_id=o2.id, user_id=u2.id, role="recruiter"),
     )
+    assert await _count(db_session, "memberships") == 3
 
-    count = (
-        await db_session.execute(select(text("count(*)")).select_from(Membership))
-    ).scalar()
-    assert count == 3
-
-
-async def test_membership_requires_existing_org_and_user(db_session: AsyncSession):
-    with pytest.raises(IntegrityError, match="fk_memberships"):
-        async with db_session.begin_nested():
-            db_session.add(
-                Membership(org_id=uuid.uuid4(), user_id=uuid.uuid4(), role="owner")
-            )
-
-
-@pytest.mark.parametrize("kind", ["", "Personal", "team", "PERSONAL"])
-async def test_invalid_org_kind_is_rejected(db_session: AsyncSession, kind: str):
-    with pytest.raises(IntegrityError, match="ck_organizations_kind"):
-        async with db_session.begin_nested():
-            db_session.add(Organization(name="x", kind=kind))
+    await _rejects(
+        db_session,
+        Membership(org_id=o1.id, user_id=u1.id, role="member"),
+        "uq_memberships_org_id_user_id",
+    )
+    for bad in ("", "admin", "Owner", "guest"):
+        await _rejects(
+            db_session,
+            Membership(org_id=o1.id, user_id=u2.id, role=bad),
+            "ck_memberships_role",
+        )
+    await _rejects(
+        db_session,
+        Membership(org_id=uuid.uuid4(), user_id=uuid.uuid4(), role="owner"),
+        "fk_memberships",
+    )
 
 
-@pytest.mark.parametrize("role", ["", "admin", "Owner", "guest"])
-async def test_invalid_membership_role_is_rejected(db_session: AsyncSession, role: str):
-    org, user = Organization(name="Ada", kind="personal"), _user()
-    await _persisted(db_session, org, user)
-
-    with pytest.raises(IntegrityError, match="ck_memberships_role"):
-        async with db_session.begin_nested():
-            db_session.add(Membership(org_id=org.id, user_id=user.id, role=role))
-
-
-@pytest.mark.parametrize("field", ["name", "kind"])
-async def test_organization_requires_name_and_kind(
-    db_session: AsyncSession, field: str
+async def test_deleting_an_org_or_a_user_removes_their_memberships_only(
+    db_session: AsyncSession,
 ):
-    values = {"name": "x", "kind": "personal"}
-    values[field] = None  # type: ignore[assignment]
-
-    with pytest.raises(IntegrityError):
-        async with db_session.begin_nested():
-            db_session.add(Organization(**values))
-
-
-async def test_user_requires_firebase_uid_and_email(db_session: AsyncSession):
-    for bad in (User(email="a@example.test"), User(firebase_uid="x")):
-        with pytest.raises(IntegrityError):
-            async with db_session.begin_nested():
-                db_session.add(bad)
-
-
-async def _membership_count(session: AsyncSession) -> int:
-    return (
-        await session.execute(text("SELECT count(*) FROM memberships"))
-    ).scalar_one()
-
-
-async def test_deleting_an_org_deletes_its_memberships_only(db_session: AsyncSession):
     o1, o2, user = (
         Organization(name="A", kind="personal"),
         Organization(name="B", kind="company"),
         _user(),
     )
-    await _persisted(db_session, o1, o2, user)
-    await _persisted(
+    await _persist(db_session, o1, o2, user)
+    await _persist(
         db_session,
         Membership(org_id=o1.id, user_id=user.id, role="owner"),
         Membership(org_id=o2.id, user_id=user.id, role="member"),
     )
+    o1_id, user_id = o1.id, user.id
 
     await db_session.execute(
-        text("DELETE FROM organizations WHERE id = :i"), {"i": o1.id}
+        text("DELETE FROM organizations WHERE id = :i"), {"i": o1_id}
     )
-
-    assert await _membership_count(db_session) == 1
-    still_there = (
-        await db_session.execute(text("SELECT count(*) FROM users"))
-    ).scalar_one()
-    assert still_there == 1  # the user survives
-
-
-async def test_deleting_a_user_deletes_their_memberships_but_not_the_org(
-    db_session: AsyncSession,
-):
-    org, user = Organization(name="A", kind="personal"), _user()
-    await _persisted(db_session, org, user)
-    await _persisted(
-        db_session, Membership(org_id=org.id, user_id=user.id, role="owner")
-    )
-
-    await db_session.execute(text("DELETE FROM users WHERE id = :i"), {"i": user.id})
-
-    assert await _membership_count(db_session) == 0
     assert (
-        await db_session.execute(text("SELECT count(*) FROM organizations"))
-    ).scalar_one() == 1
+        await _count(db_session, "memberships"),
+        await _count(db_session, "users"),
+    ) == (1, 1)
 
-
-async def test_on_conflict_provisioning_shape_works(db_session: AsyncSession):
-    """P1-07 will provision with INSERT ... ON CONFLICT (firebase_uid): make sure it is possible."""
-    stmt = text(
-        "INSERT INTO users (id, firebase_uid, email) VALUES (:id, 'same', 'a@example.test') "
-        "ON CONFLICT (firebase_uid) DO UPDATE SET email = EXCLUDED.email RETURNING id"
-    )
-    first = (await db_session.execute(stmt, {"id": uuid.uuid4()})).scalar_one()
-    second = (await db_session.execute(stmt, {"id": uuid.uuid4()})).scalar_one()
-
-    assert first == second
+    await db_session.execute(text("DELETE FROM users WHERE id = :i"), {"i": user_id})
+    assert (
+        await _count(db_session, "memberships"),
+        await _count(db_session, "organizations"),
+    ) == (0, 1)

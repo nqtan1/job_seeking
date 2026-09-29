@@ -2,8 +2,10 @@
 
 Nothing here may echo exception text, validation input, or provider messages: the body is
 built only from developer-authored ``AppError.detail``, the HTTP status phrase, and the
-field location + error *type* of validation failures. Unhandled errors are logged (with
-traceback) and answered with a generic 500.
+field location + error *type* of validation failures. Unhandled errors are logged (the
+formatter strips the exception message) and answered with a generic 500. Every response
+carries the request id (body ``request_id`` + ``X-Request-Id`` header) so a user-reported
+error can be traced in the logs.
 """
 
 import logging
@@ -16,6 +18,12 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from recruitai.core.errors import AppError, ValidationFailed
+from recruitai.core.logging import use_context
+from recruitai.core.middleware import (
+    LOG_CONTEXT_SCOPE_KEY,
+    REQUEST_ID_HEADER,
+    REQUEST_ID_SCOPE_KEY,
+)
 
 PROBLEM_JSON = "application/problem+json"
 logger = logging.getLogger("recruitai.errors")
@@ -44,6 +52,7 @@ def _phrase(status: int) -> str:
 
 
 def _problem(
+    request: Request,
     status: int,
     code: str,
     detail: str,
@@ -60,14 +69,22 @@ def _problem(
     }
     if errors:
         body["errors"] = errors
+    out_headers = dict(headers or {})
+    # Read from the ASGI scope, not a contextvar: unhandled-error responses are built by the
+    # outermost middleware, after the request context has already been reset.
+    request_id = request.scope.get(REQUEST_ID_SCOPE_KEY)
+    if request_id:
+        body["request_id"] = request_id
+        out_headers[REQUEST_ID_HEADER] = request_id
     return JSONResponse(
-        body, status_code=status, media_type=PROBLEM_JSON, headers=headers
+        body, status_code=status, media_type=PROBLEM_JSON, headers=out_headers
     )
 
 
-async def _app_error(_: Request, exc: Exception) -> JSONResponse:
+async def _app_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)
     return _problem(
+        request,
         int(exc.status_code),
         exc.code,
         exc.detail,
@@ -76,7 +93,7 @@ async def _app_error(_: Request, exc: Exception) -> JSONResponse:
     )
 
 
-async def _request_validation(_: Request, exc: Exception) -> JSONResponse:
+async def _request_validation(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     # Only location + error type. pydantic's `msg` carries custom-validator ValueError text
     # and `input` echoes what the client sent: neither is ever returned.
@@ -86,23 +103,28 @@ async def _request_validation(_: Request, exc: Exception) -> JSONResponse:
     ]
     default = ValidationFailed()
     return _problem(
-        int(default.status_code), default.code, default.detail, errors=errors
+        request, int(default.status_code), default.code, default.detail, errors=errors
     )
 
 
-async def _http_exception(_: Request, exc: Exception) -> JSONResponse:
+async def _http_exception(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, StarletteHTTPException)
     status = exc.status_code
     # `exc.detail` is intentionally ignored: it may have been written with internals in it.
     code = _STATUS_CODES.get(status, "http_error")
     headers = dict(exc.headers) if exc.headers else None
-    return _problem(status, code, _phrase(status), headers=headers)
+    return _problem(request, status, code, _phrase(status), headers=headers)
 
 
-async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
-    logger.error("unhandled exception (%s)", type(exc).__name__, exc_info=exc)
+async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+    # Runs in the outermost middleware, after the request context was reset: re-enter it so
+    # this (most important) log line carries request_id / org_id / user_id.
+    with use_context(request.scope.get(LOG_CONTEXT_SCOPE_KEY) or {}):
+        logger.error("unhandled exception (%s)", type(exc).__name__, exc_info=exc)
     generic = AppError()
-    return _problem(int(generic.status_code), generic.code, generic.default_detail)
+    return _problem(
+        request, int(generic.status_code), generic.code, generic.default_detail
+    )
 
 
 def install_error_handlers(app: FastAPI) -> None:

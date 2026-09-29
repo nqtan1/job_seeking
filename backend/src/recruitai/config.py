@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     # pooler): Procrastinate needs LISTEN/NOTIFY. Connection budget per process is
     # db_pool_size + db_max_overflow, so total = instances * that; keep it under the
     # server's max_connections.
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
     database_url: str
     db_pool_size: int = 5
     db_max_overflow: int = 5

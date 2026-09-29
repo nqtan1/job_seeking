@@ -31,38 +31,28 @@ def app_with_dead_db() -> FastAPI:
     return app
 
 
-async def test_ready_is_503_without_leaking_details_when_db_is_down(
+async def test_dead_database_makes_ready_503_without_leaks_but_health_stays_up(
     app_with_dead_db: FastAPI,
 ):
     transport = httpx.ASGITransport(app=app_with_dead_db)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
-        resp = await c.get("/ready")
+        ready = await c.get("/ready")
+        health = await c.get("/health")
 
-    assert resp.status_code == 503
-    assert resp.json() == {"status": "unavailable"}
+    assert ready.status_code == 503 and ready.json() == {"status": "unavailable"}
     for secret in ("secretpw", "127.0.0.1", "psycopg", "Traceback"):
-        assert secret not in resp.text
+        assert secret not in ready.text
+    assert health.status_code == 200
 
 
-async def test_health_stays_up_when_db_is_down(app_with_dead_db: FastAPI):
-    transport = httpx.ASGITransport(app=app_with_dead_db)
-    async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
-        resp = await c.get("/health")
+def test_engine_is_created_by_the_lifespan_not_at_import_and_disposed_after():
+    assert core_db._engine is None  # importing/creating the app opens nothing
 
-    assert resp.status_code == 200
-
-
-def test_importing_the_app_does_not_open_the_database():
-    assert core_db._engine is None  # engine is created by the lifespan, not at import
-
-
-def test_lifespan_initialises_then_disposes_the_engine():
     with TestClient(create_app()) as client:
         assert core_db._engine is not None
         assert client.get("/ready").json() == {"status": "ready"}
 
-    assert core_db._engine is None
-    assert core_db._session_factory is None
+    assert core_db._engine is None and core_db._session_factory is None
 
 
 async def test_db_session_writes_are_invisible_to_other_connections(

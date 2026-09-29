@@ -81,6 +81,12 @@ source_modules = ["recruitai.core.errors"]
 forbidden_modules = ["fastapi", "starlette"]
 
 [[tool.importlinter.contracts]]
+name = "core.logging has no web framework dependency"
+type = "forbidden"
+source_modules = ["recruitai.core.logging"]
+forbidden_modules = ["fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
 name = "config does not depend on main"
 type = "forbidden"
 source_modules = ["recruitai.config"]

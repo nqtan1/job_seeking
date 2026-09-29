@@ -26,19 +26,15 @@ async def initialised_db(test_database_url, monkeypatch):
     await core_db.close_db()
 
 
-async def test_get_db_select_one_round_trips(initialised_db):
-    gen = get_db()
-    session = await anext(gen)
-
-    assert isinstance(session, AsyncSession)
-    assert (await session.execute(text("SELECT 1"))).scalar() == 1
-    await gen.aclose()
-
-
 async def _finish(gen) -> None:
     """Complete the dependency the way FastAPI does on a successful request."""
     with pytest.raises(StopAsyncIteration):
         await anext(gen)
+
+
+async def _rows() -> int:
+    async with core_db._session_factory() as s:  # type: ignore[misc]
+        return (await s.execute(text("SELECT count(*) FROM t_get_db_probe"))).scalar()
 
 
 @pytest.fixture
@@ -53,47 +49,38 @@ async def probe_table(initialised_db):
         await s.commit()
 
 
-async def _rows() -> int:
-    async with core_db._session_factory() as s:  # type: ignore[misc]
-        return (await s.execute(text("SELECT count(*) FROM t_get_db_probe"))).scalar()
+async def test_get_db_transaction_semantics(probe_table):
+    insert = text("INSERT INTO t_get_db_probe VALUES (1)")
 
-
-async def test_get_db_does_not_commit_on_success(probe_table):
-    gen = get_db()
+    gen = get_db()  # works, and hands out a real session
     session = await anext(gen)
-    await session.execute(text("INSERT INTO t_get_db_probe VALUES (1)"))
-    await _finish(gen)  # request finished OK: still nothing committed
-
+    assert isinstance(session, AsyncSession)
+    assert (await session.execute(text("SELECT 1"))).scalar() == 1
+    await session.execute(insert)
+    await _finish(gen)  # request finished OK, but nobody committed: nothing is kept
     assert await _rows() == 0
 
-
-async def test_get_db_keeps_writes_the_service_committed(probe_table):
-    gen = get_db()
+    gen = get_db()  # a service that commits keeps its writes
     session = await anext(gen)
-    await session.execute(text("INSERT INTO t_get_db_probe VALUES (1)"))
+    await session.execute(insert)
     await session.commit()
     await _finish(gen)
-
     assert await _rows() == 1
 
-
-async def test_get_db_rolls_back_when_the_request_fails(probe_table):
-    gen = get_db()
+    gen = get_db()  # a failing request rolls back
     session = await anext(gen)
-    await session.execute(text("INSERT INTO t_get_db_probe VALUES (1)"))
+    await session.execute(insert)
     with pytest.raises(ValueError):
         await gen.athrow(ValueError("handler failed"))
+    assert await _rows() == 1  # still only the committed row
 
-    assert await _rows() == 0
 
-
-async def test_engine_uses_psycopg_and_sets_timeouts(test_database_url, monkeypatch):
+async def test_engine_config_psycopg_timeouts_url_handling_and_naming(
+    test_database_url, monkeypatch
+):
+    url = test_database_url.render_as_string(hide_password=False)
     engine: AsyncEngine = create_engine(
-        _settings(
-            monkeypatch,
-            test_database_url.render_as_string(hide_password=False),
-            DB_STATEMENT_TIMEOUT_MS="1234",
-        )
+        _settings(monkeypatch, url, DB_STATEMENT_TIMEOUT_MS="1234")
     )
     try:
         assert engine.dialect.driver == "psycopg"
@@ -101,32 +88,23 @@ async def test_engine_uses_psycopg_and_sets_timeouts(test_database_url, monkeypa
             assert (
                 await conn.execute(text("SHOW statement_timeout"))
             ).scalar() == "1234ms"
-            app_name = (await conn.execute(text("SHOW application_name"))).scalar()
-            assert app_name == "recruitai-api"
+            assert (
+                await conn.execute(text("SHOW application_name"))
+            ).scalar() == "recruitai-api"
     finally:
         await engine.dispose()
 
-
-def test_plain_postgresql_url_is_upgraded_to_psycopg(monkeypatch):
-    engine = create_engine(_settings(monkeypatch, "postgresql://u:p@localhost/x_test"))
-
-    assert engine.dialect.driver == "psycopg"
-
-
-def test_non_psycopg_driver_is_rejected(monkeypatch):
+    plain = create_engine(_settings(monkeypatch, "postgresql://u:p@localhost/x_test"))
+    assert plain.dialect.driver == "psycopg"  # a plain postgresql:// URL is upgraded
     with pytest.raises(ValueError):
         create_engine(
             _settings(monkeypatch, "postgresql+asyncpg://u:p@localhost/x_test")
         )
-
-
-def test_base_has_naming_convention():
     assert Base.metadata.naming_convention["pk"] == "pk_%(table_name)s"
 
 
 async def test_get_db_without_init_raises():
     await core_db.close_db()
-    gen = get_db()
 
     with pytest.raises(RuntimeError):
-        await anext(gen)
+        await anext(get_db())

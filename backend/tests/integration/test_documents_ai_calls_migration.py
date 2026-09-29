@@ -60,7 +60,7 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
     }
 
 
-def test_documents_columns(insp):
+def test_documents_columns_constraints_and_indexes(insp):
     cols = _cols(insp, "documents")
 
     assert set(cols) == {
@@ -71,9 +71,6 @@ def test_documents_columns(insp):
     }
     assert str(cols["size"]["type"]) == "BIGINT"  # files can exceed 2 GiB in principle
     assert cols["created_at"]["type"].timezone is True
-
-
-def test_documents_constraints_and_indexes(insp):
     checks = {c["name"]: c["sqltext"] for c in insp.get_check_constraints("documents")}
     assert set(checks) == {
         "ck_documents_kind",
@@ -97,7 +94,7 @@ def test_documents_constraints_and_indexes(insp):
     assert indexes["ix_documents_org_id_created_at"] == ["org_id", "created_at"]
 
 
-def test_ai_calls_columns_are_metadata_only(insp):
+def test_ai_calls_are_metadata_only_with_the_expected_constraints(insp):
     """Privacy guard (ADR 0014): a prompt/response/content column must never appear here.
     If you genuinely need a new metadata column, extend AI_CALLS_COLUMNS deliberately."""
     cols = _cols(insp, "ai_calls")
@@ -107,9 +104,6 @@ def test_ai_calls_columns_are_metadata_only(insp):
         "user_id"
     }
     assert cols["created_at"]["type"].timezone is True
-
-
-def test_ai_calls_constraints_and_indexes(insp):
     checks = {c["name"]: c["sqltext"] for c in insp.get_check_constraints("ai_calls")}
     assert set(checks) == {
         "ck_ai_calls_status",

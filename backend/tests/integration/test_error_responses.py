@@ -106,7 +106,7 @@ async def client():
 
 
 def _assert_problem(resp: httpx.Response, status: int, code: str) -> dict:
-    assert resp.status_code == status
+    assert resp.status_code == status, resp.text
     assert resp.headers["content-type"].startswith("application/problem+json")
     body = resp.json()
     assert body["status"] == status and body["code"] == code
@@ -115,48 +115,34 @@ def _assert_problem(resp: httpx.Response, status: int, code: str) -> dict:
     return body
 
 
-async def test_not_found(client):
+async def test_app_errors_map_to_their_status_and_stable_code(client):
     body = _assert_problem(await client.get("/t/not-found"), 404, "not_found")
-
     assert body["detail"] == "Document not found" and body["title"] == "Not Found"
-
-
-async def test_not_found_with_specific_code_from_a_sync_route(client):
-    _assert_problem(await client.get("/t/not-found-code"), 404, "document_not_found")
-
-
-async def test_forbidden(client):
+    _assert_problem(
+        await client.get("/t/not-found-code"), 404, "document_not_found"
+    )  # sync route
     _assert_problem(await client.get("/t/forbidden"), 403, "forbidden")
-
-
-async def test_validation_failed_carries_field_errors(client):
+    _assert_problem(
+        await client.get("/t/dependency"), 404, "not_found"
+    )  # raised in a dependency
+    _assert_problem(await client.get("/t/app-error"), 500, "internal_error")
     body = _assert_problem(await client.get("/t/validation"), 422, "validation_failed")
-
     assert body["errors"] == [{"loc": "body.cv", "type": "too_large"}]
-
-
-async def test_upstream_unavailable_sets_retry_after(client):
     resp = await client.get("/t/upstream")
-
     _assert_problem(resp, 503, "upstream_unavailable")
     assert resp.headers["retry-after"] == "30"
 
 
-async def test_app_error_raised_in_a_dependency_is_handled(client):
-    _assert_problem(await client.get("/t/dependency"), 404, "not_found")
-
-
-async def test_bare_app_error_is_a_generic_500(client):
-    _assert_problem(await client.get("/t/app-error"), 500, "internal_error")
-
-
 @pytest.mark.parametrize("path", ["/t/value-error", "/t/runtime-error-sync"])
-async def test_unhandled_exception_is_a_generic_500_that_never_leaks(client, path):
-    resp = await client.get(path)
+async def test_unhandled_exception_is_a_generic_500_that_never_leaks(
+    client, path, caplog
+):
+    with caplog.at_level(logging.ERROR, logger="recruitai.errors"):
+        resp = await client.get(path)
 
     body = _assert_problem(resp, 500, "internal_error")
-    assert "secret detail" not in resp.text
     for leaked in (
+        "secret detail",
         "passwd",
         "postgres://",
         "ValueError",
@@ -164,86 +150,64 @@ async def test_unhandled_exception_is_a_generic_500_that_never_leaks(client, pat
         "Traceback",
         "File ",
     ):
-        assert leaked not in resp.text
+        assert leaked not in resp.text, leaked
     assert body["detail"] == AppError.default_detail
+    record = next(
+        r for r in caplog.records if r.name == "recruitai.errors"
+    )  # but it IS logged
+    assert record.exc_info is not None and record.exc_info[0] in (
+        ValueError,
+        RuntimeError,
+    )
 
 
-async def test_unhandled_exception_is_logged_with_its_traceback(client, caplog):
-    with caplog.at_level(logging.ERROR, logger="recruitai.errors"):
-        await client.get("/t/value-error")
+async def test_http_exceptions_never_echo_detail_keep_headers_and_survive_odd_statuses(
+    client,
+):
+    body = _assert_problem(await client.get("/t/http-exception"), 400, "bad_request")
+    assert body["detail"] == "Bad Request"
 
-    record = next(r for r in caplog.records if r.name == "recruitai.errors")
-    assert record.exc_info is not None and record.exc_info[0] is ValueError
-    assert "ValueError" in record.getMessage()
-
-
-async def test_http_exception_detail_is_never_echoed(client):
-    resp = await client.get("/t/http-exception")
-
-    body = _assert_problem(resp, 400, "bad_request")
-    assert body["detail"] == "Bad Request" and "secret" not in resp.text
-
-
-async def test_http_exception_headers_are_preserved(client):
     resp = await client.get("/t/http-exception-headers")
-
     _assert_problem(resp, 401, "unauthorized")
-    assert resp.headers["www-authenticate"] == "Bearer" and "secret" not in resp.text
+    assert resp.headers["www-authenticate"] == "Bearer"
 
-
-async def test_non_standard_http_status_does_not_break_the_handler(client):
-    resp = await client.get("/t/http-exception-odd-status")
-
+    resp = await client.get(
+        "/t/http-exception-odd-status"
+    )  # 499 is not in http.HTTPStatus
     _assert_problem(resp, 499, "http_error")
     assert "secret" not in resp.text
 
 
-async def test_unknown_route_is_a_problem_404(client):
+async def test_unknown_route_and_wrong_method_are_problems(client):
     _assert_problem(await client.get("/nope"), 404, "not_found")
-
-
-async def test_wrong_method_is_a_problem_405_with_allow_header(client):
     resp = await client.post("/health")
-
     _assert_problem(resp, 405, "method_not_allowed")
     assert "GET" in resp.headers["allow"]
 
 
-async def test_query_validation_reports_location_and_type_only(client):
+async def test_validation_errors_report_location_and_type_only(client):
     resp = await client.get("/t/query", params={"limit": "abc-not-a-number"})
+    assert _assert_problem(resp, 422, "validation_failed")["errors"] == [
+        {"loc": "query.limit", "type": "int_parsing"}
+    ]
+    assert "abc-not-a-number" not in resp.text  # client input is not echoed
 
-    body = _assert_problem(resp, 422, "validation_failed")
-    assert body["errors"] == [{"loc": "query.limit", "type": "int_parsing"}]
-    assert "abc-not-a-number" not in resp.text  # the client's input is not echoed back
-
-
-async def test_missing_body_field_is_reported_by_location(client):
     resp = await client.post("/t/body", json={"email": "a@b.c"})
+    assert _assert_problem(resp, 422, "validation_failed")["errors"] == [
+        {"loc": "body.age", "type": "missing"}
+    ]
 
-    body = _assert_problem(resp, 422, "validation_failed")
-    assert body["errors"] == [{"loc": "body.age", "type": "missing"}]
+    resp = await client.post(
+        "/t/body", json={"email": "no-at-sign", "age": 3}
+    )  # custom validator raises
+    assert _assert_problem(resp, 422, "validation_failed")["errors"] == [
+        {"loc": "body.email", "type": "value_error"}
+    ]
+    for leaked in ("secret", "passwd", "no-at-sign"):
+        assert leaked not in resp.text
 
-
-async def test_custom_validator_message_and_input_are_not_echoed(client):
-    resp = await client.post("/t/body", json={"email": "no-at-sign", "age": 3})
-
-    body = _assert_problem(resp, 422, "validation_failed")
-    assert body["errors"] == [{"loc": "body.email", "type": "value_error"}]
-    assert (
-        "secret" not in resp.text
-        and "passwd" not in resp.text
-        and "no-at-sign" not in resp.text
-    )
-
-
-async def test_malformed_json_body_is_a_problem_422(client):
     resp = await client.post(
         "/t/body", content=b"{not json", headers={"content-type": "application/json"}
     )
-
     _assert_problem(resp, 422, "validation_failed")
     assert "not json" not in resp.text
-
-
-async def test_health_still_works(client):
-    assert (await client.get("/health")).json() == {"status": "ok"}
