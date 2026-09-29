@@ -65,7 +65,7 @@ Ceci est le corps de la lettre de motivation de test, rédigé en français et u
                 if pdf_file.exists():
                     print(f"Verified: PDF successfully generated at {pdf_file} ({pdf_file.stat().st_size} bytes)")
                     
-                    # Save a copy of the smoke test PDF to backend/tests/ for verification
+                    # Save a copy of the smoke test PDF to backend/tests_legacy/ for verification
                     dest_dir = Path(__file__).resolve().parent
                     dest_pdf = dest_dir / "smoke_letter.pdf"
                     dest_pdf.write_bytes(pdf_file.read_bytes())
