@@ -75,7 +75,7 @@ source_modules = ["recruitai.config"]
 forbidden_modules = ["recruitai.main"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests_v2"]
+testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
