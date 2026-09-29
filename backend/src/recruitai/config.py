@@ -10,6 +10,18 @@ class Settings(BaseSettings):
     env: Literal["local", "dev", "staging", "prod"]
     firebase_auth_emulator_host: str | None = None
 
+    # Postgres. Both the API and the worker connect directly (no transaction-mode
+    # pooler): Procrastinate needs LISTEN/NOTIFY. Connection budget per process is
+    # db_pool_size + db_max_overflow, so total = instances * that; keep it under the
+    # server's max_connections.
+    database_url: str
+    db_pool_size: int = 5
+    db_max_overflow: int = 5
+    db_pool_timeout_s: int = 30
+    db_pool_recycle_s: int = 1800
+    db_statement_timeout_ms: int = 30_000
+    db_idle_in_transaction_timeout_ms: int = 60_000
+
     @model_validator(mode="after")
     def _forbid_emulator_in_prod(self) -> Self:
         if self.env == "prod" and self.firebase_auth_emulator_host:

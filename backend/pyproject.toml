@@ -40,23 +40,23 @@ packages = ["src/recruitai"]
 [tool.ruff]
 target-version = "py313"
 extend-exclude = [
-    "main.py",
-    "api",
-    "application",
-    "domain",
-    "infrastructure",
-    "workers",
-    "migrations",
-    "core",
-    "utils",
-    "config",
-    "tests",
+    "./main.py",
+    "./api",
+    "./application",
+    "./domain",
+    "./infrastructure",
+    "./workers",
+    "./migrations",
+    "./core",
+    "./utils",
+    "./config",
+    "./tests_legacy",
 ]
 
 [tool.mypy]
 files = ["src"]
 strict = true
-exclude = '^(main\.py|api|application|domain|infrastructure|workers|migrations|core|utils|config|tests)/?'
+exclude = '^(main\.py|api|application|domain|infrastructure|workers|migrations|core|utils|config|tests_legacy)/?'
 
 [tool.importlinter]
 root_package = "recruitai"
@@ -69,6 +69,18 @@ source_modules = ["recruitai.config"]
 forbidden_modules = ["fastapi"]
 
 [[tool.importlinter.contracts]]
+name = "core.db has no FastAPI dependency"
+type = "forbidden"
+source_modules = ["recruitai.core.db"]
+forbidden_modules = ["fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "core.errors has no web framework dependency"
+type = "forbidden"
+source_modules = ["recruitai.core.errors"]
+forbidden_modules = ["fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
 name = "config does not depend on main"
 type = "forbidden"
 source_modules = ["recruitai.config"]
@@ -76,6 +88,8 @@ forbidden_modules = ["recruitai.main"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
 
 [dependency-groups]
 dev = [
