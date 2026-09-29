@@ -1,15 +1,26 @@
 from unittest.mock import MagicMock, patch
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from infrastructure.agents.agent_config import AgentConfig
-from infrastructure.career_chat.agent import CareerChatAgent, RECENT_TURNS_KEPT
 from domain.cv.schema import CVInformation, PersonalInfo
-from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
+from infrastructure.agents.agent_config import AgentConfig
+from infrastructure.career_chat.agent import RECENT_TURNS_KEPT, CareerChatAgent
 
 
 def _build_agent(mock_model, max_history=10):
-    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model):
+    with patch(
+        "infrastructure.agents.base_agents.ChatGoogleGenerativeAI",
+        return_value=mock_model,
+    ):
         return CareerChatAgent(
             config=AgentConfig(
                 provider="vertex",
@@ -22,7 +33,9 @@ def _build_agent(mock_model, max_history=10):
 
 
 def _cv():
-    return CVInformation(personal_info=PersonalInfo(name="Jane Doe", phone="0600000000"))
+    return CVInformation(
+        personal_info=PersonalInfo(name="Jane Doe", phone="0600000000")
+    )
 
 
 def _job():
@@ -54,7 +67,9 @@ def test_seed_context_includes_cv_and_optional_sections():
 
 def test_truncate_history_smart_condenses_older_turns_via_summary():
     mock_model = MagicMock()
-    mock_model.invoke.return_value = MagicMock(content="Candidate discussed backend role, gaps in Docker.")
+    mock_model.invoke.return_value = MagicMock(
+        content="Candidate discussed backend role, gaps in Docker."
+    )
     agent = _build_agent(mock_model, max_history=5)
 
     agent.seed_context(candidate_cv=_cv())

@@ -1,10 +1,9 @@
-import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from infrastructure.agents.agent_config import AgentConfig
 from infrastructure.agents.base_agents import BaseAgent
-from langchain_openai import ChatOpenAI
 
 
 def test_agent_config_qwen_valid(monkeypatch):
@@ -99,7 +98,9 @@ def test_base_agent_initialization_with_qwen(mock_chat_openai, monkeypatch):
 
 
 @patch("infrastructure.agents.base_agents.ChatOpenAI")
-def test_base_agent_initialization_with_qwen_missing_api_key(mock_chat_openai, monkeypatch):
+def test_base_agent_initialization_with_qwen_missing_api_key(
+    mock_chat_openai, monkeypatch
+):
     monkeypatch.setenv("LLM_PROVIDER", "qwen")
     monkeypatch.setenv("QWEN_BASE_URL", "http://vllm-endpoint/v1")
     monkeypatch.setenv("QWEN_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct")
@@ -125,7 +126,7 @@ def test_base_agent_initialization_with_qwen_missing_api_key(mock_chat_openai, m
 
 def test_agent_config_section_loading(monkeypatch):
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
-    
+
     mock_data = {
         "cv": {
             "provider": "qwen",
@@ -136,9 +137,9 @@ def test_agent_config_section_loading(monkeypatch):
             "provider": "vertex",
             "model_name": "gemini-2.5-flash",
             "temperature": 0.5,
-        }
+        },
     }
-    
+
     with patch.object(AgentConfig, "_load_config_file", return_value=mock_data):
         # Load fit section
         config_fit = AgentConfig(config_path="dummy.yaml", section="fit")

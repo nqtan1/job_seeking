@@ -2,9 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from domain.cv.schema import CVInformation
 from infrastructure.agents.agent_config import AgentConfig
 from infrastructure.cv.agent import CVAnalysisAgent
-from domain.cv.schema import CVInformation
 
 
 def _build_model_mock():
@@ -19,12 +19,18 @@ def test_extract_cv_uses_gemini_file_upload(tmp_path):
     pdf_path.write_bytes(b"pdf bytes")
 
     mock_model = _build_model_mock()
-    mock_file = SimpleNamespace(state=SimpleNamespace(name="READY"), uri="gemini-file-uri", name="cv-file")
+    mock_file = SimpleNamespace(
+        state=SimpleNamespace(name="READY"), uri="gemini-file-uri", name="cv-file"
+    )
     mock_client = MagicMock()
     mock_client.files.upload.return_value = mock_file
 
-    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "infrastructure.cv.agent.genai.Client", return_value=mock_client
+    with (
+        patch(
+            "infrastructure.agents.base_agents.ChatGoogleGenerativeAI",
+            return_value=mock_model,
+        ),
+        patch("infrastructure.cv.agent.genai.Client", return_value=mock_client),
     ):
         agent = CVAnalysisAgent(
             config=AgentConfig(
@@ -57,9 +63,13 @@ def test_extract_cv_uses_vertex_base64_payload(tmp_path):
 
     mock_model = _build_model_mock()
 
-    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model), patch(
-        "infrastructure.cv.agent.genai.Client"
-    ) as mock_client:
+    with (
+        patch(
+            "infrastructure.agents.base_agents.ChatGoogleGenerativeAI",
+            return_value=mock_model,
+        ),
+        patch("infrastructure.cv.agent.genai.Client") as mock_client,
+    ):
         agent = CVAnalysisAgent(
             config=AgentConfig(
                 provider="vertex",
@@ -131,10 +141,13 @@ def test_extract_cv_with_qwen_scanned_pdf(tmp_path):
     # Mock pdfplumber context manager to return empty pages / empty text
     mock_pdf = MagicMock()
     mock_page = MagicMock()
-    mock_page.extract_text.return_value = "" # Scanned/empty
+    mock_page.extract_text.return_value = ""  # Scanned/empty
     mock_pdf.pages = [mock_page]
 
-    with patch("pdfplumber.open", return_value=MagicMock(__enter__=MagicMock(return_value=mock_pdf))):
+    with patch(
+        "pdfplumber.open",
+        return_value=MagicMock(__enter__=MagicMock(return_value=mock_pdf)),
+    ):
         agent = CVAnalysisAgent(
             config=AgentConfig(
                 provider="qwen",
@@ -145,11 +158,10 @@ def test_extract_cv_with_qwen_scanned_pdf(tmp_path):
         )
 
         import pytest
+
         with pytest.raises(RuntimeError, match="empty or scanned"):
             agent.extract_cv(
                 file_path=str(pdf_path),
                 message="Extract CV details",
                 output_schema=CVInformation,
             )
-
-
