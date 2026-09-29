@@ -1,24 +1,26 @@
-import os
-import json
-import pytest
 import asyncio
-from fastapi.testclient import TestClient
+import json
+import os
 
+import pytest
+from fastapi.testclient import TestClient
 
 # Set up global environment variable for all tests
 os.environ.setdefault("JOB_QUEUE_MODE", "in_memory")
 
 os.environ.setdefault(
     "TENANT_API_KEYS_JSON",
-    json.dumps({
-        "test-tenant-1": ["key-1"],
-        "test-tenant-2": ["key-2"],
-        "test-tenant-cv": ["key-cv"],
-        "different-tenant": ["key-diff"],
-        "tenant-a": ["tenant-key-a"],
-        "test-tenant-123": ["key-123"],
-        "default": ["key-default"],
-    })
+    json.dumps(
+        {
+            "test-tenant-1": ["key-1"],
+            "test-tenant-2": ["key-2"],
+            "test-tenant-cv": ["key-cv"],
+            "different-tenant": ["key-diff"],
+            "tenant-a": ["tenant-key-a"],
+            "test-tenant-123": ["key-123"],
+            "default": ["key-default"],
+        }
+    ),
 )
 
 # Fake LLM provider config so AgentConfig() construction doesn't blow up in CI,
@@ -34,6 +36,7 @@ os.environ.setdefault("QWEN_API_KEY", "test-qwen-api-key")
 
 # Monkeypatch TestClient.request to automatically inject tenant headers and API keys in tests
 original_request = TestClient.request
+
 
 def patched_request(self, method: str, url: str, **kwargs):
     headers = kwargs.get("headers") or {}
@@ -76,6 +79,7 @@ def patched_request(self, method: str, url: str, **kwargs):
     kwargs["headers"] = headers
     return original_request(self, method, url, **kwargs)
 
+
 TestClient.request = patched_request
 
 
@@ -90,6 +94,7 @@ def event_loop():
 def clear_tenant_registry_cache():
     """Clear the tenant registry LRU cache to prevent state leakage across tests."""
     from core.auth import get_tenant_registry
+
     get_tenant_registry.cache_clear()
 
 
@@ -102,8 +107,8 @@ def reset_module_level_agent_singletons():
     the rest of the session, and other tests silently talk to that stale
     agent instead of the real class their patches target.
     """
-    import api.jobs as jobs_route
     import api.cv as cv_route
+    import api.jobs as jobs_route
     import api.motivation_letter as ml_route
 
     yield

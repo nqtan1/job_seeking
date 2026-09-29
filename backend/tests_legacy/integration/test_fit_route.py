@@ -1,11 +1,19 @@
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from infrastructure.agents.agent_config import AgentConfig
-from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
 from fastapi.testclient import TestClient
-from domain.fit.schema import FitCheck, FitAnalysisResponse, FitAnalysisRequest, Recommendation
-from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+
+from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
+from domain.fit.schema import FitAnalysisRequest, FitCheck, Recommendation
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
+from infrastructure.agents.agent_config import AgentConfig
 
 
 class FakeFitAgent:
@@ -30,8 +38,8 @@ def _build_client():
     with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm:
         mock_llm.return_value = MagicMock()
 
-        from main import app
         import api.fit as fit_route
+        from main import app
 
         fit_route.agent = FakeFitAgent(
             AgentConfig(
@@ -49,8 +57,16 @@ def test_fit_analyze_endpoint_returns_fit_check():
 
     request = FitAnalysisRequest(
         candidate_cv=CVInformation(
-            personal_info=PersonalInfo(name="John Doe", email="john@example.com", phone="+33612345678"),
-            experiences=[Experience(job_title="ML Engineer", company="Example Corp", description="Built ML systems")],
+            personal_info=PersonalInfo(
+                name="John Doe", email="john@example.com", phone="+33612345678"
+            ),
+            experiences=[
+                Experience(
+                    job_title="ML Engineer",
+                    company="Example Corp",
+                    description="Built ML systems",
+                )
+            ],
             skills=[RawSkill(name="Python")],
         ),
         job_information=JobPosition(

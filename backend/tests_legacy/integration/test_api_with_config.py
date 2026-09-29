@@ -1,16 +1,25 @@
 import io
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from infrastructure.agents.agent_config import AgentConfig
-from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from domain.jobs.schema import CompensationInfo, JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    CompensationInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
 from domain.motivation_letter.schema import MotivationLetter, MotivationLetterMetadata
+from infrastructure.agents.agent_config import AgentConfig
 
 
 class FakeResult:
@@ -118,7 +127,7 @@ class FakeMotivationLetterAgent:
 
     def generate_letter(self, request):
         metadata = MotivationLetterMetadata(
-            generated_at=datetime(2026, 6, 30, 12, 0, 0),
+            generated_at=datetime(2026, 6, 30, 12, 0, 0, tzinfo=UTC),
             job_type=request.job_type,
             language=request.language,
             tone=request.tone,
@@ -140,17 +149,19 @@ def client(monkeypatch):
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/fake-credentials.json")
     monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
 
-    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm, \
-         patch("infrastructure.cv.agent.genai.Client") as mock_cv_client, \
-         patch("infrastructure.jobs.analysis.agent.genai.Client") as mock_jobs_client:
+    with (
+        patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI") as mock_llm,
+        patch("infrastructure.cv.agent.genai.Client") as mock_cv_client,
+        patch("infrastructure.jobs.analysis.agent.genai.Client") as mock_jobs_client,
+    ):
         mock_llm.return_value = MagicMock()
         mock_cv_client.return_value = MagicMock()
         mock_jobs_client.return_value = MagicMock()
 
-        from main import app
         import api.cv as cv_route
         import api.jobs as jobs_route
         import api.motivation_letter as ml_route
+        from main import app
 
         mock_data = {
             "provider": "vertex",

@@ -1,10 +1,18 @@
 from unittest.mock import MagicMock, patch
 
-from infrastructure.agents.agent_config import AgentConfig
-from domain.cv.schema import CVInformation, PersonalInfo, Experience, RawSkill
-from infrastructure.fit.agent import FitAgent
+from domain.cv.schema import CVInformation, Experience, PersonalInfo, RawSkill
 from domain.fit.schema import FitCheck
-from domain.jobs.schema import JobPosition, CompanyInfo, Badges, Profile, AboutCompany, Modalities, SourceMeta
+from domain.jobs.schema import (
+    AboutCompany,
+    Badges,
+    CompanyInfo,
+    JobPosition,
+    Modalities,
+    Profile,
+    SourceMeta,
+)
+from infrastructure.agents.agent_config import AgentConfig
+from infrastructure.fit.agent import FitAgent
 
 
 def _build_model_mock():
@@ -17,7 +25,10 @@ def _build_model_mock():
 def test_analyze_fit_uses_structured_prompt_and_payload():
     mock_model = _build_model_mock()
 
-    with patch("infrastructure.agents.base_agents.ChatGoogleGenerativeAI", return_value=mock_model):
+    with patch(
+        "infrastructure.agents.base_agents.ChatGoogleGenerativeAI",
+        return_value=mock_model,
+    ):
         agent = FitAgent(
             config=AgentConfig(
                 provider="vertex",
@@ -28,8 +39,16 @@ def test_analyze_fit_uses_structured_prompt_and_payload():
         )
 
         candidate_cv = CVInformation(
-            personal_info=PersonalInfo(name="John Doe", email="john@example.com", phone="+33612345678"),
-            experiences=[Experience(job_title="ML Engineer", company="Example Corp", description="Built ML systems")],
+            personal_info=PersonalInfo(
+                name="John Doe", email="john@example.com", phone="+33612345678"
+            ),
+            experiences=[
+                Experience(
+                    job_title="ML Engineer",
+                    company="Example Corp",
+                    description="Built ML systems",
+                )
+            ],
             skills=[RawSkill(name="Python")],
         )
         job_information = JobPosition(

@@ -1,8 +1,3 @@
-import os
-import sqlite3
-import time
-import pytest
-from datetime import datetime
 from workers.background import (
     BackgroundJobManager,
     BackgroundJobStatus,
@@ -17,7 +12,7 @@ def sample_add_job(a: int, b: int) -> dict:
 def test_durable_job_execution(monkeypatch, tmp_path):
     # Set JOB_QUEUE_MODE = "durable" explicitly for this test
     monkeypatch.setenv("JOB_QUEUE_MODE", "durable")
-    
+
     # Register the test job type
     register_job_handler("test_addition", sample_add_job)
 
@@ -39,7 +34,11 @@ def test_durable_job_execution(monkeypatch, tmp_path):
         record_init = manager.get(job_id)
         assert record_init is not None
         assert record_init.job_type == "test_addition"
-        assert record_init.status in [BackgroundJobStatus.QUEUED, BackgroundJobStatus.RUNNING, BackgroundJobStatus.COMPLETED]
+        assert record_init.status in [
+            BackgroundJobStatus.QUEUED,
+            BackgroundJobStatus.RUNNING,
+            BackgroundJobStatus.COMPLETED,
+        ]
 
         # Wait for completion and verify results
         result = manager.wait(job_id, timeout=3.0)
@@ -59,19 +58,21 @@ def test_durable_job_execution(monkeypatch, tmp_path):
 def test_durable_job_survives_process_kill_and_restart(monkeypatch, tmp_path):
     # Set JOB_QUEUE_MODE = "durable"
     monkeypatch.setenv("JOB_QUEUE_MODE", "durable")
-    
+
     # Register the test job type
     register_job_handler("test_addition", sample_add_job)
 
     # Isolated test database
     db_file = tmp_path / "test_kill_restart.db"
-    
+
     # --- PHASE 1: SUBMIT AND IMMEDIATELY SHUTDOWN (simulate process crash/kill) ---
     # We turn off durable mode's polling loop temporarily to ensure it doesn't run,
     # simulating a job that was enqueued right before a crash.
-    monkeypatch.setenv("JOB_QUEUE_MODE", "durable_no_polling")  # Just to submit to DB and not execute
+    monkeypatch.setenv(
+        "JOB_QUEUE_MODE", "durable_no_polling"
+    )  # Just to submit to DB and not execute
     manager_crash = BackgroundJobManager(max_workers=1, db_path=str(db_file))
-    
+
     # Submit job manually to DB as 'queued'
     job_id = manager_crash.submit(
         tenant_id="test-tenant",
@@ -80,11 +81,11 @@ def test_durable_job_survives_process_kill_and_restart(monkeypatch, tmp_path):
         a=100,
         b=200,
     )
-    
+
     record_pre = manager_crash.get(job_id)
     assert record_pre is not None
     assert record_pre.status == BackgroundJobStatus.QUEUED
-    
+
     # Shutdown manager (simulates killing the server process)
     manager_crash.shutdown()
 
