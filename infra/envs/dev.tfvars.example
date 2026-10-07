@@ -1,0 +1,14 @@
+# Single config for deploy: read by Terraform AND by ./deploy.sh. Copy to envs/<env>.tfvars (gitignored).
+project_id        = "dev-recruitai"
+env               = "dev"
+region            = "europe-west9" # Paris
+billing_account   = "015B33-2B2E7A-442F4C"
+budget_amount_eur = 10
+tmp_ttl_days      = 1
+sql_tier          = "db-f1-micro"
+llm_backend       = "vertex" # vertex | openai_compat (self-hosted later)
+llm_model         = "gemini-3.5-flash"
+llm_location      = "eu" # Vertex location: Gemini 3.x is not served from europe-west9; "eu" = EU data residency
+github_repo       = "nqtan1/job_seeking"
+alert_email       = "you@example.com"
+deploy_run        = false # set true after secrets have values and images are pushed
