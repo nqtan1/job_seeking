@@ -1,0 +1,21 @@
+Développeur Python Backend (H/F) - CDI
+Fictiva Logiciels - Paris 9e (75) - Hybride, 2 jours de télétravail par semaine
+
+À propos de nous
+Fictiva Logiciels est une scale-up française de 120 personnes qui édite une plateforme de gestion de flotte.
+
+Vos missions
+- Concevoir et développer des API REST avec FastAPI
+- Améliorer les performances de notre base PostgreSQL
+- Participer aux revues de code et à la mise en production continue
+
+Profil recherché
+- 3 à 5 ans d'expérience en développement Python
+- Maîtrise de FastAPI, PostgreSQL, Docker
+- Bac+5 (Master ou diplôme d'ingénieur)
+- Appréciés : Kubernetes, Kafka
+- Autonomie et goût du travail en équipe
+
+Conditions
+Rémunération : 48 000 € à 55 000 € brut annuel, 10 jours de RTT, Tickets Restaurant, mutuelle prise en charge à 100 %.
+Démarrage : dès que possible. Méthodes : Agile (Scrum).

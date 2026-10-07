@@ -1,0 +1,23 @@
+MARIE-CLAIRE DUBOIS
+Data Analyst (former Secondary School Teacher)
+marieclaire.dubois@example.test | +33 6 00 00 00 02 | Paris, France
+linkedin.com/in/mcdubois-example
+
+SUMMARY
+Fifteen years in education, retrained as a data analyst. Strong communicator with solid SQL and Python skills.
+
+EXPERIENCE
+Data Analyst, Fictiva Analytics, Paris
+March 2022 - Present
+Built Power BI dashboards for retail clients, automated weekly reporting with Python and SQL, reduced reporting time by 60%.
+
+Mathematics Teacher, Collège Jean-Moulin, Paris
+September 2007 - August 2021
+Taught mathematics to grades 6 to 9. Coordinated the department's digital tools programme for 4 years.
+
+EDUCATION
+Certificate in Data Analysis, Fictiva Academy, 2021 - 2022
+Master in Mathematics, Université Paris-Cité, 2003 - 2007
+
+SKILLS
+SQL, Python (pandas), Power BI, Excel, Statistics, Teaching, Public speaking, French (native), English (C1)

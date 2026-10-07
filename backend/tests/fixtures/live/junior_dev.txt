@@ -1,0 +1,23 @@
+LUCAS MARTEL
+Junior Software Developer
+lucas.martel@example.test | +33 6 00 00 00 01 | Lyon, France
+github.com/lucasmartel-example
+
+SUMMARY
+Recent graduate with a passion for web development and clean code.
+
+EDUCATION
+Bachelor of Science in Computer Science, Université Claude-Bernard Lyon 1, 2020 - 2023
+Master 1 in Software Engineering, INSA Lyon, 2023 - 2024 (not completed)
+
+EXPERIENCE
+Software Development Intern, Brightwave SAS, Lyon
+June 2023 - September 2023
+Built REST endpoints with Flask and wrote unit tests with pytest. Fixed 25 bugs in the customer dashboard.
+
+Freelance Web Developer, self-employed
+January 2024 - Present
+Built three small business websites using React and Node.js.
+
+SKILLS
+Python, JavaScript, React, Flask, SQL, Git, Docker (basic), English (B2)

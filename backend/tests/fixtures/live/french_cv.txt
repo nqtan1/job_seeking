@@ -1,0 +1,22 @@
+THOMAS BERNARD
+Ingénieur logiciel
+thomas.bernard@example.test | 06 00 00 00 03 | Toulouse, France
+
+PROFIL
+Ingénieur logiciel avec six ans d'expérience en développement back-end et en systèmes distribués.
+
+EXPÉRIENCE PROFESSIONNELLE
+Ingénieur logiciel senior, Aérotech Solutions, Toulouse
+Janvier 2021 - Aujourd'hui
+Conception de microservices en Java et Kotlin, migration vers Kubernetes, encadrement de deux développeurs juniors.
+
+Développeur Java, Soft'Azur, Toulouse
+Septembre 2018 - Décembre 2020
+Développement d'applications de gestion en Spring Boot, intégration continue avec Jenkins.
+
+FORMATION
+Diplôme d'ingénieur en informatique, ENSEEIHT Toulouse, 2015 - 2018
+Classes préparatoires MPSI/MP, Lycée Pierre-de-Fermat, Toulouse, 2013 - 2015
+
+COMPÉTENCES
+Java, Kotlin, Spring Boot, Kubernetes, PostgreSQL, Kafka, Git, Anglais (courant), Espagnol (notions)
