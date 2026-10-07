@@ -1,0 +1,7 @@
+agents:
+  cv_extract: {provider: gemini}
+  job_extract: {provider: gemini}
+  fit: {provider: gemini}
+  letter: {provider: gemini}
+  letter_assist: {provider: gemini}
+  coach: {provider: gemini}
