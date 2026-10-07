@@ -1,0 +1,250 @@
+name: CI
+
+# Runs on pull requests, and is called by cd.yml for every push to main / tag, so a deploy
+# can never start from a red commit (and CI runs once per push, not twice).
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:   # Actions tab > CI > Run workflow, on any branch
+
+permissions:
+  contents: read
+
+# a new push to a pull request cancels its superseded run; runs on main are never cancelled
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  new-code:
+    name: new-code (recruitai)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recruitai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: mypy
+        run: uv run mypy --strict src
+
+      - name: import-linter
+        run: uv run lint-imports
+
+      - name: pip-audit (locked runtime dependencies)
+        run: |
+          uv export --frozen --no-dev --no-emit-project -o /tmp/req.txt
+          uvx pip-audit -r /tmp/req.txt --no-deps --disable-pip
+
+      # 22 test files mint real ID tokens from the Firebase Auth emulator (localhost:9099).
+      - name: Start the Firebase Auth emulator
+        run: docker compose up -d --build --wait firebase-emulator
+
+      - name: pytest (tests)
+        env:
+          ENV: local
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitai_test
+        run: uv run pytest
+
+  docker-images:
+    name: docker images (api + worker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build api image
+        run: docker build -f Dockerfile.api -t recruitai-api:ci .
+
+      - name: Build worker image
+        run: docker build -f Dockerfile.worker -t recruitai-worker:ci .
+
+      - name: api image runs as non-root
+        run: |
+          user="$(docker run --rm recruitai-api:ci whoami)"
+          test "$user" = "app"
+
+      - name: worker image runs as non-root
+        run: |
+          user="$(docker run --rm recruitai-worker:ci whoami)"
+          test "$user" = "app"
+
+      - name: Tectonic compiles offline (package bundle pre-warmed at build time, ADR 0010)
+        run: |
+          docker run --rm --network none recruitai-worker:ci sh -c \
+            "mkdir -p /tmp/out && tectonic --outdir /tmp/out /app/docker/sample.tex && test -s /tmp/out/sample.pdf"
+      - name: worker image compiles every letter template offline (P2-20)
+        run: docker run --rm --network none recruitai-worker:ci python /app/docker/render_check.py
+
+  web:
+    name: web (lint, types, unit, build, OpenAPI drift)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recruitai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit (production dependencies)
+        working-directory: web
+        run: pnpm audit --prod
+
+      - name: Lint
+        working-directory: web
+        run: pnpm lint
+
+      - name: Format check
+        working-directory: web
+        run: pnpm exec prettier --check .
+
+      - name: Typecheck
+        working-directory: web
+        run: pnpm typecheck
+
+      - name: Unit tests
+        working-directory: web
+        run: pnpm test --run
+
+      - name: Build
+        working-directory: web
+        run: pnpm build
+
+      # Drift check: regenerate the API types from the real app's OpenAPI and fail if the
+      # committed schema.d.ts differs (a backend response-model change without `pnpm gen:api`).
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Start the API (OpenAPI source)
+        working-directory: backend
+        env:
+          ENV: local
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitai
+          FIREBASE_PROJECT_ID: demo-recruitai
+          APP_CHECK_ENFORCED: "false"
+        run: |
+          uv sync --locked
+          nohup uv run uvicorn recruitai.main:app --port 8000 > /tmp/api.log 2>&1 &
+          curl --retry 30 --retry-delay 1 --retry-connrefused --retry-all-errors -fsS http://localhost:8000/openapi.json > /dev/null
+
+      - name: OpenAPI drift check
+        working-directory: web
+        run: pnpm check:api
+
+  web-e2e:
+    name: web e2e (Playwright, canned LLM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: web
+    env:
+      E2E_WEB_PORT: "5174"
+      E2E_API_URL: http://localhost:8011
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # Postgres + Firebase emulator; --wait uses their healthchecks.
+      - name: Start Postgres + Firebase emulator
+        working-directory: backend
+        run: docker compose up -d --build --wait
+
+      # The same isolated stack as locally: own database, API on :8011, scripted worker
+      # (canned LLM and job-search data), queue schema applied.
+      - name: Migrate and start the API and the worker
+        working-directory: backend
+        run: |
+          uv sync --locked
+          bash tests/e2e_stack.sh up
+
+      - name: Install web dependencies and Chromium
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Playwright journeys
+        working-directory: web
+        run: pnpm e2e
+
+      - name: Upload Playwright traces and server logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-debug
+          path: |
+            web/test-results
+            backend/.e2e-run/*.log
