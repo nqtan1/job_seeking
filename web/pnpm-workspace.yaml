@@ -1,0 +1,10 @@
+allowBuilds:
+  '@firebase/util': false
+  protobufjs: false
+overrides:
+  # firebase pulls grpc-js 1.9.x (GHSA-m9gg-hp2v-232j, GHSA-f596-whhp-79r4); firestore is unused here
+  '@grpc/grpc-js': '>=1.13.6'
+auditConfig:
+  ignoreGhsas:
+    # braces DoS via deeply nested patterns, no patched version; only reached through the shadcn CLI
+    - GHSA-vfj7-8cjw-p6xm
