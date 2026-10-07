@@ -1,0 +1,38 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
+\setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
+\usepackage[\VAR{babel}]{babel}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.9em}
+\renewcommand{\familydefault}{\sfdefault}
+\begin{document}
+\raggedright
+
+{\Large\bfseries \VAR{name}}\\[0.2em]
+\rule{\linewidth}{0.6pt}\\[0.3em]
+{\small \VAR{contact_line}}
+
+\vspace{1.2em}
+\hfill \VAR{date}
+
+\BLOCK{if recipient_block}
+\VAR{recipient_block}
+
+\BLOCK{endif}
+{\large\bfseries \VAR{subject}}
+
+\VAR{salutation}
+
+\BLOCK{for paragraph in paragraphs}
+\VAR{paragraph}
+
+\BLOCK{endfor}
+\VAR{closing}
+
+\bigskip
+\textbf{\VAR{signature}}
+
+\end{document}

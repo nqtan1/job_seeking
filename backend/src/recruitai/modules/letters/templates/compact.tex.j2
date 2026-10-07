@@ -1,0 +1,35 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
+\setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
+\usepackage[\VAR{babel}]{babel}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\begin{document}
+\small % 10pt look from the 11pt class: size10.clo is not in the offline cache
+\raggedright
+
+\textbf{\VAR{name}} \hfill \VAR{date}\\
+{\small \VAR{contact_line}}
+
+\BLOCK{if recipient_block}
+\smallskip
+\VAR{recipient_block}
+
+\BLOCK{endif}
+\textbf{\VAR{labels.subject} \VAR{subject}}
+
+\VAR{salutation}
+
+\BLOCK{for paragraph in paragraphs}
+\VAR{paragraph}
+
+\BLOCK{endfor}
+\VAR{closing}
+
+\smallskip
+\VAR{signature}
+
+\end{document}

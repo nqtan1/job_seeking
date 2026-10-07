@@ -1,0 +1,42 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
+\setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
+\usepackage[\VAR{babel}]{babel}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.9em}
+\begin{document}
+
+\noindent\begin{minipage}[t]{0.5\textwidth}
+\raggedright
+\textbf{\VAR{name}}\BLOCK{if sender_details} \\
+\VAR{sender_details}\BLOCK{endif}
+\end{minipage}\hfill
+\BLOCK{if recipient_block}
+\begin{minipage}[t]{0.4\textwidth}
+\raggedright
+\VAR{recipient_block}
+\end{minipage}
+\BLOCK{endif}
+
+\vspace{1.5em}
+\hfill \VAR{date_line}
+
+\vspace{1em}
+\noindent\textbf{\VAR{labels.subject}} \VAR{subject}
+
+\vspace{0.5em}
+\VAR{salutation}
+
+\BLOCK{for paragraph in paragraphs}
+\VAR{paragraph}
+
+\BLOCK{endfor}
+\VAR{closing}
+
+\bigskip
+\hfill \VAR{signature}
+
+\end{document}
