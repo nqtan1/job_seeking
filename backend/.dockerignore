@@ -1,0 +1,42 @@
+# Dockerfile.api / Dockerfile.worker only need pyproject.toml, uv.lock, README.md and src/.
+# Everything else here just bloats the build context sent to the daemon.
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Legacy (frozen, not part of the target images)
+main.py
+api/
+application/
+domain/
+infrastructure/
+workers/
+migrations/
+core/
+utils/
+config/
+agents/
+applications/
+cv/
+db/
+fit/
+hr/
+jobs/
+motivation_letter/
+tests_legacy/
+logs/
+*.db
+*.sqlite
+
+# Target tests (not needed in the runtime image). alembic/ IS needed: ARCHITECTURE.md §6
+# runs `alembic upgrade head` as a Cloud Run job using the api image.
+tests/
+
+.env
+.env.*
+!.env.example
+.git/

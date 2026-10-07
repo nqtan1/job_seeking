@@ -1,0 +1,26 @@
+# Multi-stage uv-based build (ARCHITECTURE.md §6). Non-root at runtime. No Rust toolchain.
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --locked --no-dev --no-install-project
+
+COPY src ./src
+RUN uv sync --locked --no-dev
+
+FROM python:3.13-slim-bookworm
+RUN groupadd --system app && useradd --system --gid app --create-home app
+WORKDIR /app
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --from=builder --chown=app:app /app/src /app/src
+# alembic/ + alembic.ini: this image also runs `alembic upgrade head` as a one-off Cloud
+# Run job on deploy (ARCHITECTURE.md §6), not just the API server.
+COPY --chown=app:app alembic ./alembic
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app config.prod.yaml ./config.yaml
+ENV PATH="/app/.venv/bin:${PATH}"
+USER app
+
+EXPOSE 8000
+CMD ["uvicorn", "recruitai.main:app", "--host", "0.0.0.0", "--port", "8000"]

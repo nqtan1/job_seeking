@@ -1,0 +1,42 @@
+# Multi-stage uv-based build (ARCHITECTURE.md §6). Non-root at runtime. No Rust toolchain:
+# Tectonic is a prebuilt static (musl) binary from its GitHub releases, not built from source.
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+
+COPY pyproject.toml uv.lock README.md ./
+RUN uv sync --locked --no-dev --no-install-project
+
+COPY src ./src
+RUN uv sync --locked --no-dev
+
+FROM python:3.13-slim-bookworm AS tectonic
+ARG TECTONIC_VERSION=0.17.0
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL -o /tmp/tectonic.tar.gz \
+       "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+    && tar -xzf /tmp/tectonic.tar.gz -C /usr/local/bin \
+    && rm /tmp/tectonic.tar.gz \
+    && chmod +x /usr/local/bin/tectonic
+
+FROM python:3.13-slim-bookworm
+RUN groupadd --system app && useradd --system --gid app --create-home app
+COPY --from=tectonic /usr/local/bin/tectonic /usr/local/bin/tectonic
+WORKDIR /app
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --from=builder --chown=app:app /app/src /app/src
+COPY --chown=app:app config.prod.yaml /app/config.yaml
+COPY --chown=app:app docker/sample.tex docker/render_check.py /app/docker/
+ENV PATH="/app/.venv/bin:${PATH}"
+ENV TECTONIC_CACHE_DIR=/home/app/.cache/Tectonic
+
+# Pre-warm the package bundle (ADR 0010): compile the sample once, with network, at build
+# time, so the runtime container never needs to fetch packages — proven by CI running this
+# same image with --network none against the same file.
+USER app
+RUN mkdir -p /tmp/tectonic-warmup \
+    && tectonic --outdir /tmp/tectonic-warmup /app/docker/sample.tex \
+    && rm -rf /tmp/tectonic-warmup
+
+CMD ["procrastinate", "--app=recruitai.worker.app", "worker"]

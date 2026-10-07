@@ -1,0 +1,24 @@
+% Pre-warms Tectonic's package bundle at image build time (ADR 0010) so the worker never
+% needs network access at runtime. It must load exactly what the letter templates load
+% (src/recruitai/modules/letters/templates): margins, fontspec with the bundled Latin Modern
+% OpenType fonts (serif and sans), and babel in BOTH languages (an offline English letter
+% fails with "english.ldf not found" if only French was warmed).
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{fontspec}
+\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
+\setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
+\usepackage[english,french]{babel}
+
+\begin{document}
+
+\noindent Madame, Monsieur,
+
+Je vous écris à propos d'une candidature. Œuvre « citée », l’apostrophe, 50 €.
+Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.
+\textbf{Cordialement}, \textit{italique}, {\sffamily sans serif \bfseries gras}.
+
+\selectlanguage{english}
+Dear Sir or Madam, yours sincerely.
+
+\end{document}
