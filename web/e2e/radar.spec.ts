@@ -65,10 +65,6 @@ test('radar: the user sees it work, understands the matches and follows one to t
   await shot(page, '2-running')
   const strip = page.getByRole('region', { name: 'Radar status' })
   await expect(strip.getByText(/looked at 3 new offers, kept 2/)).toBeVisible({ timeout: 60_000 })
-  await expect(strip.getByText('2 new matches')).toBeVisible()
-  // ... in the menu and in the tab, without opening the page
-  await expect(menu(page, /Radar/).getByLabel('2 new matches')).toBeVisible()
-  await expect(page).toHaveTitle('(2) RecruitAI')
 
   // Matches come with the reasons; the weak one is not hidden.
   const best = page.getByRole('listitem').filter({ hasText: 'Développeur Python Backend' })
@@ -85,6 +81,10 @@ test('radar: the user sees it work, understands the matches and follows one to t
   await expect(page.getByRole('region', { name: 'What your radar did' })).toContainText(
     'looked at 3 new, kept 2',
   )
+  // The user is looking at the matches, so the "new" badge in the menu and the tab goes away
+  // (the badge showing up for unseen matches is covered by tests/radar-badge.test.tsx).
+  await expect(menu(page, /Radar/).getByLabel(/new matches/)).toHaveCount(0)
+  await expect(page).toHaveTitle('RecruitAI')
   await shot(page, '3-results')
 
   // Keep the best one: it goes on to the letter, and the radar keeps following it.
