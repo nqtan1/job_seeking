@@ -1,0 +1,105 @@
+name: CD
+
+# main -> staging (GitHub environment "staging"); tag v* -> prod (environment "production", set
+# required reviewers on it = the approval gate). Auth is Workload Identity Federation: no keys.
+# Per-environment GitHub variables (outputs of `terraform output github_vars`):
+#   GCP_PROJECT, GCP_REGION, WIF_PROVIDER, DEPLOY_SA
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml   # a red commit never reaches a deploy
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging' }}
+    env:
+      IMG: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/recruitai
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the GitHub environment variables
+        env:
+          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+          DEPLOY_SA: ${{ vars.DEPLOY_SA }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_APPCHECK_SITE_KEY: ${{ vars.VITE_APPCHECK_SITE_KEY }}
+        run: |
+          bad=0
+          for v in GCP_PROJECT GCP_REGION WIF_PROVIDER DEPLOY_SA VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_APP_ID VITE_APPCHECK_SITE_KEY; do
+            val="${!v}"
+            if [ -z "$val" ]; then echo "::error::variable $v is empty in this environment"; bad=1
+            elif [[ "$val" =~ ^[[:space:]] || "$val" =~ [[:space:]]$ ]]; then echo "::error::variable $v has a leading or trailing space"; bad=1; fi
+          done
+          exit $bad
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: beta   # worker pools are a beta command group
+      - run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" -q
+
+      - name: Build and push images
+        working-directory: backend
+        run: |
+          for s in api worker; do
+            docker build -f Dockerfile.$s -t "$IMG/$s:$GITHUB_SHA" .
+            docker push "$IMG/$s:$GITHUB_SHA"
+          done
+
+      - name: Migrate database
+        run: |
+          gcloud run jobs update recruitai-migrate --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$GITHUB_SHA"
+          gcloud run jobs execute recruitai-migrate --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --wait
+
+      - name: Roll api and worker
+        run: |
+          gcloud run services update recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$GITHUB_SHA"
+          gcloud beta run worker-pools update recruitai-worker --quiet --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/worker:$GITHUB_SHA"
+
+      - uses: pnpm/action-setup@v5
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build web and deploy Hosting
+        env:
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_APPCHECK_SITE_KEY: ${{ vars.VITE_APPCHECK_SITE_KEY }}
+        run: |
+          (cd web && pnpm install --frozen-lockfile && pnpm build)
+          npx --yes firebase-tools@15 deploy --only hosting --project "${{ vars.GCP_PROJECT }}"
+
+      - name: Smoke test
+        run: |
+          url=$(gcloud run services describe recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --format='value(status.url)')
+          curl -fsS --retry 5 --retry-delay 5 "$url/health"
