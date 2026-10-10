@@ -117,7 +117,7 @@ def to_job_position(r: UnifiedJobSearchResult) -> JobPosition:
             nice_to_have=[],
         ),
         modalities=Modalities(),
-        source_meta=SourceMeta(),
+        source_meta=SourceMeta(apply_url=r.url),
         job_description_text=r.description,
     )
 

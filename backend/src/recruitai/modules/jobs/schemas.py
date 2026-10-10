@@ -62,6 +62,10 @@ class Modalities(BaseModel):
 class SourceMeta(BaseModel):
     industry: str | None = None
     raw_description_hash: str | None = None
+    apply_url: str | None = Field(
+        default=None,
+        description="Where to apply; set from the provider, never by the model",
+    )
 
 
 class CompensationInfo(BaseModel):

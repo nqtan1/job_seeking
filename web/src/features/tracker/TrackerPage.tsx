@@ -27,6 +27,7 @@ import {
 } from './api'
 import { Link } from 'react-router'
 import { cn } from 'cn'
+import { ApplyLink } from '@/features/pipeline/ApplyLink'
 import { needsAttention } from './attention'
 
 const COLUMNS: [Status, string][] = [
@@ -302,6 +303,7 @@ function ApplicationCard({ app }: { app: Application }) {
       )}
       {change.isError && <ErrorMessage error={change.error} />}
       <div className="flex gap-2">
+        <ApplyLink jobId={app.job_id} />
         <Button
           size="sm"
           variant="outline"

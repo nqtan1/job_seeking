@@ -15,6 +15,14 @@ const KEY = ['jobs']
 export const useJobs = () =>
   useQuery({ queryKey: KEY, queryFn: async () => unwrap(await api.GET('/api/v1/jobs')) })
 
+/** Where to apply for a saved job, from the cached inbox list. http(s) only: the URL comes
+ *  from a third-party provider. ponytail: the list is capped at 50 jobs, a per-job lookup if
+ *  an inbox outgrows it. */
+export function useApplyUrl(jobId: string | null | undefined): string | null {
+  const url = useJobs().data?.find((j) => j.id === jobId)?.data.source_meta.apply_url
+  return url && /^https?:\/\//i.test(url) ? url : null
+}
+
 const post = async (body: JobIn) => unwrap(await api.POST('/api/v1/jobs', { body }))
 
 /** One mutation for the three entry paths; a File is uploaded as a `jd` document first. */

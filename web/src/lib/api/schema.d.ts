@@ -2553,6 +2553,11 @@ export interface components {
             industry?: string | null;
             /** Raw Description Hash */
             raw_description_hash?: string | null;
+            /**
+             * Apply Url
+             * @description Where to apply; set from the provider, never by the model
+             */
+            apply_url?: string | null;
         };
         /** StatusChangeIn */
         StatusChangeIn: {

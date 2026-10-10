@@ -139,7 +139,25 @@ resource "google_artifact_registry_repository" "images" {
   location      = var.region
   format        = "DOCKER"
   labels        = local.labels
-  depends_on    = [google_project_service.api]
+
+  # Every deploy pushes a new sha-tagged image, so storage only grows. Keep the 2 newest
+  # versions of each image (the running revision is always among them), delete the rest.
+  cleanup_policy_dry_run = false
+  cleanup_policies {
+    id     = "keep-recent"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 2
+    }
+  }
+  cleanup_policies {
+    id     = "delete-old"
+    action = "DELETE"
+    condition {
+      older_than = "604800s" # 7 days
+    }
+  }
+  depends_on = [google_project_service.api]
 }
 
 # ---- P4-03: files bucket ----

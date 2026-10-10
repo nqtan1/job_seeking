@@ -69,8 +69,12 @@ def test_ambiguous_or_lookalike_matches_are_left_empty_not_guessed():
 
 
 def test_the_description_hash_is_always_the_real_one():
-    job = blank_job(source_meta={"raw_description_hash": "made-up-by-the-model"})
-    assert (
-        post_process(job, "texte").source_meta.raw_description_hash
-        != "made-up-by-the-model"
+    job = blank_job(
+        source_meta={
+            "raw_description_hash": "made-up-by-the-model",
+            "apply_url": "https://made.up",
+        }
     )
+    meta = post_process(job, "texte").source_meta
+    assert meta.raw_description_hash != "made-up-by-the-model"
+    assert meta.apply_url is None  # only providers set the apply link

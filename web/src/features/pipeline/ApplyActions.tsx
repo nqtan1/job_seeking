@@ -4,6 +4,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
 import { useApply, usePipeline } from './api'
+import { ApplyLink } from './ApplyLink'
 
 const LABEL: Record<string, string> = {
   to_apply: 'To apply',
@@ -29,12 +30,16 @@ export function ApplyActions({
   const pipeline = usePipeline()
   const apply = useApply()
   const existing = pipeline.application(jobId)
+  const siteLink = <ApplyLink jobId={jobId} />
   if (existing)
     return (
-      <Link to="/tracker" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-        <StatusBadge tone="success">{LABEL[existing.status] ?? existing.status}</StatusBadge>
-        View in tracker
-      </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to="/tracker" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <StatusBadge tone="success">{LABEL[existing.status] ?? existing.status}</StatusBadge>
+          View in tracker
+        </Link>
+        {siteLink}
+      </div>
     )
   const go = (status: 'to_apply' | 'applied') =>
     apply.mutate(
@@ -51,6 +56,7 @@ export function ApplyActions({
     )
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {siteLink}
       <Button size="sm" variant="outline" disabled={apply.isPending} onClick={() => go('to_apply')}>
         Add to tracker
       </Button>

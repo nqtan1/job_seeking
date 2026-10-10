@@ -32,6 +32,7 @@ def _dedupe(items: list[str]) -> list[str]:
 def post_process(job: JobPosition, text: str) -> JobPosition:
     job.job_description_text = text
     # Always ours: a hash the model made up would never match the text.
+    job.source_meta.apply_url = None  # only providers know the real link
     job.source_meta.raw_description_hash = hashlib.sha256(text.encode()).hexdigest()
     job.title = clean_text(job.title) or job.title
     job.company.name = clean_text(job.company.name) or job.company.name

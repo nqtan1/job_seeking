@@ -1,7 +1,8 @@
 name: CD
 
 # main -> staging (GitHub environment "staging"); tag v* -> prod (environment "production", set
-# required reviewers on it = the approval gate). Auth is Workload Identity Federation: no keys.
+# required reviewers on it = the approval gate). Tags only deploy when vars.PROD_DEPLOY == "true".
+# Auth is Workload Identity Federation: no keys.
 # Per-environment GitHub variables (outputs of `terraform output github_vars`):
 #   GCP_PROJECT, GCP_REGION, WIF_PROVIDER, DEPLOY_SA
 
@@ -24,6 +25,9 @@ jobs:
 
   deploy:
     needs: ci
+    # main always deploys to staging; a v* tag deploys to production only once the repository
+    # variable PROD_DEPLOY is "true" (set it after the production project and environment exist).
+    if: github.ref == 'refs/heads/main' || vars.PROD_DEPLOY == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging' }}

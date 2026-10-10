@@ -1,18 +1,17 @@
-# Non-secret settings (committable). URLs and keys stay in .env.
-# Precedence: env vars > .env > this file > defaults. Keys are the lowercase Settings field names.
-app_check_enforced: false   # local only; prod can never disable it
-ai_call_timeout_s: 180      # the self-hosted Qwen models are slow (a CV took >30 s)
+# Non-secret settings baked into the production images (copied to /app/config.yaml).
+# ENV=prod allows only Gemini on Vertex. Project, location and credentials come from the
+# environment / Cloud Run service account, never from this file.
+# Letters on the "smart" model sometimes need >30 s (the default). A timeout is not retried, but
+# invalid output is retried once: 2 x 60 s still fits the API's 120 s Cloud Run request timeout.
+ai_call_timeout_s: 60
+gemini_flash_lite: gemini-3.5-flash-lite   # "fast" tier
+gemini_flash: gemini-3.5-flash             # "smart" tier
 
-qwen_model_name: slm        # default Qwen text model
-qwen_vl_model_name: vlm     # used automatically when an input contains an image
-gemini_flash_lite: gemini-3.5-flash-lite # Gemini "fast" tier
-gemini_flash: gemini-3.5-flash-lite             # Gemini "smart" tier
-
-# Agents: cv_extract, job_extract, fit, letter, letter_assist, coach
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
   job_extract: {provider: gemini, model: gemini-3.5-flash-lite}
-  fit: {provider: gemini, model: gemini-3.5-flash-lite}
+  fit: {provider: gemini, model: gemini-3.5-flash}
+  # gemini-3.5-flash hangs >50 s on Vertex eu in ~2 of 3 letter calls (measured 2026-10-07); lite takes ~2.5 s
   letter: {provider: gemini, model: gemini-3.5-flash-lite}
   letter_assist: {provider: gemini, model: gemini-3.5-flash-lite}
   coach: {provider: gemini, model: gemini-3.5-flash-lite}
