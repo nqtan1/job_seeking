@@ -55,7 +55,9 @@ function FileEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
     <Card>
       <CardHeader>
         <CardTitle>Upload a job description file</CardTitle>
-        <CardDescription>PDF, DOCX or image.</CardDescription>
+        <CardDescription>
+          PDF, DOCX or image. A file with several offers is split into one job each.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <Label htmlFor="jd-file">Job description file</Label>
@@ -250,7 +252,12 @@ export function JobsPage() {
   const add = useAddJob()
   const prev = useRef(add.data)
   useEffect(() => {
-    if (add.data && add.data !== prev.current) toast(`Job added: ${add.data.data.title}`)
+    if (add.data && add.data !== prev.current)
+      toast(
+        add.data.length === 1
+          ? `Job added: ${add.data[0].data.title}`
+          : `${add.data.length} jobs added from the file`,
+      )
     prev.current = add.data
   }, [add.data])
   return (

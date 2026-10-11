@@ -7,13 +7,18 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway, FilePart, TextPart
-from recruitai.ai.prompts.jobs import PROMPT_VERSION
+from recruitai.ai.prompts.jobs import (
+    INDEX_PROMPT_VERSION,
+    ONE_PROMPT_VERSION,
+    PROMPT_VERSION,
+)
 from recruitai.core.errors import NotFound, ValidationFailed
 from recruitai.core.storage import LocalStorage
 from recruitai.modules.documents import service as documents
 from recruitai.modules.identity.models import Organization, User
 from recruitai.modules.jobs import service
 from recruitai.modules.jobs.models import JobPosting
+from recruitai.modules.jobs.schemas import MAX_OFFERS, OfferIndex
 from tests.fixtures.jobs import FakeJobProvider
 from tests.unit.test_jobs_parser import blank_job
 
@@ -76,14 +81,48 @@ async def test_file_job_checks_kind_and_ownership_before_any_llm_call(
         )
     assert fake_llm.calls == []
 
-    fake_llm.queue(PROMPT_VERSION, blank_job())
-    posting = await service.add_from_file(
+    # A brochure with two offers: one index call, then one extraction per offer (a link the
+    # model made up is dropped).
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["Dev Python", "Data Eng"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="Dev Python"))
+    fake_llm.queue(
+        ONE_PROMPT_VERSION,
+        blank_job(title="Data Eng", source_meta={"apply_url": "https://made.up"}),
+    )
+    postings = await service.add_from_file(
         db_session, fake_storage, fake_llm, org_id=a.id, document_id=jd.id
     )
-    assert posting.source == "file"
+    assert [c.feature for c in fake_llm.calls] == [
+        INDEX_PROMPT_VERSION,
+        ONE_PROMPT_VERSION,
+        ONE_PROMPT_VERSION,
+    ]
+    assert any(
+        isinstance(p, TextPart) and "Data Eng" in p.text
+        for p in fake_llm.calls[2].parts
+    )
+    assert [p.title for p in postings] == ["Dev Python", "Data Eng"]
+    assert {p.source for p in postings} == {"file"}
+    assert postings[1].data["source_meta"]["apply_url"] is None
     assert any(
         isinstance(p, FilePart) and p.data == PDF for p in fake_llm.calls[0].parts
     )
+
+
+async def test_a_file_with_too_many_offers_is_refused_and_saves_nothing(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway, fake_storage: LocalStorage
+):
+    org = await _org(db_session, "a")
+    jd = await documents.upload(
+        db_session, fake_storage, org_id=org.id, uploaded_by=None, kind="jd", data=PDF
+    )
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["x"] * (MAX_OFFERS + 1)))
+    with pytest.raises(ValidationFailed):
+        await service.add_from_file(
+            db_session, fake_storage, fake_llm, org_id=org.id, document_id=jd.id
+        )
+    assert await service.list_jobs(db_session, org_id=org.id) == []
+    assert len(fake_llm.calls) == 1  # only the cheap index call was paid for
 
 
 async def test_saving_a_search_result_is_idempotent_and_maps_without_llm(

@@ -5,12 +5,14 @@ dashboards and per-user quotas (ADR 0009, ADR 0014). ``reserve_call``/``finish_c
 by both gateways (``ai/gemini.py``, ``ai/qwen.py``).
 """
 
+import asyncio
 import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from weakref import WeakKeyDictionary
 
 from sqlalchemy import (
     CheckConstraint,
@@ -169,6 +171,20 @@ class CallStats:
     output_tokens: int = 0
 
 
+# An AsyncSession runs one operation at a time. Callers may run several model calls in
+# parallel on the request's session (job extraction fans out per offer), so the short
+# bookkeeping around each call (reserve, finish) takes this per-session lock; the model calls
+# themselves, the slow part, stay parallel.
+_session_locks: WeakKeyDictionary[AsyncSession, asyncio.Lock] = WeakKeyDictionary()
+
+
+def _lock_for(session: AsyncSession) -> asyncio.Lock:
+    lock = _session_locks.get(session)
+    if lock is None:
+        lock = _session_locks[session] = asyncio.Lock()
+    return lock
+
+
 @asynccontextmanager
 async def tracked_call(
     session: AsyncSession,
@@ -185,15 +201,16 @@ async def tracked_call(
     exception, a cancellation or a closed stream is recorded as ``error``, and the ``finally``
     runs on all of them. ``feature`` is the versioned id (``cv_extract@2``): the part before
     ``@`` is stored as the groupable feature, the whole as ``prompt_version``."""
-    call_id = await reserve_call(
-        session,
-        org_id=org_id,
-        user_id=user_id,
-        feature=feature.split("@", 1)[0],
-        model=model,
-        prompt_version=feature,
-        quota=quota,
-    )
+    async with _lock_for(session):
+        call_id = await reserve_call(
+            session,
+            org_id=org_id,
+            user_id=user_id,
+            feature=feature.split("@", 1)[0],
+            model=model,
+            prompt_version=feature,
+            quota=quota,
+        )
     stats = CallStats()
     started = time.perf_counter()
     status = "error"
@@ -201,14 +218,15 @@ async def tracked_call(
         yield stats
         status = "ok"
     finally:
-        await finish_call(
-            session,
-            call_id,
-            input_tokens=stats.input_tokens,
-            output_tokens=stats.output_tokens,
-            latency_ms=int((time.perf_counter() - started) * 1000),
-            status=status,
-        )
+        async with _lock_for(session):
+            await finish_call(
+                session,
+                call_id,
+                input_tokens=stats.input_tokens,
+                output_tokens=stats.output_tokens,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                status=status,
+            )
 
 
 async def usage_since(

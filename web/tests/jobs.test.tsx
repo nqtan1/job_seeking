@@ -75,3 +75,24 @@ test('search results can be added by external id; a search error shows message +
   await user.click(screen.getByRole('button', { name: 'Search' }))
   expect(await screen.findByText(/not configured\. \(request id: rq9\)/)).toBeInTheDocument()
 })
+
+test('a file with several offers is uploaded once and reports every job created', async () => {
+  const user = userEvent.setup()
+  mocks.POST.mockImplementation(async (url: string) =>
+    url === '/api/v1/documents'
+      ? { data: { document_id: 'd1' } }
+      : { data: [job, { ...job, id: 'j2' }] },
+  )
+  renderPage()
+  await user.upload(
+    screen.getByLabelText('Job description file'),
+    new File(['%PDF'], 'offers.pdf', { type: 'application/pdf' }),
+  )
+  await user.click(screen.getByRole('button', { name: 'Upload and add' }))
+  await waitFor(() =>
+    expect(mocks.POST).toHaveBeenCalledWith('/api/v1/jobs/from-file', {
+      body: { source: 'file', document_id: 'd1' },
+    }),
+  )
+  expect(await screen.findByText('2 jobs added from the file')).toBeInTheDocument()
+})

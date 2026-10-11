@@ -5,9 +5,14 @@ import pytest
 from fastapi import FastAPI
 
 from recruitai.ai.gateway import FakeLLMGateway
-from recruitai.ai.prompts.jobs import PROMPT_VERSION
+from recruitai.ai.prompts.jobs import (
+    INDEX_PROMPT_VERSION,
+    ONE_PROMPT_VERSION,
+    PROMPT_VERSION,
+)
 from recruitai.core.app_check import verify_app_check
 from recruitai.core.errors import UpstreamUnavailable
+from recruitai.modules.jobs.schemas import OfferIndex
 from tests.fixtures.jobs import FakeJobProvider
 from tests.unit.test_jobs_parser import blank_job
 
@@ -46,12 +51,17 @@ async def test_three_entry_paths_then_list_and_read(
     assert manual.status_code == 201
     assert manual.json()["source"] == "manual" and manual.json()["external_id"] is None
 
-    fake_llm.queue(PROMPT_VERSION, blank_job())
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["A", "B"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job())
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job())
     doc = await _upload_jd(client, ada)
-    file_job = await client.post(
-        "/api/v1/jobs", headers=ada, json={"source": "file", "document_id": doc}
+    file_jobs = await client.post(
+        "/api/v1/jobs/from-file",
+        headers=ada,
+        json={"source": "file", "document_id": doc},
     )
-    assert file_job.status_code == 201 and file_job.json()["source"] == "file"
+    assert file_jobs.status_code == 201
+    assert [j["source"] for j in file_jobs.json()] == ["file", "file"]
 
     saved = await client.post(
         "/api/v1/jobs",
@@ -64,12 +74,17 @@ async def test_three_entry_paths_then_list_and_read(
         json={"source": "france_travail", "external_id": "AB1"},
     )
     assert saved.status_code == 201 and saved.json()["id"] == again.json()["id"]
-    assert len(fake_llm.calls) == 2  # saving a provider result costs no LLM call
+    assert (
+        len(fake_llm.calls) == 4
+    )  # manual + index + 2 offers; a provider result costs none
 
     listed = (await client.get("/api/v1/jobs", headers=ada)).json()
-    assert len(listed) == 3
+    assert len(listed) == 4  # manual + two from the file + the saved search result
     page = (await client.get("/api/v1/jobs?limit=2&offset=2", headers=ada)).json()
-    assert [j["id"] for j in page] == [listed[2]["id"]]  # newest first, then paged
+    assert [j["id"] for j in page] == [
+        listed[2]["id"],
+        listed[3]["id"],
+    ]  # newest first, then paged
     assert (await client.get("/api/v1/jobs?limit=0", headers=ada)).status_code == 422
     one = await client.get(f"/api/v1/jobs/{manual.json()['id']}", headers=ada)
     assert one.json() == manual.json()
@@ -122,7 +137,9 @@ async def test_org_b_cannot_read_list_or_reference_org_as_jobs(
     assert (await client.get(f"/api/v1/jobs/{job_id}", headers=bob)).status_code == 404
     assert (await client.get("/api/v1/jobs", headers=bob)).json() == []
     stolen = await client.post(
-        "/api/v1/jobs", headers=bob, json={"source": "file", "document_id": ada_doc}
+        "/api/v1/jobs/from-file",
+        headers=bob,
+        json={"source": "file", "document_id": ada_doc},
     )
     assert stolen.status_code == 404
     assert len(fake_llm.calls) == 1  # Bob's attempt never reached the model

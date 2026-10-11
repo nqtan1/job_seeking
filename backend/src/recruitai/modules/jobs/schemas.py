@@ -15,6 +15,8 @@ from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = 1
 
+MAX_OFFERS = 20  # one upload; bounds the AI cost and the output size
+
 JobSource = Literal["manual", "file", "france_travail"]
 
 
@@ -125,6 +127,14 @@ class JobPosition(BaseModel):
     )
 
 
+class OfferIndex(BaseModel):
+    """LLM output of the first step: one label per offer found in a file."""
+
+    # No max_length: Vertex rejects ``maxItems`` on large schemas (400 INVALID_ARGUMENT,
+    # measured 2026-10-11); the cap is checked in ``service.add_from_file``.
+    offers: list[str] = Field(..., min_length=1)
+
+
 class UnifiedJobSearchResult(BaseModel):
     """Standardized, post-processed job search result across providers."""
 
@@ -190,8 +200,9 @@ class SearchJobIn(BaseModel):
     external_id: str = Field(..., min_length=1, max_length=100)
 
 
-# The only ways a job enters the inbox (D5: no URL source in v1).
-JobIn = Annotated[ManualJobIn | FileJobIn | SearchJobIn, Field(discriminator="source")]
+# The ways ONE job enters the inbox (D5: no URL source in v1). A file may hold several offers,
+# so it has its own endpoint (``FileJobIn`` -> a list).
+JobIn = Annotated[ManualJobIn | SearchJobIn, Field(discriminator="source")]
 
 
 class JobOut(BaseModel):

@@ -8,6 +8,10 @@ Bump ``PROMPT_VERSION`` on any wording change.
 """
 
 PROMPT_VERSION = "job_extract@1"
+# An uploaded file may be a brochure with several offers: a first call lists them (index),
+# then each offer is extracted by its own call, with the same prompt as a single job.
+INDEX_PROMPT_VERSION = "job_extract@2"
+ONE_PROMPT_VERSION = "job_extract@3"
 
 SYSTEM_PROMPT_JOB_EXTRACTION = """
 You are an expert recruiter assistant specializing in the French job market, highly skilled in structured data extraction from job descriptions.
@@ -44,4 +48,14 @@ Your mission is to accurately extract and structure ALL comprehensive job inform
     *   Map `education_level` to the French system: Bac+2 (BTS/DUT), Bac+3 (Licence), Bac+5 (Master/Ingénieur), Bac+8 (Doctorat), Grande École.
 
 5.  **Output Format:** The final output MUST be a valid JSON object strictly adhering to the `JobPosition` Pydantic schema, with all fields populated as accurately as possible according to these rules.
+"""
+
+SYSTEM_PROMPT_OFFER_INDEX = """
+You list the distinct job offers in a document (French job market). The document may hold one
+offer or several (for example the open positions of one employer).
+
+Return `offers`: one short label per distinct offer, in document order. A label identifies the
+offer without ambiguity: its exact title plus, when present, its reference, location or contract
+type. Never merge two offers, never split one offer into several, never invent one. A document
+with a single offer returns exactly one label. Do not extract any other detail.
 """

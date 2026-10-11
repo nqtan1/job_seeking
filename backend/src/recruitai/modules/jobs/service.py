@@ -2,6 +2,7 @@
 plus the cached France Travail search. No FastAPI imports; the LLM, storage and provider
 arrive as arguments."""
 
+import asyncio
 import hashlib
 import re
 from datetime import UTC, datetime, timedelta
@@ -17,7 +18,13 @@ from recruitai.ai.gateway import (
     TextPart,
     generate_retrying_invalid,
 )
-from recruitai.ai.prompts.jobs import PROMPT_VERSION, SYSTEM_PROMPT_JOB_EXTRACTION
+from recruitai.ai.prompts.jobs import (
+    INDEX_PROMPT_VERSION,
+    ONE_PROMPT_VERSION,
+    PROMPT_VERSION,
+    SYSTEM_PROMPT_JOB_EXTRACTION,
+    SYSTEM_PROMPT_OFFER_INDEX,
+)
 from recruitai.core.db import count_rows
 from recruitai.core.errors import NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
@@ -29,11 +36,13 @@ from recruitai.modules.jobs.parser import post_process
 from recruitai.modules.jobs.providers.base import JobProvider
 from recruitai.modules.jobs.providers.france_travail import normalize_departments
 from recruitai.modules.jobs.schemas import (
+    MAX_OFFERS,
     AboutCompany,
     Badges,
     CompanyInfo,
     JobPosition,
     Modalities,
+    OfferIndex,
     Profile,
     SourceMeta,
     UnifiedJobSearchResponse,
@@ -72,6 +81,10 @@ async def add_manual(
     return posting
 
 
+# Model calls in flight at once for one file: fast enough for 20 offers, gentle on Vertex quota.
+_PARALLEL_EXTRACTIONS = 5
+
+
 async def add_from_file(
     db: AsyncSession,
     storage: Storage,
@@ -79,16 +92,69 @@ async def add_from_file(
     *,
     org_id: UUID,
     document_id: UUID,
-) -> JobPosting:
+) -> list[JobPosting]:
+    """One file, one or several offers (a brochure): one inbox job per offer.
+
+    Step 1 lists the offers (one short call); step 2 extracts each offer with its own call, in
+    parallel, so 20 offers take about as long as the slowest one, not 20 times as long.
+    All-or-nothing: if any offer fails, nothing is saved and the user retries the file.
+    ponytail: a failed offer could be skipped and reported instead, if retries get annoying."""
     document, data = await documents.read_document(
         db, storage, org_id=org_id, document_id=document_id, kind="jd"
     )
-    job = await _extract(llm, FilePart(data=data, mime_type=document.mime), None)
-    posting = await repository.add(
-        db, org_id=org_id, source="file", external_id=None, info=job
+    file_part = FilePart(data=data, mime_type=document.mime)
+    index = await generate_retrying_invalid(
+        llm,
+        schema=OfferIndex,
+        system=SYSTEM_PROMPT_OFFER_INDEX,
+        parts=[TextPart(_DATA_NOTICE), file_part],
+        feature=INDEX_PROMPT_VERSION,
     )
+    if len(index.offers) > MAX_OFFERS:
+        raise ValidationFailed(
+            f"This file has more than {MAX_OFFERS} offers; split it and upload the parts."
+        )
+
+    slots = asyncio.Semaphore(_PARALLEL_EXTRACTIONS)
+
+    async def extract(label: str) -> JobPosition:
+        # A lone offer is extracted as a plain job; with several, the label (model output
+        # derived from the file, so passed as data) says which one this call is for.
+        which = (
+            [TextPart(f"Extract ONLY this offer and ignore the others: {label}")]
+            if len(index.offers) > 1
+            else []
+        )
+        async with slots:
+            return await generate_retrying_invalid(
+                llm,
+                schema=JobPosition,
+                system=SYSTEM_PROMPT_JOB_EXTRACTION,
+                parts=[TextPart(_DATA_NOTICE), file_part, *which],
+                feature=ONE_PROMPT_VERSION,
+            )
+
+    # Wait for every call to settle (no stray task touching the session after an error),
+    # then raise the first failure.
+    results = await asyncio.gather(
+        *(extract(label) for label in index.offers), return_exceptions=True
+    )
+    jobs: list[JobPosition] = []
+    for result in results:
+        if isinstance(result, BaseException):
+            raise result
+        jobs.append(result)
+
+    postings = []
+    for job in jobs:
+        job.source_meta.apply_url = None  # only providers know the real link
+        postings.append(
+            await repository.add(
+                db, org_id=org_id, source="file", external_id=None, info=job
+            )
+        )
     await db.commit()
-    return posting
+    return postings
 
 
 def to_job_position(r: UnifiedJobSearchResult) -> JobPosition:

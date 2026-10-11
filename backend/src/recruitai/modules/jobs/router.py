@@ -67,21 +67,39 @@ async def add_job(
     body: JobIn,
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    storage: Annotated[Storage, Depends(get_storage_dependency)],
     llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
     provider: Annotated[JobProvider, Depends(get_job_provider)],
 ) -> JobOut:
     if isinstance(body, ManualJobIn):
         job = await service.add_manual(db, llm, org_id=ctx.org_id, text=body.text)
-    elif isinstance(body, FileJobIn):
-        job = await service.add_from_file(
-            db, storage, llm, org_id=ctx.org_id, document_id=body.document_id
-        )
     else:
         job = await service.save_search_result(
             db, provider, org_id=ctx.org_id, external_id=body.external_id
         )
     return _out(job)
+
+
+@router.post(
+    "/from-file",
+    status_code=201,
+    response_model=list[JobOut],
+    dependencies=[Depends(verify_app_check), Depends(limit_ai)],
+    responses=problem_responses(
+        Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
+    ),
+)
+async def add_jobs_from_file(
+    body: FileJobIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    storage: Annotated[Storage, Depends(get_storage_dependency)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> list[JobOut]:
+    """A job description file holds one offer, or several: each becomes its own job."""
+    jobs = await service.add_from_file(
+        db, storage, llm, org_id=ctx.org_id, document_id=body.document_id
+    )
+    return [_out(j) for j in jobs]
 
 
 @router.get(

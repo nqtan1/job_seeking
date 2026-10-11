@@ -5,10 +5,7 @@ import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
 
 export type SearchParams = { query?: string; department?: string; contract_type?: string }
-type JobIn =
-  | components['schemas']['ManualJobIn']
-  | components['schemas']['FileJobIn']
-  | components['schemas']['SearchJobIn']
+type JobIn = components['schemas']['ManualJobIn'] | components['schemas']['SearchJobIn']
 
 const KEY = ['jobs']
 
@@ -23,9 +20,10 @@ export function useApplyUrl(jobId: string | null | undefined): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null
 }
 
-const post = async (body: JobIn) => unwrap(await api.POST('/api/v1/jobs', { body }))
+const post = async (body: JobIn) => [unwrap(await api.POST('/api/v1/jobs', { body }))]
 
-/** One mutation for the three entry paths; a File is uploaded as a `jd` document first. */
+/** One mutation for the three entry paths, always resolving to a list of the jobs created:
+ *  a File is uploaded as a `jd` document first and may hold several offers. */
 export function useAddJob() {
   const qc = useQueryClient()
   return useMutation({
@@ -34,7 +32,10 @@ export function useAddJob() {
       if ('externalId' in input) {
         return post({ source: 'france_travail', external_id: input.externalId })
       }
-      return post({ source: 'file', document_id: await uploadDocument('jd', input.file) })
+      const document_id = await uploadDocument('jd', input.file)
+      return unwrap(
+        await api.POST('/api/v1/jobs/from-file', { body: { source: 'file', document_id } }),
+      )
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })
