@@ -51,6 +51,7 @@ async def create(
     length: str,
     company_type: str,
     content: dict[str, Any],
+    ideas: dict[str, Any] | None = None,
 ) -> Letter:
     """The letter and its first version, in the caller's transaction."""
     letter = Letter(
@@ -62,6 +63,7 @@ async def create(
         length=length,
         company_type=company_type,
         content=content,
+        ideas=ideas,
         schema_version=SCHEMA_VERSION,
     )
     session.add(letter)

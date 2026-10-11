@@ -21,13 +21,23 @@ type Props = {
   block: EditorBlock
   /** Current text: the unsaved draft if there is one, else the stored text. */
   value: string
+  /** Writing ideas for this block (letters the user writes themself). */
+  ideas?: string[]
   saving: boolean
   onChange: (text: string) => void
   onSave: () => void
 }
 
 /** One editable block: textarea, select-text AI actions with an accept/dismiss suggestion, Save. */
-export function BlockEditor({ letterId, block, value, saving, onChange, onSave }: Props) {
+export function BlockEditor({
+  letterId,
+  block,
+  value,
+  ideas = [],
+  saving,
+  onChange,
+  onSave,
+}: Props) {
   const assist = useAssist(letterId)
   const [selection, setSelection] = useState<Range>()
   const [suggestion, setSuggestion] = useState<Range & { text: string }>()
@@ -42,6 +52,16 @@ export function BlockEditor({ letterId, block, value, saving, onChange, onSave }
   return (
     <div className="space-y-1">
       <Label htmlFor={block.key}>{block.label}</Label>
+      {ideas.length > 0 && (
+        <div className="rounded-md border border-dashed bg-muted/40 p-2 text-sm">
+          <p className="font-medium">Ideas</p>
+          <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+            {ideas.map((idea) => (
+              <li key={idea}>{idea}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <Textarea
         id={block.key}
         rows={block.block === 'body' || block.block === 'opening' ? 5 : 2}

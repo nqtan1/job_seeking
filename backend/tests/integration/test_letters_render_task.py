@@ -23,6 +23,7 @@ from recruitai.modules.letters import service, tasks
 from recruitai.modules.letters.models import Letter
 from recruitai.worker import render_pdf
 from tests.fixtures.db import purge_tenant
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.unit.test_jobs_parser import blank_job
 
@@ -60,6 +61,7 @@ async def committed_letter(
         )
         llm = FakeLLMGateway()
         llm.queue(PROMPT_VERSION, DRAFT)
+        llm.queue(FIT_VERSION, FIT)
         letter = await service.generate(session, llm, org_id=ctx.org_id, job_id=job.id)
     yield ctx, letter.id
     await purge_tenant(db_engine, org_id=ctx.org_id, user_id=ctx.user_id)

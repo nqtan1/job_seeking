@@ -1316,6 +1316,27 @@ export interface components {
              */
             index?: number | null;
         };
+        /**
+         * BodyIdea
+         * @description One suggested paragraph: which requirement of the job to answer, with which proof.
+         */
+        BodyIdea: {
+            /**
+             * Requirement
+             * @description A requirement or mission of the job this paragraph can answer
+             */
+            requirement: string;
+            /**
+             * Proof
+             * @description The concrete evidence from the candidate profile to use (project, result, tool)
+             */
+            proof: string;
+            /**
+             * Angle
+             * @description One short sentence on how to put it, never the paragraph itself
+             */
+            angle: string;
+        };
         /** Body_upload_document_api_v1_documents_post */
         Body_upload_document_api_v1_documents_post: {
             /** Kind */
@@ -1943,6 +1964,19 @@ export interface components {
             /** Signature */
             signature: string;
         };
+        /**
+         * LetterIdeas
+         * @description Stored and returned with the letter. ``body`` lines up with the letter's body
+         *     paragraphs; an entry is null where the paragraph already holds the user's own text.
+         */
+        LetterIdeas: {
+            /** Opening */
+            opening: string[];
+            /** Body */
+            body: (components["schemas"]["BodyIdea"] | null)[];
+            /** Closing */
+            closing: string[];
+        };
         /** LetterIn */
         LetterIn: {
             /**
@@ -1950,6 +1984,10 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
+            /** Highlights */
+            highlights?: string[];
+            /** Motivation */
+            motivation?: string | null;
             /**
              * Language
              * @default fr
@@ -1980,6 +2018,12 @@ export interface components {
              * @enum {string}
              */
             template: "classic" | "modern" | "compact" | "lettre_fr";
+            /**
+             * Mode
+             * @default ai
+             * @enum {string}
+             */
+            mode: "ai" | "own_words";
         };
         /** LetterOut */
         LetterOut: {
@@ -2034,6 +2078,7 @@ export interface components {
             pdf_document_id: string | null;
             /** Pdf Filename */
             pdf_filename: string;
+            ideas?: components["schemas"]["LetterIdeas"] | null;
             content: components["schemas"]["LetterContent"];
             /**
              * Created At

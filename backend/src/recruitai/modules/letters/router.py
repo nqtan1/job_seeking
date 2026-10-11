@@ -58,6 +58,7 @@ def _out(letter: Letter) -> LetterOut:
             "render_status": letter.render_status,
             "pdf_document_id": letter.pdf_document_id,
             "pdf_filename": service.pdf_filename(letter),
+            "ideas": letter.ideas,
             "content": letter.content,
             "created_at": letter.created_at,
             "updated_at": letter.updated_at,

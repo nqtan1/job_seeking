@@ -25,6 +25,7 @@ from recruitai.core.storage import LocalStorage, ObjectNotFound
 from recruitai.modules.letters import tasks as letters_tasks
 from recruitai.modules.matching.schemas import FitCheck
 from tests.fixtures.auth import mint_emulator_token
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_coach_router import parse_sse
 from tests.integration.test_letters_service import DRAFT
 from tests.integration.test_matching_router import _add_job, _add_profile
@@ -117,6 +118,7 @@ async def test_the_whole_v1_journey_from_sign_in_to_account_deletion(
 
         # 5. Letter: generate, edit one block, check it, render the PDF, download it.
         fake_llm.queue(letters_prompt.PROMPT_VERSION, DRAFT)
+        fake_llm.queue(FIT_VERSION, FIT)
         letter = (
             await api.post(
                 "/api/v1/letters", headers=who, json={"job_id": job_id, "tone": "warm"}

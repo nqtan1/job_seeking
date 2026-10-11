@@ -38,6 +38,7 @@ export function useCreateLetter() {
     onSuccess: (l) => {
       qc.setQueryData(['letter', l.id], l)
       qc.invalidateQueries({ queryKey: ['letters'] })
+      qc.invalidateQueries({ queryKey: ['fit'] }) // generating a letter may have run the fit
     },
   })
 }

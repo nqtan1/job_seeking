@@ -14,6 +14,7 @@ from recruitai.ai.prompts.letters import PROMPT_VERSION
 from recruitai.core.storage import LocalStorage
 from recruitai.core.tasks import TaskRun
 from recruitai.modules.letters import tasks
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.integration.test_matching_router import _add_job, _add_profile
 
@@ -40,6 +41,7 @@ async def test_render_request_poll_and_download(
     await _add_profile(real_client, fake_llm, ada)
     job_id = await _add_job(real_client, fake_llm, ada)
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = (
         await real_client.post("/api/v1/letters", headers=ada, json={"job_id": job_id})
     ).json()

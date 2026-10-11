@@ -19,6 +19,7 @@ from recruitai.ai.prompts import letters as letters_prompt
 from recruitai.core.storage import LocalStorage, ObjectNotFound
 from recruitai.modules.matching.schemas import FitCheck
 from tests.fixtures.auth import mint_emulator_token
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.integration.test_matching_router import _add_job, _add_profile
 from tests.unit.test_schemas import VALID
@@ -96,6 +97,7 @@ async def _fill_account(
     llm.queue(fit_prompt.PROMPT_VERSION, FitCheck.model_validate(VALID))
     await client.post("/api/v1/fit-analyses", headers=headers, json={"job_id": job_id})
     llm.queue(letters_prompt.PROMPT_VERSION, DRAFT)
+    llm.queue(FIT_VERSION, FIT)
     await client.post("/api/v1/letters", headers=headers, json={"job_id": job_id})
     await client.post("/api/v1/applications", headers=headers, json={"job_id": job_id})
     conversation = (

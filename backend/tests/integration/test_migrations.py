@@ -635,7 +635,7 @@ def test_letters_structure_constraints_and_downgrade(scratch_migration_db):
         insp = inspect(engine)
         cols = {c["name"] for c in insp.get_columns("letters")}
         assert cols == {
-            "id", "org_id", "job_id", "kind", "template", "content", "latex_override",
+            "id", "org_id", "job_id", "kind", "template", "content", "latex_override", "ideas",
             "language", "tone", "length", "company_type", "status", "render_status",
             "pdf_document_id", "schema_version", "created_at", "updated_at",
         }  # fmt: skip

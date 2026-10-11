@@ -14,7 +14,7 @@ import { describeError } from '@/lib/problem'
 import { DeleteLetterButton } from './DeleteLetterButton'
 import { useEditBlock, useLetter, usePdfPreview, useRender } from './api'
 import { BlockEditor } from './BlockEditor'
-import { editorBlocks } from './blocks'
+import { editorBlocks, ideasFor } from './blocks'
 import { ExportButtons, QualityPanel, VersionsPanel } from './panels'
 
 export function LetterPage() {
@@ -48,18 +48,31 @@ export function LetterPage() {
       </Page>
     )
 
+  // A letter the user writes themself starts with empty paragraphs: no PDF until they are done.
+  const incomplete = editorBlocks(letter.data.content).some(
+    (b) => b.block !== 'subject' && !b.text.trim(),
+  )
   const rendering = render.isPending || status === 'queued'
   const renderFailed = status === 'failed' || render.isError
 
   return (
     <Page
       title={letter.data.content.subject || 'Cover letter'}
-      description="Edit a paragraph, then render the PDF to preview it."
+      description={
+        letter.data.ideas
+          ? 'Write each paragraph in your own words, using the ideas, then render the PDF.'
+          : 'Edit a paragraph, then render the PDF to preview it.'
+      }
       back={back}
       wide
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" disabled={rendering} onClick={() => render.mutate()}>
+          <Button
+            size="sm"
+            disabled={rendering || incomplete}
+            title={incomplete ? 'Write and save every paragraph first' : undefined}
+            onClick={() => render.mutate()}
+          >
             {rendering ? 'Rendering PDF…' : 'Render PDF'}
           </Button>
           <DeleteLetterButton id={letterId} onDeleted={() => navigate('/letters')} />
@@ -77,6 +90,7 @@ export function LetterPage() {
               letterId={letterId}
               block={b}
               value={drafts[b.key] ?? b.text}
+              ideas={ideasFor(letter.data.ideas, b)}
               saving={edit.isPending}
               onChange={(text) => setDrafts({ ...drafts, [b.key]: text })}
               onSave={() =>

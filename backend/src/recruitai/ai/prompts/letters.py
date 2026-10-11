@@ -12,7 +12,7 @@ Bump ``PROMPT_VERSION`` on any wording change (it is the gateway ``feature`` and
 ``ai_calls.prompt_version``).
 """
 
-PROMPT_VERSION = "letter@1"
+PROMPT_VERSION = "letter@3"
 
 BASE_SYSTEM_PROMPTS: dict[str, str] = {
     "startup": """
@@ -103,6 +103,17 @@ OUTPUT STRUCTURE CONTRACT (STRUCTURED BLOCKS):
 - No markdown, no bullet lists inside paragraphs: plain sentences only.
 """
 
+ARGUMENT_CONTRACT = """
+ARGUMENT CONTRACT (WHY THIS CANDIDATE FITS):
+- The letter must PROVE the fit, not only describe the CV. You are given FIT ANALYSIS (strengths and gaps of the candidate for this exact job, assessed independently) and, when present, the candidate's own PERSONAL MOTIVATION and the strengths they chose to put forward.
+- PERSONAL MOTIVATION, when given, is the heart of the letter and must NOT be reduced to a passing mention. Every distinct idea, detail, name, place, project or anecdote in it must appear in the letter, in the candidate's voice (first person), keeping the specifics. Never drop one to save space, and never replace it with generic enthusiasm.
+- `opening`: a personal hook built from the strongest idea of the PERSONAL MOTIVATION, then the role. If no motivation is given, use the most specific genuine reason visible in the job and profile; never a generic "I am motivated".
+- `body`: when a PERSONAL MOTIVATION is given, the FIRST body paragraph is dedicated to it: it carries all the remaining ideas and details of the motivation, linked to this job or employer. It counts as one of the body paragraphs of the requested length. The other paragraphs each answer ONE requirement or mission of the job by pairing it with ONE concrete proof from CANDIDATE PROFILE (a project, result, tool). Prioritise the strengths the candidate chose to put forward, then the strongest FIT ANALYSIS strengths. Name the job's requirement, then the evidence.
+- Gaps: never list weaknesses or apologise. If a gap has a transferable experience in CANDIDATE PROFILE, frame it as a strength; otherwise say nothing about it.
+- The PERSONAL MOTIVATION is a valid source of facts about the candidate's reasons and personal activities (including things not in the CV, such as open-source work or studies); every claim about work experience and skills must still come from CANDIDATE PROFILE or the PERSONAL MOTIVATION. Never invent.
+- `closing`: what the candidate will concretely bring and a call to talk, in one or two sentences.
+"""
+
 REGENERATE_INSTRUCTION = """
 BLOCK REWRITE TASK:
 - You are rewriting ONE block of an existing letter: the block named "{block}". The current letter is given to you.
@@ -125,7 +136,10 @@ Language: {LANGUAGE_INSTRUCTIONS[language]}
 def get_system_prompt(company_type: str, tone: str, language: str, length: str) -> str:
     """Persona + tone + language + length + block contract. Unknown values are a caller bug
     (the API validates them with ``Literal`` types), so they raise ``KeyError``."""
-    return f"{_persona(company_type, tone, language, length)}\n\n{BLOCKS_CONTRACT}"
+    return (
+        f"{_persona(company_type, tone, language, length)}\n\n{BLOCKS_CONTRACT}"
+        f"{ARGUMENT_CONTRACT}"
+    )
 
 
 def get_block_system_prompt(
@@ -163,4 +177,41 @@ def get_assist_system_prompt(language: str, tone: str, action: str) -> str:
         f"You are an expert career coach editing a cover letter.\n\n"
         f"TONE: {TONE_MODIFIERS[tone]}\n\nLanguage: {LANGUAGE_INSTRUCTIONS[language]}\n"
         + ASSIST_INSTRUCTION.format(action=ASSIST_ACTIONS[action])
+    )
+
+
+# ---- Ideas for a letter the user writes themself: we suggest, never write the paragraphs.
+IDEAS_PROMPT_VERSION = "letter@ideas1"  # the `letter` agent, a different prompt
+
+IDEAS_INSTRUCTION = """
+IDEAS TASK:
+- The candidate will write their cover letter THEMSELVES, in their own words. You do NOT write
+  the letter: you give short ideas on what to say, so they can write it faster and better.
+- Return only the ideas of the output schema. Every idea is a short phrase or one sentence,
+  never a finished paragraph, never a ready-to-paste sentence of the letter.
+- `opening`: 2 or 3 angles for a personal hook (a genuine reason, a link between the candidate
+  and the employer or mission). `body`: exactly the number of paragraphs requested, each pairing
+  ONE requirement or mission of the job with ONE concrete proof from CANDIDATE PROFILE, prioritising
+  the strengths the candidate chose and the FIT ANALYSIS strengths. `closing`: 1 or 2 angles.
+- Ground every proof in CANDIDATE PROFILE. Never invent experience, skills, employers or numbers.
+  Never mention the candidate's gaps. {skip}
+- Write the ideas in the language specified above, with correct spelling and all accents and diacritics (é, è, à, ç…). No markdown.
+"""
+
+
+def get_ideas_system_prompt(
+    company_type: str, tone: str, language: str, paragraphs: int, has_own_text: bool
+) -> str:
+    """Persona + language + the ideas task. ``paragraphs`` is how many body paragraphs the
+    candidate still has to write; when ``has_own_text`` another one already holds their words."""
+    skip = (
+        "The candidate already wrote their personal motivation: do not repeat it, build on it."
+        if has_own_text
+        else ""
+    )
+    return (
+        f"{BASE_SYSTEM_PROMPTS[company_type]}\n\n"
+        f"Language: {LANGUAGE_INSTRUCTIONS[language]}\n"
+        f"Number of body ideas to return: exactly {paragraphs}."
+        + IDEAS_INSTRUCTION.format(skip=skip)
     )

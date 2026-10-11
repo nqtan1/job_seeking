@@ -8,6 +8,7 @@ from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts.letters import PROMPT_VERSION
 from recruitai.core.app_check import verify_app_check
 from recruitai.modules.letters.schemas import BlockText
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.integration.test_matching_router import _add_job, _add_profile
 
@@ -28,6 +29,7 @@ async def _letter(
     await _add_profile(client, llm, who)
     job_id = await _add_job(client, llm, who)
     llm.queue(PROMPT_VERSION, DRAFT)
+    llm.queue(FIT_VERSION, FIT)
     resp = await client.post(
         "/api/v1/letters",
         headers=who,

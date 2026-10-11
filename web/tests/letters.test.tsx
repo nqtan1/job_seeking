@@ -79,3 +79,22 @@ test('render: queued task is polled until done, then the PDF preview appears', a
   expect(frame).toHaveAttribute('src', '/pdf/l1.pdf')
   expect(polls).toBeGreaterThan(1)
 }, 15000)
+
+test('a letter written by the user shows ideas beside its blocks and waits for every paragraph', async () => {
+  letter = {
+    ...base,
+    content: { ...base.content, opening: '', body: ['Mes mots', ''] },
+    ideas: {
+      opening: ['Parler de Zarr'],
+      body: [null, { requirement: 'Tests', proof: 'CI 40 → 8 min', angle: 'Chiffrer' }],
+      closing: ['Proposer un entretien'],
+    },
+  } as unknown as typeof letter
+  renderPage()
+  expect(await screen.findByText('Parler de Zarr')).toBeInTheDocument()
+  expect(screen.getByText('Answer: Tests')).toBeInTheDocument()
+  expect(screen.getByText('Proposer un entretien')).toBeInTheDocument()
+  // The paragraph that already holds their words gets no idea box; the PDF waits.
+  expect(screen.getAllByText('Ideas')).toHaveLength(3)
+  expect(screen.getByRole('button', { name: 'Render PDF' })).toBeDisabled()
+})

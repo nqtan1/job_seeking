@@ -6,14 +6,20 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway, TextPart
-from recruitai.ai.prompts.letters import PROMPT_VERSION
+from recruitai.ai.prompts.letters import IDEAS_PROMPT_VERSION, PROMPT_VERSION
 from recruitai.core.errors import NotFound, ValidationFailed
 from recruitai.modules.candidates import repository as candidates_repo
 from recruitai.modules.candidates.schemas import CVInformation, PersonalInfo, RawSkill
 from recruitai.modules.identity.models import Organization, User
 from recruitai.modules.jobs import repository as jobs_repo
 from recruitai.modules.letters import service
-from recruitai.modules.letters.schemas import BlockText, LetterDraft
+from recruitai.modules.letters.schemas import (
+    BlockText,
+    BodyIdea,
+    LetterDraft,
+    LetterIdeasDraft,
+)
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.unit.test_jobs_parser import blank_job
 
 DRAFT = LetterDraft(
@@ -50,11 +56,12 @@ async def _tenant(db: AsyncSession, tag: str, *, profile: bool = True):
     return org, job
 
 
-async def test_generate_fills_programmatic_blocks_and_needs_no_fit_analysis(
+async def test_generate_argues_from_a_fit_it_runs_and_the_candidates_own_words(
     db_session: AsyncSession, fake_llm: FakeLLMGateway
 ):
     org, job = await _tenant(db_session, "a")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
 
     letter = await service.generate(
         db_session,
@@ -64,6 +71,8 @@ async def test_generate_fills_programmatic_blocks_and_needs_no_fit_analysis(
         language="fr",
         tone="warm",
         company_type="startup",
+        highlights=["CI/CD et tests automatisés"],
+        motivation="J'admire leur approche open source.",
         now=NOW,
     )
 
@@ -79,14 +88,23 @@ async def test_generate_fills_programmatic_blocks_and_needs_no_fit_analysis(
         "none",
         "classic",
     )
-    call = fake_llm.calls[0]
+    # No fit existed, so one was run first; the letter call then carries it and the user's words.
+    assert [c.feature for c in fake_llm.calls] == [FIT_VERSION, PROMPT_VERSION]
+    call = fake_llm.calls[1]
     assert call.model == "smart" and "startup culture" in call.system
     sent = " ".join(p.text for p in call.parts if isinstance(p, TextPart))
     assert "<candidate_profile>" in sent and "Lucas Martel" in sent
+    assert FIT.strengths[0] in sent and "CI/CD et tests automatisés" in sent
+    assert "J'admire leur approche open source." in sent
     versions = await service.list_versions(
         db_session, org_id=org.id, letter_id=letter.id
     )
     assert [v.n for v in versions] == [1]
+
+    # A second letter for the same job reuses that fit: no extra model call for it.
+    fake_llm.queue(PROMPT_VERSION, DRAFT)
+    await service.generate(db_session, fake_llm, org_id=org.id, job_id=job.id, now=NOW)
+    assert [c.feature for c in fake_llm.calls[2:]] == [PROMPT_VERSION]
 
 
 async def test_regenerating_or_editing_one_block_leaves_the_rest_and_keeps_history(
@@ -94,6 +112,7 @@ async def test_regenerating_or_editing_one_block_leaves_the_rest_and_keeps_histo
 ):
     org, job = await _tenant(db_session, "a")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = await service.generate(
         db_session, fake_llm, org_id=org.id, job_id=job.id, now=NOW
     )
@@ -146,6 +165,7 @@ async def test_invalid_blocks_and_missing_inputs_cost_no_model_call(
 ):
     org, job = await _tenant(db_session, "a")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = await service.generate(
         db_session, fake_llm, org_id=org.id, job_id=job.id, now=NOW
     )
@@ -182,6 +202,7 @@ async def test_other_orgs_cannot_see_edit_regenerate_or_restore_a_letter(
     a, job_a = await _tenant(db_session, "a")
     b, _ = await _tenant(db_session, "b")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = await service.generate(
         db_session, fake_llm, org_id=a.id, job_id=job_a.id, now=NOW
     )
@@ -222,6 +243,7 @@ async def test_assist_returns_a_suggestion_per_action_and_never_changes_the_lett
 ):
     org, job = await _tenant(db_session, "a")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = await service.generate(
         db_session, fake_llm, org_id=org.id, job_id=job.id, now=NOW
     )
@@ -258,6 +280,7 @@ async def test_assist_rejects_a_selection_outside_the_block_and_other_orgs(
     a, job = await _tenant(db_session, "a")
     b, _ = await _tenant(db_session, "b")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = await service.generate(
         db_session, fake_llm, org_id=a.id, job_id=job.id, now=NOW
     )
@@ -291,6 +314,7 @@ async def test_check_and_export_cope_with_a_deleted_job_and_refuse_without_a_pro
 
     org, job = await _tenant(db_session, "a")
     fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(FIT_VERSION, FIT)
     letter = await service.generate(
         db_session, fake_llm, org_id=org.id, job_id=job.id, now=NOW
     )
@@ -317,3 +341,49 @@ async def test_check_and_export_cope_with_a_deleted_job_and_refuse_without_a_pro
     )
     with pytest.raises(ValidationFailed):
         await service.check_letter(db_session, org_id=org.id, letter_id=letter.id)
+
+
+async def test_own_words_mode_keeps_their_text_and_only_gives_ideas(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway
+):
+    org, job = await _tenant(db_session, "own")
+    mine = "  Je veux que mon code serve la recherche.  Zarr, le week-end !  "
+    idea = BodyIdea(
+        requirement="CI", proof="Pipeline 40 -> 8 min", angle="Chiffrer le gain"
+    )
+    fake_llm.queue(FIT_VERSION, FIT)
+    fake_llm.queue(
+        IDEAS_PROMPT_VERSION,
+        LetterIdeasDraft(
+            opening=["Anecdote", "Mission", "Lieu", "4e"],
+            body=[idea, idea],
+            closing=["Appel"],
+        ),
+    )
+
+    letter = await service.generate(
+        db_session, fake_llm, org_id=org.id, job_id=job.id, mode="own_words",
+        length="standard", motivation=mine, now=NOW,
+    )  # fmt: skip
+
+    c = letter.content
+    assert c["body"] == [
+        mine.strip(),
+        "",
+        "",
+    ]  # their words untouched, the rest left to them
+    assert c["opening"] == "" and c["salutation"] == "Madame, Monsieur,"
+    assert c["subject"].startswith("Candidature au poste de")
+    # Ideas line up with the paragraphs: none for the paragraph that is already theirs.
+    assert letter.ideas["body"][0] is None and len(letter.ideas["body"]) == 3
+    assert letter.ideas["opening"] == ["Anecdote", "Mission", "Lieu"]  # capped at 3
+    # The model only suggested: it never saw a "write the letter" task.
+    assert [x.feature for x in fake_llm.calls] == [FIT_VERSION, IDEAS_PROMPT_VERSION]
+    assert (
+        "do NOT write" in fake_llm.calls[1].system
+        or "THEMSELVES" in fake_llm.calls[1].system
+    )
+
+    # A PDF of a letter with empty paragraphs is refused until they are written.
+    with pytest.raises(ValidationFailed):
+        await service.request_render(db_session, org_id=org.id, letter_id=letter.id)

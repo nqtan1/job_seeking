@@ -67,6 +67,8 @@ class Letter(Base):
         String, nullable=False, server_default="classic"
     )
     content: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    # Writing ideas, only for a letter the user writes themself (``mode="own_words"``).
+    ideas: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     # "Eject to raw LaTeX" (§10.1): when set, the template is skipped.
     latex_override: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String, nullable=False)

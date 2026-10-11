@@ -17,6 +17,7 @@ export const useJob = (jobId: string) =>
 export const useLatestFit = (jobId: string) =>
   useQuery({
     queryKey: ['fit', jobId],
+    enabled: !!jobId,
     queryFn: async () => {
       const list = unwrap(
         await api.GET('/api/v1/fit-analyses', { params: { query: { job_id: jobId, limit: 1 } } }),

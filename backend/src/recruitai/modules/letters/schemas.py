@@ -8,7 +8,7 @@ template never needs the model again.
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,6 +23,8 @@ Template = Literal["classic", "modern", "compact", "lettre_fr"]
 # The persona of the base prompt; same vocabulary as fit analyses.
 CompanyType = Literal["corporate", "startup", "phd"]
 BlockName = Literal["subject", "salutation", "opening", "body", "closing"]
+# "ai": the model writes the whole letter. "own_words": the user writes it; we only give ideas.
+Mode = Literal["ai", "own_words"]
 AssistAction = Literal[
     "shorten", "more_formal", "more_concrete", "add_metric", "fix_grammar"
 ]
@@ -51,6 +53,45 @@ class LetterDraft(BaseModel):
         ...,
         description="Closing phrase only, without the candidate's name (the signature is added by code)",
     )
+
+
+class BodyIdea(BaseModel):
+    """One suggested paragraph: which requirement of the job to answer, with which proof."""
+
+    requirement: str = Field(
+        ..., description="A requirement or mission of the job this paragraph can answer"
+    )
+    proof: str = Field(
+        ...,
+        description="The concrete evidence from the candidate profile to use (project, result, tool)",
+    )
+    angle: str = Field(
+        ...,
+        description="One short sentence on how to put it, never the paragraph itself",
+    )
+
+
+class LetterIdeasDraft(BaseModel):
+    """LLM output for a letter the user writes themself: ideas, never finished text."""
+
+    opening: list[str] = Field(
+        ..., description="2 or 3 short ideas for a personal opening hook"
+    )
+    body: list[BodyIdea] = Field(
+        ..., description="One idea per body paragraph to write, strongest first"
+    )
+    closing: list[str] = Field(
+        ..., description="1 or 2 short ideas for the closing paragraph"
+    )
+
+
+class LetterIdeas(BaseModel):
+    """Stored and returned with the letter. ``body`` lines up with the letter's body
+    paragraphs; an entry is null where the paragraph already holds the user's own text."""
+
+    opening: list[str]
+    body: list[BodyIdea | None]
+    closing: list[str]
 
 
 class BlockText(BaseModel):
@@ -90,11 +131,18 @@ class LetterContent(BaseModel):
 
 class LetterIn(BaseModel):
     job_id: UUID
+    # The candidate's own voice: which fit strengths to put forward (tapped from the fit
+    # analysis) and, in their words, why this role / employer. Both optional.
+    highlights: list[Annotated[str, Field(max_length=300)]] = Field(
+        default_factory=list, max_length=5
+    )
+    motivation: str | None = Field(None, max_length=1500)
     language: Language = "fr"
     tone: Tone = "professional"
     length: Length = "standard"
     company_type: CompanyType = "corporate"
     template: Template = "classic"
+    mode: Mode = "ai"
 
 
 class BlockEditIn(BaseModel):
@@ -123,6 +171,7 @@ class LetterOut(BaseModel):
     render_status: Literal["none", "queued", "done", "failed"]
     pdf_document_id: UUID | None
     pdf_filename: str
+    ideas: LetterIdeas | None = None
     content: LetterContent
     created_at: datetime
     updated_at: datetime

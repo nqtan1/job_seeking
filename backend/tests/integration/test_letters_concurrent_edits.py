@@ -14,6 +14,7 @@ from recruitai.modules.candidates.schemas import CVInformation, PersonalInfo, Ra
 from recruitai.modules.jobs import repository as jobs_repo
 from recruitai.modules.letters import service
 from tests.fixtures.db import purge_tenant
+from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.unit.test_jobs_parser import blank_job
 
@@ -48,6 +49,7 @@ async def test_parallel_block_edits_get_distinct_consecutive_versions(
         )
         llm = FakeLLMGateway()
         llm.queue(PROMPT_VERSION, DRAFT)
+        llm.queue(FIT_VERSION, FIT)
         letter = await service.generate(session, llm, org_id=ctx.org_id, job_id=job.id)
         await session.close()
 

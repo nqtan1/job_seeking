@@ -1,5 +1,5 @@
 import { FileText } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { useJobs } from '@/features/job-search/api'
 import { DeleteLetterButton } from './DeleteLetterButton'
+import { MotivationBlock } from './MotivationBlock'
 import { useCreateLetter, useLetters, type LetterIn } from './api'
 
 const OPTIONS = {
@@ -34,15 +35,22 @@ function NewLetter() {
   const create = useCreateLetter()
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { register, handleSubmit } = useForm<LetterIn>({
+  const { register, handleSubmit, control, setValue } = useForm<LetterIn>({
     defaultValues: {
       job_id: params.get('job') ?? '',
+      highlights: [],
+      motivation: '',
+      mode: 'ai',
       language: 'fr',
       tone: 'professional',
       length: 'standard',
       company_type: 'corporate',
       template: 'classic',
     },
+  })
+  const [jobId, highlights, motivation, mode] = useWatch({
+    control,
+    name: ['job_id', 'highlights', 'motivation', 'mode'],
   })
   return (
     <Card>
@@ -94,6 +102,44 @@ function NewLetter() {
                 </NativeSelect>
               </div>
             ))}
+            <fieldset className="space-y-1 sm:col-span-3">
+              <legend className="text-sm font-medium">Who writes the letter?</legend>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    [
+                      'ai',
+                      'AI writes it',
+                      'A complete letter from your profile, the fit and your motivation.',
+                    ],
+                    [
+                      'own_words',
+                      'I write it myself',
+                      'Your words stay untouched. You get ideas for each paragraph.',
+                    ],
+                  ] as const
+                ).map(([value, title, hint]) => (
+                  <label
+                    key={value}
+                    className="flex min-w-48 flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                  >
+                    <input type="radio" value={value} className="mt-1" {...register('mode')} />
+                    <span>
+                      <span className="block font-medium">{title}</span>
+                      <span className="text-muted-foreground">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <MotivationBlock
+              own={mode === 'own_words'}
+              jobId={jobId}
+              highlights={highlights ?? []}
+              motivation={motivation ?? ''}
+              onHighlights={(v) => setValue('highlights', v)}
+              onMotivation={(v) => setValue('motivation', v)}
+            />
             {create.isPending && (
               <div className="sm:col-span-3">
                 <StepProgress steps={STEPS} />
@@ -101,7 +147,11 @@ function NewLetter() {
             )}
             {create.isError && <ErrorMessage error={create.error} />}
             <Button type="submit" className="sm:w-fit" disabled={create.isPending}>
-              {create.isPending ? 'Writing your letter…' : 'Generate letter'}
+              {create.isPending
+                ? 'Preparing your letter…'
+                : mode === 'own_words'
+                  ? 'Create my letter with ideas'
+                  : 'Generate letter'}
             </Button>
           </form>
         )}

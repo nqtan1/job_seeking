@@ -220,7 +220,8 @@ def test_system_prompt_combines_persona_tone_language_length_and_block_contract(
         "academic"
         in letters.get_system_prompt("phd", "academic", "en", "detailed").lower()
     )
-    assert letters.PROMPT_VERSION == "letter@1"
+    assert "ARGUMENT CONTRACT" in p and "PERSONAL MOTIVATION" in p
+    assert letters.PROMPT_VERSION == "letter@3"
     with pytest.raises(KeyError):
         letters.get_system_prompt("ngo", "warm", "fr", "short")
 
