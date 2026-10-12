@@ -65,13 +65,35 @@ jobs:
           install_components: beta   # worker pools are a beta command group
       - run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" -q
 
-      - name: Build and push images
-        working-directory: backend
-        run: |
-          for s in api worker; do
-            docker build -f Dockerfile.$s -t "$IMG/$s:$GITHUB_SHA" .
-            docker push "$IMG/$s:$GITHUB_SHA"
-          done
+      # Layer cache in the GitHub Actions cache: a fresh runner restores the dependency layers,
+      # so a commit that did not touch pyproject.toml/uv.lock pushes only the small code
+      # layers (a few MB), not ~180 MB of identical dependencies every deploy.
+      # provenance/sbom off: keep a plain single-image manifest, as `docker build` pushed.
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and push api
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          file: backend/Dockerfile.api
+          push: true
+          tags: ${{ env.IMG }}/api:${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Build and push worker
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          file: backend/Dockerfile.worker
+          push: true
+          tags: ${{ env.IMG }}/worker:${{ github.sha }}
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,scope=worker,mode=max
+          provenance: false
+          sbom: false
 
       - name: Migrate database
         run: |

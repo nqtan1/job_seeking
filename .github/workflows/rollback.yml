@@ -1,0 +1,114 @@
+name: Rollback
+
+# Manual: put an earlier, already-built version back on an environment, without rebuilding.
+#   Actions > Rollback > Run workflow > environment + the commit SHA of a good deploy
+#   (the SHA is the image tag; see the CD run list, or `gcloud artifacts docker images list`).
+#
+# It redeploys that SHA's api and worker images (new Cloud Run revision, 100% traffic, exactly
+# like CD does), then smoke-tests. Optionally it also rebuilds and redeploys the web app from
+# that commit, so the web and the API stay a matching pair.
+#
+# It does NOT touch the database. Migrations are additive (expand/contract), so the previous
+# code runs on the current schema; never drop or rename a column in the same release that
+# stops using it. Do not run `alembic downgrade` on live data to "undo" a deploy.
+#
+# Why redeploy the image instead of shifting traffic to an old revision: the API service sends
+# 100% of traffic to the latest revision. Pinning traffic to an old revision turns that off, and
+# the next normal deploy would then silently not receive traffic.
+#
+# Needs the same per-environment GitHub variables as CD.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to roll back
+        type: choice
+        options: [staging, production]
+        default: staging
+      sha:
+        description: Commit SHA to roll back to (full or 7+ chars of a previous deploy)
+        type: string
+        required: true
+      web:
+        description: Also rebuild and redeploy the web app from that commit
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: rollback-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    env:
+      IMG: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/recruitai
+      SHA: ${{ inputs.sha }}
+    steps:
+      - name: Check the input
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{7,40}$ ]] || { echo "::error::sha must be 7-40 hex characters"; exit 1; }
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+        with:
+          install_components: beta   # worker pools are a beta command group
+
+      - name: Resolve the images (they must still exist)
+        run: |
+          # A short SHA is expanded to the full tag by looking it up in the registry.
+          full=$(gcloud artifacts docker tags list "$IMG/api" --project "${{ vars.GCP_PROJECT }}" \
+                   --format='value(tag)' | grep -E "^${SHA}" | head -n1 || true)
+          [ -n "$full" ] || { echo "::error::no api image tagged $SHA in $IMG (already cleaned up?)"; exit 1; }
+          gcloud artifacts docker images describe "$IMG/api:$full" --project "${{ vars.GCP_PROJECT }}" >/dev/null
+          gcloud artifacts docker images describe "$IMG/worker:$full" --project "${{ vars.GCP_PROJECT }}" >/dev/null
+          echo "FULL_SHA=$full" >> "$GITHUB_ENV"
+          echo "Rolling back to $full"
+
+      - name: Roll api and worker back
+        run: |
+          gcloud run services update recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$FULL_SHA"
+          gcloud beta run worker-pools update recruitai-worker --quiet --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/worker:$FULL_SHA"
+
+      - uses: actions/checkout@v7
+        if: ${{ inputs.web }}
+        with:
+          ref: ${{ env.FULL_SHA }}
+      - uses: pnpm/action-setup@v5
+        if: ${{ inputs.web }}
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v5
+        if: ${{ inputs.web }}
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Rebuild web from that commit and deploy Hosting
+        if: ${{ inputs.web }}
+        env:
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT }}
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_APPCHECK_SITE_KEY: ${{ vars.VITE_APPCHECK_SITE_KEY }}
+        run: |
+          (cd web && pnpm install --frozen-lockfile && pnpm build)
+          npx --yes firebase-tools@15 deploy --only hosting --project "${{ vars.GCP_PROJECT }}"
+
+      - name: Smoke test
+        run: |
+          url=$(gcloud run services describe recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --format='value(status.url)')
+          curl -fsS --retry 5 --retry-delay 5 "$url/health"
