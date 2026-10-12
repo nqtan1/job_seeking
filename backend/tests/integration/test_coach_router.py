@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import text
 
 from recruitai.ai.gateway import FakeLLMGateway, QuotaExceeded
 from recruitai.ai.prompts.coach import PROMPT_VERSION
@@ -221,3 +222,75 @@ async def test_the_turn_is_committed_when_each_request_has_its_own_session(
         ("user", "Salut"),
         ("assistant", "Bonjour"),
     ]
+
+
+async def test_focus_job_attach_switch_detach_and_tenancy(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    conv_id = await _conversation(client, fake_llm, ada)
+    got = await client.get(f"{BASE}/{conv_id}", headers=ada)
+    assert got.status_code == 200
+    body = got.json()
+    assert body["focus"]["job_id"] == body["job_id"]
+    assert body["capabilities"] == {
+        "function_calling": True,
+        "web_grounding": True,
+        "streaming": True,
+    }
+    assert body["job_focus_enabled"] is False
+
+    detached = await client.patch(
+        f"{BASE}/{conv_id}", headers=ada, json={"job_id": None}
+    )
+    assert detached.status_code == 200
+    assert detached.json()["job_id"] is None and detached.json()["focus"] is None
+
+    other_job = await _add_job(client, fake_llm, ada)
+    attached = await client.patch(
+        f"{BASE}/{conv_id}", headers=ada, json={"job_id": other_job}
+    )
+    assert attached.json()["focus"]["job_id"] == other_job
+
+    # Org B can neither read, change nor attach org A's data.
+    assert (await client.get(f"{BASE}/{conv_id}", headers=bob)).status_code == 404
+    assert (
+        await client.patch(f"{BASE}/{conv_id}", headers=bob, json={"job_id": None})
+    ).status_code == 404
+    await _add_profile(client, fake_llm, bob)
+    mine = (await client.post(BASE, headers=bob, json={})).json()["id"]
+    assert (
+        await client.patch(f"{BASE}/{mine}", headers=bob, json={"job_id": other_job})
+    ).status_code == 404
+
+
+async def test_reply_stores_which_job_version_it_used(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    conv_id = await _conversation(client, fake_llm, ada)
+    job_id = (await client.get(f"{BASE}/{conv_id}", headers=ada)).json()["job_id"]
+    fake_llm.queue_stream(PROMPT_VERSION, ["Bien."])
+    await client.post(
+        f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Salut"}
+    )
+
+    user, coach = (await client.get(f"{BASE}/{conv_id}/messages", headers=ada)).json()
+    assert user["meta"] is None
+    assert coach["meta"]["job_ref"]["job_id"] == job_id
+    assert len(coach["meta"]["job_ref"]["content_hash"]) == 64
+    assert coach["meta"]["prompt_version"] == PROMPT_VERSION
+
+
+async def test_unreadable_meta_does_not_break_history(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, db_session
+):
+    conv_id = await _conversation(client, fake_llm, ada)
+    fake_llm.queue_stream(PROMPT_VERSION, ["Ok."])
+    await client.post(f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Hi"})
+    await db_session.execute(
+        text(
+            "UPDATE messages SET meta = '{\"schema_version\": 99}' WHERE role = 'assistant'"
+        )
+    )
+
+    resp = await client.get(f"{BASE}/{conv_id}/messages", headers=ada)
+    assert resp.status_code == 200 and resp.json()[1]["meta"] is None

@@ -45,7 +45,21 @@ class FilePart:
 Part = TextPart | FilePart
 
 
+@dataclass(frozen=True)
+class BackendCapabilities:
+    """What a backend can do for the coach (F5). The UI and the tool loop read this; a missing
+    capability is shown to the user, never failed silently."""
+
+    function_calling: bool = True
+    web_grounding: bool = True
+    streaming: bool = True
+
+
 class LLMGateway(Protocol):
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        """What the backend serving ``feature`` supports (a routing gateway may differ per feature)."""
+        ...
+
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None
     ) -> str:
@@ -137,6 +151,10 @@ class FakeLLMGateway:
         default_factory=dict
     )
     calls: list[RecordedCall] = field(default_factory=list)
+    caps: BackendCapabilities = field(default_factory=BackendCapabilities)
+
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        return self.caps
 
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None

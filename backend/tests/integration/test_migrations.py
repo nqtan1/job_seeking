@@ -466,7 +466,7 @@ def test_coach_tables_constraints_and_downgrade(scratch_migration_db):
             "id", "org_id", "candidate_id", "job_id", "started_at",
         }  # fmt: skip
         assert {c["name"] for c in insp.get_columns("messages")} == {
-            "id", "conversation_id", "org_id", "role", "content", "created_at",
+            "id", "conversation_id", "org_id", "role", "content", "created_at", "meta",
         }  # fmt: skip
         conv_fk = {
             fk["referred_table"]: fk["options"]["ondelete"]

@@ -5,8 +5,10 @@ conversation outlives its job posting (``job_id`` is ``SET NULL``)."""
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from recruitai.core.db import Base
@@ -53,6 +55,8 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Assistant rows only: what the reply was grounded in (``schemas.MessageMeta``, schema_version 1).
+    meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

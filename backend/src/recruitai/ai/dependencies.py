@@ -13,7 +13,7 @@ from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai import gemini, qwen
-from recruitai.ai.gateway import LLMGateway
+from recruitai.ai.gateway import BackendCapabilities, LLMGateway
 from recruitai.ai.overrides import effective_settings
 from recruitai.config import Provider, Settings, get_settings
 from recruitai.core.db import get_db
@@ -53,6 +53,17 @@ class _RoutingGateway:
         if provider not in self._gateways:
             self._gateways[provider] = self._build(provider)
         return self._gateways[provider]
+
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        if feature is None:
+            raise ValueError(
+                "capabilities needs the agent's feature to pick a provider"
+            )
+        # From settings alone: answering must not build a provider client (a missing key or URL
+        # would fail routes that never call a model).
+        if self._settings.provider_for(feature) == "qwen":
+            return qwen.capabilities(self._settings)
+        return gemini.capabilities(self._settings)
 
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None

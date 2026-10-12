@@ -20,7 +20,14 @@ from pydantic import BaseModel, ValidationError
 from pypdf import PdfReader
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.ai.gateway import FilePart, Part, T, TextPart, provider_errors
+from recruitai.ai.gateway import (
+    BackendCapabilities,
+    FilePart,
+    Part,
+    T,
+    TextPart,
+    provider_errors,
+)
 from recruitai.ai.usage import CallStats, tracked_call
 from recruitai.config import Settings
 from recruitai.core.errors import UpstreamUnavailable, ValidationFailed
@@ -38,6 +45,13 @@ def _sanitize_base_url(url: str | None) -> str | None:
     if not url.endswith("/v1") and "/v1/" not in url:
         url = f"{url}/v1"
     return url
+
+
+def capabilities(settings: Settings) -> BackendCapabilities:
+    # No native web grounding on an OpenAI-compatible server; tools only if it was started for them.
+    return BackendCapabilities(
+        function_calling=settings.qwen_tools, web_grounding=False
+    )
 
 
 def build_client(settings: Settings) -> AsyncOpenAI:
@@ -133,6 +147,9 @@ class QwenGateway:
         self._db = db
         self._org_id = org_id
         self._user_id = user_id
+
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        return capabilities(self._settings)
 
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None
