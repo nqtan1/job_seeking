@@ -43,6 +43,13 @@ export function useCreateLetter() {
   })
 }
 
+/** Three questions tailored to a job; their answers become the personal part of the letter. */
+export const useMotivationQuestions = () =>
+  useMutation({
+    mutationFn: async (body: components['schemas']['MotivationQuestionsIn']) =>
+      unwrap(await api.POST('/api/v1/letters/motivation-questions', { body })),
+  })
+
 export function useEditBlock(id: string) {
   const qc = useQueryClient()
   return useMutation({

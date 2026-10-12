@@ -337,6 +337,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/letters/motivation-questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Motivation Questions
+         * @description Three questions tailored to this job and the candidate. Their answers, sent with
+         *     ``POST /letters`` as ``answers``, are what makes the letter personal. Saves nothing.
+         */
+        post: operations["motivation_questions_api_v1_letters_motivation_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/letters/{letter_id}": {
         parameters: {
             query?: never;
@@ -1145,6 +1166,16 @@ export interface components {
             quota: number;
             /** Radar Stops At */
             radar_stops_at: number;
+        };
+        /**
+         * Answer
+         * @description The candidate's answer to one of the questions above, in their own words.
+         */
+        Answer: {
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
         };
         /** ApplicationDocumentIn */
         ApplicationDocumentIn: {
@@ -2009,6 +2040,8 @@ export interface components {
             highlights?: string[];
             /** Motivation */
             motivation?: string | null;
+            /** Answers */
+            answers?: components["schemas"]["Answer"][];
             /**
              * Language
              * @default fr
@@ -2202,6 +2235,41 @@ export interface components {
             start_date?: string | null;
             /** Duration */
             duration?: string | null;
+        };
+        /**
+         * MotivationQuestion
+         * @description One question that draws a specific, personal answer out of the candidate.
+         */
+        MotivationQuestion: {
+            /**
+             * Question
+             * @description One or two short sentences, concrete to this job and profile
+             */
+            question: string;
+            /**
+             * Hint
+             * @description One short line on what kind of detail makes a good answer
+             */
+            hint: string;
+        };
+        /** MotivationQuestionsIn */
+        MotivationQuestionsIn: {
+            /**
+             * Job Id
+             * Format: uuid
+             */
+            job_id: string;
+            /**
+             * Language
+             * @default fr
+             * @enum {string}
+             */
+            language: "fr" | "en";
+        };
+        /** MotivationQuestionsOut */
+        MotivationQuestionsOut: {
+            /** Questions */
+            questions: components["schemas"]["MotivationQuestion"][];
         };
         /** OnboardingOut */
         OnboardingOut: {
@@ -4188,6 +4256,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LetterOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    motivation_questions_api_v1_letters_motivation_questions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivationQuestionsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MotivationQuestionsOut"];
                 };
             };
             /** @description Authentication is required or the provided credentials are invalid. */

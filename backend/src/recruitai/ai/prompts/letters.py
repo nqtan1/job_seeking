@@ -12,7 +12,7 @@ Bump ``PROMPT_VERSION`` on any wording change (it is the gateway ``feature`` and
 ``ai_calls.prompt_version``).
 """
 
-PROMPT_VERSION = "letter@3"
+PROMPT_VERSION = "letter@4"
 
 BASE_SYSTEM_PROMPTS: dict[str, str] = {
     "startup": """
@@ -104,13 +104,25 @@ OUTPUT STRUCTURE CONTRACT (STRUCTURED BLOCKS):
 """
 
 ARGUMENT_CONTRACT = """
-ARGUMENT CONTRACT (WHY THIS CANDIDATE FITS):
-- The letter must PROVE the fit, not only describe the CV. You are given FIT ANALYSIS (strengths and gaps of the candidate for this exact job, assessed independently) and, when present, the candidate's own PERSONAL MOTIVATION and the strengths they chose to put forward.
-- PERSONAL MOTIVATION, when given, is the heart of the letter and must NOT be reduced to a passing mention. Every distinct idea, detail, name, place, project or anecdote in it must appear in the letter, in the candidate's voice (first person), keeping the specifics. Never drop one to save space, and never replace it with generic enthusiasm.
-- `opening`: a personal hook built from the strongest idea of the PERSONAL MOTIVATION, then the role. If no motivation is given, use the most specific genuine reason visible in the job and profile; never a generic "I am motivated".
-- `body`: when a PERSONAL MOTIVATION is given, the FIRST body paragraph is dedicated to it: it carries all the remaining ideas and details of the motivation, linked to this job or employer. It counts as one of the body paragraphs of the requested length. The other paragraphs each answer ONE requirement or mission of the job by pairing it with ONE concrete proof from CANDIDATE PROFILE (a project, result, tool). Prioritise the strengths the candidate chose to put forward, then the strongest FIT ANALYSIS strengths. Name the job's requirement, then the evidence.
+ARGUMENT CONTRACT (WHY THIS CANDIDATE FITS, AND WHY THEY WANT THIS):
+SOURCES
+- FIT ANALYSIS gives the strengths and gaps of the candidate for this exact job. PERSONAL MOTIVATION holds the candidate's own answers about why this role and this employer: it is the ONLY source of their reasons, feelings and personal story. CANDIDATE PROFILE is the only source of their work experience and skills (the PERSONAL MOTIVATION may add personal activities and studies not in the CV).
+- The persona above sets the register. Where it asks you to "express genuine interest", "show you researched them" or "demonstrate understanding of their business", do it ONLY with facts present in JOB, CANDIDATE PROFILE or PERSONAL MOTIVATION; otherwise leave it out. Never invent.
+
+WHEN PERSONAL MOTIVATION IS GIVEN
+- It is the heart of the letter. Every distinct idea, detail, name, place, project or anecdote in it must appear, in the candidate's voice (first person), keeping the specifics (names, places, numbers) exactly. Never drop one to save space.
+- Show, do not tell: never turn a specific into an abstract virtue. Say what they did, saw or want, not that they are "passionate" or "motivated".
+- `opening`: a hook built from the single most specific thing in the PERSONAL MOTIVATION, then the role.
+- `body`: the FIRST paragraph is dedicated to the PERSONAL MOTIVATION: why this employer, this field, this role, in their words, with every remaining detail, tied to something concrete of the job. It counts as one of the body paragraphs of the requested length.
+
+WHEN PERSONAL MOTIVATION IS EMPTY OR "(none given)"
+- You do NOT know why the candidate wants this job, so do NOT claim it. Write no statement of attraction, passion, interest, enthusiasm, curiosity or motivation about the employer, the field or the challenges. Forbidden in this case: "passionné", "attiré par", "vif intérêt", "motivé par", "enthousiasme", "les défis passionnants", "passionate", "excited", "keen interest", "thrilled", "drawn to".
+- `opening`: state the role and the single most relevant concrete fact from the profile (a result, a project), plainly. The letter then persuades with evidence only.
+
+BODY (ALWAYS)
+- Each remaining paragraph answers ONE requirement or mission of the job by pairing it with ONE concrete proof from CANDIDATE PROFILE (a project, a number, a tool). Prioritise the strengths the candidate chose to put forward, then the strongest FIT ANALYSIS strengths. Name the requirement, then the evidence.
 - Gaps: never list weaknesses or apologise. If a gap has a transferable experience in CANDIDATE PROFILE, frame it as a strength; otherwise say nothing about it.
-- The PERSONAL MOTIVATION is a valid source of facts about the candidate's reasons and personal activities (including things not in the CV, such as open-source work or studies); every claim about work experience and skills must still come from CANDIDATE PROFILE or the PERSONAL MOTIVATION. Never invent.
+- Write like a person, not a brochure. Avoid stock phrases such as "solide expérience", "expertise approfondie", "scalabilité", "je suis convaincu que", "fort de", "au sein de vos équipes", "dynamique", "proven track record", "I am confident that". Prefer a plain fact to an adjective.
 - `closing`: what the candidate will concretely bring and a call to talk, in one or two sentences.
 """
 
@@ -252,4 +264,34 @@ _SPELL_LANGUAGE = {
 def get_spellcheck_system_prompt(language: str) -> str:
     return "You are a meticulous proofreader.\n" + SPELLCHECK_INSTRUCTION.format(
         language=_SPELL_LANGUAGE[language]
+    )
+
+
+# ---- Questions that draw the candidate's real, specific motivation out of them.
+QUESTIONS_PROMPT_VERSION = "letter@questions1"  # the `letter` agent, a different prompt
+
+QUESTIONS_INSTRUCTION = """
+MOTIVATION INTERVIEW:
+- You prepare the questions a thoughtful recruiter would want answered before reading this
+  candidate's cover letter. Their answers will become the personal heart of the letter, so each
+  question must pull out a SPECIFIC, personal, true detail, never a generic virtue.
+- Return exactly 3 questions in `questions`:
+  1. WHY THIS: what pulls them to this precise employer, field, mission or technology (name it
+     from the JOB: the real domain, product or project, not "the company").
+  2. THEIR STORY: a moment, project or experience from THEIR OWN PROFILE (name the real item)
+     that connects to this job: what happened, what they did, what it taught them.
+  3. WHAT NEXT: what they want to build, learn or change in this role, and why it matters to them.
+- Each question is one or two short sentences, addressed to the candidate ("vous" in French,
+  "you" in English), concrete to this job and profile, answerable in 2 to 4 sentences. Never ask
+  "why are you motivated" or anything that can be answered with a cliché.
+- `hint` is one short line telling what kind of detail makes a good answer (a name, a moment,
+  a number, a reason), never an example answer and never a suggestion of what to feel.
+- Never presuppose a fact that is not in CANDIDATE PROFILE or JOB. Language: {language}
+"""
+
+
+def get_questions_system_prompt(language: str) -> str:
+    return (
+        "You are an experienced recruiter and career coach.\n"
+        + QUESTIONS_INSTRUCTION.format(language=LANGUAGE_INSTRUCTIONS[language])
     )

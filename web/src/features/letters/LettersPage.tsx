@@ -40,6 +40,7 @@ function NewLetter() {
       job_id: params.get('job') ?? '',
       highlights: [],
       motivation: '',
+      answers: [],
       mode: 'ai',
       language: 'fr',
       tone: 'professional',
@@ -48,9 +49,9 @@ function NewLetter() {
       template: 'classic',
     },
   })
-  const [jobId, highlights, motivation, mode] = useWatch({
+  const [jobId, highlights, motivation, mode, language] = useWatch({
     control,
-    name: ['job_id', 'highlights', 'motivation', 'mode'],
+    name: ['job_id', 'highlights', 'motivation', 'mode', 'language'],
   })
   return (
     <Card>
@@ -70,7 +71,10 @@ function NewLetter() {
           <form
             className="grid gap-3 sm:grid-cols-3"
             onSubmit={handleSubmit((v) =>
-              create.mutate(v, { onSuccess: (l) => navigate(`/letters/${l.id}`) }),
+              create.mutate(
+                { ...v, answers: (v.answers ?? []).filter((a) => a.answer.trim()) },
+                { onSuccess: (l) => navigate(`/letters/${l.id}`) },
+              ),
             )}
           >
             <div className="space-y-1 sm:col-span-3">
@@ -78,7 +82,14 @@ function NewLetter() {
               <NativeSelect
                 id="job_id"
                 className="w-full"
-                {...register('job_id', { required: true })}
+                {...register('job_id', {
+                  required: true,
+                  // The answers belong to one job: never carry them over to another.
+                  onChange: () => {
+                    setValue('answers', [])
+                    setValue('highlights', [])
+                  },
+                })}
               >
                 <NativeSelectOption value="" disabled>
                   Choose a job…
@@ -133,12 +144,15 @@ function NewLetter() {
               </div>
             </fieldset>
             <MotivationBlock
+              key={`${jobId}-${language}`}
               own={mode === 'own_words'}
               jobId={jobId}
+              language={language === 'en' ? 'en' : 'fr'}
               highlights={highlights ?? []}
-              motivation={motivation ?? ''}
+              note={motivation ?? ''}
               onHighlights={(v) => setValue('highlights', v)}
-              onMotivation={(v) => setValue('motivation', v)}
+              onNote={(v) => setValue('motivation', v)}
+              onAnswers={(v) => setValue('answers', v)}
             />
             {create.isPending && (
               <div className="sm:col-span-3">

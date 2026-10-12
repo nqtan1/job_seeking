@@ -6,18 +6,25 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway, TextPart
-from recruitai.ai.prompts.letters import IDEAS_PROMPT_VERSION, PROMPT_VERSION
-from recruitai.core.errors import NotFound, ValidationFailed
+from recruitai.ai.prompts.letters import (
+    IDEAS_PROMPT_VERSION,
+    PROMPT_VERSION,
+    QUESTIONS_PROMPT_VERSION,
+)
+from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.modules.candidates import repository as candidates_repo
 from recruitai.modules.candidates.schemas import CVInformation, PersonalInfo, RawSkill
 from recruitai.modules.identity.models import Organization, User
 from recruitai.modules.jobs import repository as jobs_repo
 from recruitai.modules.letters import service
 from recruitai.modules.letters.schemas import (
+    Answer,
     BlockText,
     BodyIdea,
     LetterDraft,
     LetterIdeasDraft,
+    MotivationQuestion,
+    MotivationQuestions,
 )
 from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.unit.test_jobs_parser import blank_job
@@ -387,3 +394,54 @@ async def test_own_words_mode_keeps_their_text_and_only_gives_ideas(
     # A PDF of a letter with empty paragraphs is refused until they are written.
     with pytest.raises(ValidationFailed):
         await service.request_render(db_session, org_id=org.id, letter_id=letter.id)
+
+
+async def test_motivation_questions_are_tailored_and_use_the_fit(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway
+):
+    org, job = await _tenant(db_session, "q")
+    q = MotivationQuestion(question="Qu'est-ce qui vous attire au CEA ?", hint="Un nom")
+    fake_llm.queue(FIT_VERSION, FIT)
+    fake_llm.queue(QUESTIONS_PROMPT_VERSION, MotivationQuestions(questions=[q] * 4))
+
+    got = await service.motivation_questions(
+        db_session, fake_llm, org_id=org.id, job_id=job.id
+    )
+
+    assert len(got) == 3  # capped at three
+    assert [c.feature for c in fake_llm.calls] == [
+        FIT_VERSION,
+        QUESTIONS_PROMPT_VERSION,
+    ]
+    sent = " ".join(p.text for p in fake_llm.calls[1].parts if isinstance(p, TextPart))
+    assert "<candidate_profile>" in sent and FIT.strengths[0] in sent
+    # A single usable question is not an interview: refused, not shown.
+    fake_llm.queue(QUESTIONS_PROMPT_VERSION, MotivationQuestions(questions=[q]))
+    with pytest.raises(UpstreamUnavailable):
+        await service.motivation_questions(
+            db_session, fake_llm, org_id=org.id, job_id=job.id
+        )
+
+
+async def test_answers_become_the_personal_heart_and_empty_means_none_given(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway
+):
+    org, job = await _tenant(db_session, "ans")
+    fake_llm.queue(FIT_VERSION, FIT)
+    fake_llm.queue(PROMPT_VERSION, DRAFT)
+    fake_llm.queue(PROMPT_VERSION, DRAFT)
+    answers = [
+        Answer(question="Pourquoi le CEA ?", answer="J'ai visité ITER à 14 ans."),
+        Answer(question="Votre histoire ?", answer="   "),  # blank: not a real answer
+    ]
+
+    await service.generate(
+        db_session, fake_llm, org_id=org.id, job_id=job.id, answers=answers, now=NOW
+    )
+    sent = " ".join(p.text for p in fake_llm.calls[1].parts if isinstance(p, TextPart))
+    assert "Question: Pourquoi le CEA ?\nAnswer: J'ai visité ITER à 14 ans." in sent
+    assert "Votre histoire" not in sent  # the blank answer is not passed on
+
+    await service.generate(db_session, fake_llm, org_id=org.id, job_id=job.id, now=NOW)
+    sent = " ".join(p.text for p in fake_llm.calls[-1].parts if isinstance(p, TextPart))
+    assert "(none given)" in sent

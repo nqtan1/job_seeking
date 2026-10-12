@@ -129,6 +129,39 @@ class LetterContent(BaseModel):
     signature: str
 
 
+class MotivationQuestion(BaseModel):
+    """One question that draws a specific, personal answer out of the candidate."""
+
+    question: str = Field(
+        ..., description="One or two short sentences, concrete to this job and profile"
+    )
+    hint: str = Field(
+        ..., description="One short line on what kind of detail makes a good answer"
+    )
+
+
+class MotivationQuestions(BaseModel):
+    questions: list[MotivationQuestion] = Field(
+        ..., description="Exactly 3 questions: why this, their story, what next"
+    )
+
+
+class MotivationQuestionsIn(BaseModel):
+    job_id: UUID
+    language: Language = "fr"
+
+
+class MotivationQuestionsOut(BaseModel):
+    questions: list[MotivationQuestion]
+
+
+class Answer(BaseModel):
+    """The candidate's answer to one of the questions above, in their own words."""
+
+    question: str = Field(..., min_length=1, max_length=300)
+    answer: str = Field(..., max_length=800)
+
+
 class LetterIn(BaseModel):
     job_id: UUID
     # The candidate's own voice: which fit strengths to put forward (tapped from the fit
@@ -137,6 +170,8 @@ class LetterIn(BaseModel):
         default_factory=list, max_length=5
     )
     motivation: str | None = Field(None, max_length=1500)
+    # Answers to the guided questions: the personal heart of the letter.
+    answers: list[Answer] = Field(default_factory=list, max_length=4)
     language: Language = "fr"
     tone: Tone = "professional"
     length: Length = "standard"

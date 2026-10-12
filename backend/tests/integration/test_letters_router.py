@@ -7,7 +7,13 @@ from fastapi import FastAPI
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts.letters import PROMPT_VERSION
 from recruitai.core.app_check import verify_app_check
-from recruitai.modules.letters.schemas import BlockText, RawSpellIssue, SpellFindings
+from recruitai.modules.letters.schemas import (
+    BlockText,
+    MotivationQuestion,
+    MotivationQuestions,
+    RawSpellIssue,
+    SpellFindings,
+)
 from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.integration.test_matching_router import _add_job, _add_profile
@@ -296,6 +302,29 @@ async def test_spellcheck_returns_only_verified_corrections_and_saves_nothing(
     no_app_check = await client.post(
         url, headers=ada, json={"items": [{"key": "opening", "text": "x"}]}
     )
+    assert no_app_check.status_code == 401
+
+
+async def test_motivation_questions_endpoint_contract(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    _, job_id = await _letter(client, fake_llm, ada)
+    url = "/api/v1/letters/motivation-questions"
+    q = MotivationQuestion(question="Pourquoi ce poste ?", hint="Un détail")
+    fake_llm.queue("letter@questions1", MotivationQuestions(questions=[q, q, q]))
+
+    ok = await client.post(url, headers=ada, json={"job_id": job_id, "language": "fr"})
+    assert ok.status_code == 200 and len(ok.json()["questions"]) == 3
+
+    assert (await client.post(url, headers=ada, json={})).status_code == 422
+    bad_lang = {"job_id": job_id, "language": "de"}
+    assert (await client.post(url, headers=ada, json=bad_lang)).status_code == 422
+    calls = len(fake_llm.calls)
+    stolen = await client.post(url, headers=bob, json={"job_id": job_id})
+    assert stolen.status_code == 404 and len(fake_llm.calls) == calls
+
+    app.dependency_overrides.pop(verify_app_check)
+    no_app_check = await client.post(url, headers=ada, json={"job_id": job_id})
     assert no_app_check.status_code == 401
 
 

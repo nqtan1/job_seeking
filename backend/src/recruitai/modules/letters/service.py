@@ -14,16 +14,18 @@ from recruitai.ai.prompts.letters import (
     ASSIST_PROMPT_VERSION,
     IDEAS_PROMPT_VERSION,
     PROMPT_VERSION,
+    QUESTIONS_PROMPT_VERSION,
     SPELLCHECK_PROMPT_VERSION,
     get_assist_system_prompt,
     get_block_system_prompt,
     get_ideas_system_prompt,
+    get_questions_system_prompt,
     get_spellcheck_system_prompt,
     get_system_prompt,
 )
 from recruitai.ai.text import compact_json
 from recruitai.core.db import count_rows
-from recruitai.core.errors import NotFound, ValidationFailed
+from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.filenames import safe_filename
 from recruitai.core.storage import Storage
@@ -34,6 +36,7 @@ from recruitai.modules.jobs import service as jobs
 from recruitai.modules.letters import export, quality, repository, spellcheck
 from recruitai.modules.letters.models import Letter, LetterVersion
 from recruitai.modules.letters.schemas import (
+    Answer,
     AssistAction,
     BlockName,
     BlockText,
@@ -48,6 +51,8 @@ from recruitai.modules.letters.schemas import (
     LetterIdeas,
     LetterIdeasDraft,
     Mode,
+    MotivationQuestion,
+    MotivationQuestions,
     Recipient,
     SpellFindings,
     SpellIssue,
@@ -114,6 +119,62 @@ async def _profile_and_job(
     return profile.data, job.data
 
 
+def _motivation_for_prompt(answers: list[Answer], note: str | None) -> str:
+    """The candidate's reasons as the model sees them: each answer with its question, then
+    any free note. Empty when they gave nothing real."""
+    parts = [
+        f"Question: {a.question.strip()}\nAnswer: {a.answer.strip()}"
+        for a in answers
+        if a.answer.strip()
+    ]
+    if (note or "").strip():
+        parts.append(f"Additional note from the candidate: {note.strip()}")  # type: ignore[union-attr]
+    return "\n\n".join(parts)
+
+
+def _own_words_text(answers: list[Answer], note: str | None) -> str:
+    """For a letter the user writes themself: their answers and note, as written, no questions."""
+    texts = [a.answer.strip() for a in answers if a.answer.strip()]
+    if (note or "").strip():
+        texts.append(note.strip())  # type: ignore[union-attr]
+    return "\n\n".join(texts)
+
+
+async def motivation_questions(
+    db: AsyncSession,
+    llm: LLMGateway,
+    *,
+    org_id: UUID,
+    job_id: UUID,
+    language: Language = "fr",
+) -> list[MotivationQuestion]:
+    """Three questions tailored to this job, employer and profile, whose answers become the
+    personal heart of the letter. Uses the job's fit analysis (run now if there is none)."""
+    profile, job = await _profile_and_job(db, org_id=org_id, job_id=job_id)
+    fit = await matching.latest_or_analyze(db, llm, org_id=org_id, job_id=job_id)
+    found = await generate_retrying_invalid(
+        llm,
+        schema=MotivationQuestions,
+        system=get_questions_system_prompt(language),
+        parts=[
+            TextPart(
+                "Prepare the questions.\n\n"
+                + _CONTEXT.format(profile=compact_json(profile), job=compact_json(job))
+                + "\n\n<fit_strengths>\n"
+                + compact_json(fit.data.get("strengths", []))
+                + "\n</fit_strengths>"
+            )
+        ],
+        feature=QUESTIONS_PROMPT_VERSION,
+    )
+    questions = [q for q in found.questions if q.question.strip()][:3]
+    if len(questions) < 2:
+        raise UpstreamUnavailable(
+            "The AI provider returned an unusable response.", code="ai_response_invalid"
+        )
+    return questions
+
+
 async def generate(
     db: AsyncSession,
     llm: LLMGateway,
@@ -127,6 +188,7 @@ async def generate(
     template: Template = "classic",
     highlights: list[str] | None = None,
     motivation: str | None = None,
+    answers: list[Answer] | None = None,
     mode: Mode = "ai",
     now: datetime | None = None,
 ) -> Letter:
@@ -145,7 +207,7 @@ async def generate(
             }
         ),
         highlights="\n".join(f"- {h}" for h in highlights or []) or "(none chosen)",
-        motivation=(motivation or "").strip() or "(none given)",
+        motivation=_motivation_for_prompt(answers or [], motivation) or "(none given)",
     )
     context = _CONTEXT.format(profile=compact_json(profile), job=compact_json(job))
     ideas: LetterIdeas | None = None
@@ -159,7 +221,7 @@ async def generate(
             tone=tone,
             language=language,
             length=length,
-            own_text=(motivation or "").strip(),
+            own_text=_own_words_text(answers or [], motivation),
         )
     else:
         draft = await generate_retrying_invalid(

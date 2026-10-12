@@ -34,6 +34,8 @@ from recruitai.modules.letters.schemas import (
     LetterContent,
     LetterIn,
     LetterOut,
+    MotivationQuestionsIn,
+    MotivationQuestionsOut,
     PdfLinkOut,
     RenderAccepted,
     SpellcheckIn,
@@ -94,6 +96,28 @@ async def create_letter(
 ) -> LetterOut:
     letter = await service.generate(db, llm, org_id=ctx.org_id, **body.model_dump())
     return _out(letter)
+
+
+@router.post(
+    "/motivation-questions",
+    response_model=MotivationQuestionsOut,
+    dependencies=[Depends(verify_app_check), Depends(limit_ai)],
+    responses=problem_responses(
+        Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
+    ),
+)
+async def motivation_questions(
+    body: MotivationQuestionsIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> MotivationQuestionsOut:
+    """Three questions tailored to this job and the candidate. Their answers, sent with
+    ``POST /letters`` as ``answers``, are what makes the letter personal. Saves nothing."""
+    questions = await service.motivation_questions(
+        db, llm, org_id=ctx.org_id, job_id=body.job_id, language=body.language
+    )
+    return MotivationQuestionsOut(questions=questions)
 
 
 @router.get(

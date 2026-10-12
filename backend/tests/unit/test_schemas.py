@@ -221,7 +221,9 @@ def test_system_prompt_combines_persona_tone_language_length_and_block_contract(
         in letters.get_system_prompt("phd", "academic", "en", "detailed").lower()
     )
     assert "ARGUMENT CONTRACT" in p and "PERSONAL MOTIVATION" in p
-    assert letters.PROMPT_VERSION == "letter@3"
+    assert letters.PROMPT_VERSION == "letter@4"
+    # No invented passion when the candidate gave no reasons: the contract bans the clichés.
+    assert "(none given)" in p and '"passionné"' in p and "do NOT claim it" in p
     with pytest.raises(KeyError):
         letters.get_system_prompt("ngo", "warm", "fr", "short")
 
