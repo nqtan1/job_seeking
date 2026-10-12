@@ -36,6 +36,8 @@ from recruitai.modules.letters.schemas import (
     LetterOut,
     PdfLinkOut,
     RenderAccepted,
+    SpellcheckIn,
+    SpellcheckOut,
     VersionOut,
 )
 
@@ -303,6 +305,29 @@ async def assist(
         action=body.action,
     )
     return AssistOut(suggestion=suggestion)
+
+
+@router.post(
+    "/{letter_id}/spellcheck",
+    response_model=SpellcheckOut,
+    dependencies=[Depends(verify_app_check), Depends(limit_ai)],
+    responses=problem_responses(
+        Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
+    ),
+)
+async def spellcheck_letter(
+    letter_id: UUID,
+    body: SpellcheckIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> SpellcheckOut:
+    """Spelling and grammar corrections for some paragraphs (one call for the whole letter or
+    for one paragraph). Saves nothing: the client applies what the user accepts."""
+    issues = await service.check_spelling(
+        db, llm, org_id=ctx.org_id, letter_id=letter_id, items=body.items
+    )
+    return SpellcheckOut(checked=len(body.items), issues=issues)
 
 
 @router.get(

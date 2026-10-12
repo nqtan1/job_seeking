@@ -98,3 +98,113 @@ test('a letter written by the user shows ideas beside its blocks and waits for e
   expect(screen.getAllByText('Ideas')).toHaveLength(3)
   expect(screen.getByRole('button', { name: 'Render PDF' })).toBeDisabled()
 })
+
+const issue = (key: string, start: number, wrong: string, right: string) => ({
+  key,
+  start,
+  end: start + wrong.length,
+  wrong,
+  right,
+  reason: 'accent',
+})
+
+test('spelling: check one paragraph, apply a correction into the draft, then save it', async () => {
+  const user = userEvent.setup()
+  letter = { ...base, content: { ...base.content, body: ['Une opportunitée unique', 'P two'] } }
+  mocks.POST.mockResolvedValue({
+    data: { checked: 1, issues: [issue('body.0', 4, 'opportunitée', 'opportunité')] },
+  })
+  renderPage()
+  await user.click(await screen.findByRole('button', { name: 'Check spelling of Paragraph 1' }))
+  await waitFor(() =>
+    expect(mocks.POST).toHaveBeenCalledWith('/api/v1/letters/{letter_id}/spellcheck', {
+      params: { path: { letter_id: 'l1' } },
+      body: { items: [{ key: 'body.0', text: 'Une opportunitée unique' }] },
+    }),
+  )
+  // Nothing changes until the user accepts, and the correction is shown in its context.
+  expect(screen.getByLabelText('Paragraph 1')).toHaveValue('Une opportunitée unique')
+  await user.click(await screen.findByRole('button', { name: /Apply 1 of 1: opportunitée/ }))
+  expect(screen.getByLabelText('Paragraph 1')).toHaveValue('Une opportunité unique')
+  expect(screen.getByRole('button', { name: 'Save Paragraph 1' })).toBeEnabled()
+  // The unsaved state is spelled out, not "no issue found".
+  expect(
+    screen.getByText('Corrections applied. Save this paragraph to keep them.'),
+  ).toBeInTheDocument()
+})
+
+test('spelling: editing a checked paragraph says so instead of silently dropping the result', async () => {
+  const user = userEvent.setup()
+  mocks.POST.mockResolvedValue({ data: { checked: 4, issues: [] } })
+  renderPage()
+  await user.click(
+    await screen.findByRole('button', { name: 'Check spelling of the whole letter' }),
+  )
+  expect(await screen.findAllByText('No spelling or grammar issue found.')).not.toHaveLength(0)
+
+  await user.type(screen.getByLabelText('Opening'), '!')
+  expect(
+    await screen.findByText(/You edited this paragraph since the last check/),
+  ).toBeInTheDocument()
+})
+
+test('spelling: a partial check is not reported as the whole letter being clean', async () => {
+  const user = userEvent.setup()
+  mocks.POST.mockResolvedValue({ data: { checked: 1, issues: [] } })
+  renderPage()
+  await user.click(await screen.findByRole('button', { name: 'Check spelling of Opening' }))
+  expect(await screen.findByText(/Checked 1 of 6 paragraphs/)).toBeInTheDocument()
+})
+
+test('spelling: ignoring is remembered in the message, and several corrected paragraphs save at once', async () => {
+  const user = userEvent.setup()
+  letter = {
+    ...base,
+    content: { ...base.content, opening: 'Un erreure', body: ['Une autre erreure', 'P two'] },
+  }
+  mocks.POST.mockResolvedValue({
+    data: {
+      checked: 5,
+      issues: [issue('opening', 3, 'erreure', 'erreur'), issue('body.0', 10, 'erreure', 'erreur')],
+    },
+  })
+  mocks.PATCH.mockImplementation(async () => ({ data: letter }))
+  renderPage()
+  await user.click(
+    await screen.findByRole('button', { name: 'Check spelling of the whole letter' }),
+  )
+  await user.click(await screen.findByRole('button', { name: 'Apply all 2 corrections' }))
+  expect(screen.getByLabelText('Opening')).toHaveValue('Un erreur')
+  expect(screen.getByLabelText('Paragraph 1')).toHaveValue('Une autre erreur')
+
+  await user.click(screen.getByRole('button', { name: 'Save 2 changes' }))
+  await waitFor(() => expect(mocks.PATCH).toHaveBeenCalledTimes(2))
+  expect(mocks.PATCH).toHaveBeenCalledWith('/api/v1/letters/{letter_id}/blocks/{block}', {
+    params: { path: { letter_id: 'l1', block: 'opening' } },
+    body: { text: 'Un erreur', index: null },
+  })
+})
+
+test('spelling: ignoring the last correction says it was ignored, not that none was found', async () => {
+  const user = userEvent.setup()
+  letter = { ...base, content: { ...base.content, opening: 'Un erreure' } }
+  mocks.POST.mockResolvedValue({
+    data: { checked: 1, issues: [issue('opening', 3, 'erreure', 'erreur')] },
+  })
+  renderPage()
+  await user.click(await screen.findByRole('button', { name: 'Check spelling of Opening' }))
+  await user.click(await screen.findByRole('button', { name: /Ignore 1 of 1/ }))
+  expect(await screen.findByText('No more corrections (1 ignored).')).toBeInTheDocument()
+  expect(screen.getByLabelText('Opening')).toHaveValue('Un erreure') // untouched
+})
+
+test('spelling: the whole-letter button waits for something to check', async () => {
+  letter = {
+    ...base,
+    content: { subject: '', salutation: '', opening: '', body: [''], closing: '' },
+  }
+  renderPage()
+  expect(
+    await screen.findByRole('button', { name: 'Check spelling of the whole letter' }),
+  ).toBeDisabled()
+})

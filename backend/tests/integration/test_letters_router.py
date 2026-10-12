@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts.letters import PROMPT_VERSION
 from recruitai.core.app_check import verify_app_check
-from recruitai.modules.letters.schemas import BlockText
+from recruitai.modules.letters.schemas import BlockText, RawSpellIssue, SpellFindings
 from tests.fixtures.fit import FIT, FIT_VERSION
 from tests.integration.test_letters_service import DRAFT
 from tests.integration.test_matching_router import _add_job, _add_profile
@@ -241,6 +241,60 @@ async def test_assist_endpoint_contract_cross_tenant_and_app_check(
         url,
         headers=ada,
         json={"block": "opening", "selection": "x", "action": "shorten"},
+    )
+    assert no_app_check.status_code == 401
+
+
+async def test_spellcheck_returns_only_verified_corrections_and_saves_nothing(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    letter_id, _ = await _letter(client, fake_llm, ada)
+    url = f"/api/v1/letters/{letter_id}/spellcheck"
+    text = "Je suis motivé par cette opportunitée."
+    fake_llm.queue(
+        "letter_assist@spell1",
+        SpellFindings(
+            issues=[
+                RawSpellIssue(
+                    key="opening",
+                    wrong="opportunitée",
+                    right="opportunité",
+                    reason="accent",
+                    context="par cette opportunitée.",
+                ),
+                RawSpellIssue(
+                    key="opening", wrong="inventé", right="x", reason="?", context=""
+                ),
+            ]
+        ),
+    )
+    ok = await client.post(
+        url, headers=ada, json={"items": [{"key": "opening", "text": text}]}
+    )
+    assert ok.status_code == 200 and ok.json()["checked"] == 1
+    [issue] = ok.json()["issues"]
+    assert text[issue["start"] : issue["end"]] == "opportunitée"
+    assert issue["right"] == "opportunité"
+    unchanged = (await client.get(f"/api/v1/letters/{letter_id}", headers=ada)).json()
+    assert unchanged["content"]["opening"] == DRAFT.opening  # nothing was saved
+
+    dup = {"items": [{"key": "opening", "text": "a"}, {"key": "opening", "text": "b"}]}
+    assert (await client.post(url, headers=ada, json=dup)).status_code == 422
+    unknown_key = {"items": [{"key": "whatever", "text": "a"}]}
+    assert (await client.post(url, headers=ada, json=unknown_key)).status_code == 422
+    too_much = {"items": [{"key": f"body.{n}", "text": "x" * 4000} for n in range(4)]}
+    assert (await client.post(url, headers=ada, json=too_much)).status_code == 422
+    huge = {"items": [{"key": "opening", "text": "x" * 5001}]}
+    assert (await client.post(url, headers=ada, json=huge)).status_code == 422
+    calls = len(fake_llm.calls)
+    stolen = await client.post(
+        url, headers=bob, json={"items": [{"key": "opening", "text": "x"}]}
+    )
+    assert stolen.status_code == 404 and len(fake_llm.calls) == calls
+
+    app.dependency_overrides.pop(verify_app_check)
+    no_app_check = await client.post(
+        url, headers=ada, json={"items": [{"key": "opening", "text": "x"}]}
     )
     assert no_app_check.status_code == 401
 

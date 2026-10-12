@@ -502,6 +502,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/letters/{letter_id}/spellcheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spellcheck Letter
+         * @description Spelling and grammar corrections for some paragraphs (one call for the whole letter or
+         *     for one paragraph). Saves nothing: the client applies what the user accepts.
+         */
+        post: operations["spellcheck_letter_api_v1_letters__letter_id__spellcheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/letters/{letter_id}/pdf": {
         parameters: {
             query?: never;
@@ -2624,6 +2645,47 @@ export interface components {
              */
             apply_url?: string | null;
         };
+        /**
+         * SpellIssue
+         * @description A verified correction: ``text[start:end] == wrong`` for the text that was sent, with
+         *     ``start``/``end`` in UTF-16 code units (JavaScript string indexes).
+         */
+        SpellIssue: {
+            /** Key */
+            key: string;
+            /** Start */
+            start: number;
+            /** End */
+            end: number;
+            /** Wrong */
+            wrong: string;
+            /** Right */
+            right: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * SpellItem
+         * @description One piece of text to check: a block key (``subject``, ``opening``, ``body.1``…).
+         */
+        SpellItem: {
+            /** Key */
+            key: string;
+            /** Text */
+            text: string;
+        };
+        /** SpellcheckIn */
+        SpellcheckIn: {
+            /** Items */
+            items: components["schemas"]["SpellItem"][];
+        };
+        /** SpellcheckOut */
+        SpellcheckOut: {
+            /** Checked */
+            checked: number;
+            /** Issues */
+            issues: components["schemas"]["SpellIssue"][];
+        };
         /** StatusChangeIn */
         StatusChangeIn: {
             /**
@@ -4681,6 +4743,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssistOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    spellcheck_letter_api_v1_letters__letter_id__spellcheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                letter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpellcheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpellcheckOut"];
                 };
             };
             /** @description Authentication is required or the provided credentials are invalid. */

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 SCHEMA_VERSION = 1
 
@@ -232,6 +232,70 @@ class AssistIn(BaseModel):
     block: BlockName
     selection: str = Field(..., min_length=1, max_length=2000)
     action: AssistAction
+
+
+class SpellItem(BaseModel):
+    """One piece of text to check: a block key (``subject``, ``opening``, ``body.1``…)."""
+
+    key: str = Field(
+        ..., pattern=r"^(subject|salutation|opening|closing|body\.\d{1,2})$"
+    )
+    text: str = Field(..., min_length=1, max_length=5000)
+
+
+class SpellcheckIn(BaseModel):
+    items: list[SpellItem] = Field(..., min_length=1, max_length=12)
+
+    @model_validator(mode="after")
+    def _keys_are_unique_and_total_is_bounded(self) -> "SpellcheckIn":
+        keys = [i.key for i in self.items]
+        if len(set(keys)) != len(keys):
+            raise ValueError("each key may appear once")
+        # A whole letter is a few thousand characters; this is not a general text endpoint.
+        if sum(len(i.text) for i in self.items) > 12_000:
+            raise ValueError("too much text to check at once")
+        return self
+
+
+class RawSpellIssue(BaseModel):
+    """LLM output: a proposal the code still has to verify against the text."""
+
+    key: str = Field(..., description="The key of the paragraph the error is in")
+    wrong: str = Field(
+        ...,
+        description="The faulty word or short phrase, copied EXACTLY as written in the text",
+    )
+    context: str = Field(
+        ...,
+        description="A fragment of 4 to 10 words from the text that contains `wrong`, copied EXACTLY, so the exact occurrence can be found",
+    )
+    right: str = Field(..., description="The corrected word or short phrase")
+    reason: str = Field(
+        ..., description="Very short explanation of the rule, in the letter's language"
+    )
+
+
+class SpellFindings(BaseModel):
+    issues: list[RawSpellIssue] = Field(
+        ..., description="Every spelling, grammar or punctuation error; empty if none"
+    )
+
+
+class SpellIssue(BaseModel):
+    """A verified correction: ``text[start:end] == wrong`` for the text that was sent, with
+    ``start``/``end`` in UTF-16 code units (JavaScript string indexes)."""
+
+    key: str
+    start: int
+    end: int
+    wrong: str
+    right: str
+    reason: str
+
+
+class SpellcheckOut(BaseModel):
+    checked: int
+    issues: list[SpellIssue]
 
 
 class AssistOut(BaseModel):

@@ -2,6 +2,7 @@
 rest, keep every change as a version. No FastAPI imports; the LLM arrives as an argument and
 other modules are reached only through their services."""
 
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -13,9 +14,11 @@ from recruitai.ai.prompts.letters import (
     ASSIST_PROMPT_VERSION,
     IDEAS_PROMPT_VERSION,
     PROMPT_VERSION,
+    SPELLCHECK_PROMPT_VERSION,
     get_assist_system_prompt,
     get_block_system_prompt,
     get_ideas_system_prompt,
+    get_spellcheck_system_prompt,
     get_system_prompt,
 )
 from recruitai.ai.text import compact_json
@@ -28,7 +31,7 @@ from recruitai.core.tasks import enqueue
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.documents import service as documents
 from recruitai.modules.jobs import service as jobs
-from recruitai.modules.letters import export, quality, repository
+from recruitai.modules.letters import export, quality, repository, spellcheck
 from recruitai.modules.letters.models import Letter, LetterVersion
 from recruitai.modules.letters.schemas import (
     AssistAction,
@@ -46,6 +49,9 @@ from recruitai.modules.letters.schemas import (
     LetterIdeasDraft,
     Mode,
     Recipient,
+    SpellFindings,
+    SpellIssue,
+    SpellItem,
     Template,
     Tone,
 )
@@ -526,6 +532,32 @@ async def assist(
         feature=ASSIST_PROMPT_VERSION,
     )
     return result.text.strip()
+
+
+async def check_spelling(
+    db: AsyncSession,
+    llm: LLMGateway,
+    *,
+    org_id: UUID,
+    letter_id: UUID,
+    items: list[SpellItem],
+) -> list[SpellIssue]:
+    """Verified spelling/grammar corrections for the given paragraphs (the user's current,
+    possibly unsaved text). Saves nothing: the client applies the ones the user accepts, then
+    saves through ``edit_block``. The letter gives the language and proves the org owns it."""
+    letter = await get_letter(db, org_id=org_id, letter_id=letter_id)
+    paragraphs = "\n".join(
+        f'<paragraph key="{i.key}">\n{unicodedata.normalize("NFC", i.text)}\n</paragraph>'
+        for i in items
+    )
+    found = await generate_retrying_invalid(
+        llm,
+        schema=SpellFindings,
+        system=get_spellcheck_system_prompt(letter.language),
+        parts=[TextPart(paragraphs)],
+        feature=SPELLCHECK_PROMPT_VERSION,
+    )
+    return spellcheck.validate(items, found.issues)
 
 
 async def export_data(

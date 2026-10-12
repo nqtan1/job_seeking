@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAssist, type AssistAction } from './api'
 import type { EditorBlock } from './blocks'
+import { SpellPanel } from './SpellPanel'
+import type { SpellIssue } from './spellcheck'
 
 const ACTIONS: [AssistAction, string][] = [
   ['shorten', 'Shorten'],
@@ -23,6 +25,19 @@ type Props = {
   value: string
   /** Writing ideas for this block (letters the user writes themself). */
   ideas?: string[]
+  /** Spelling: `undefined` = not checked (or edited since), `[]` = checked and clean. */
+  issues?: SpellIssue[]
+  ignored?: number
+  /** Checked, then edited: the result is out of date. */
+  staleCheck?: boolean
+  /** This paragraph is being checked / any check is running (buttons wait). */
+  checking?: boolean
+  checkDisabled?: boolean
+  checkError?: unknown
+  onCheck?: () => void
+  onApplyIssue?: (index: number) => void
+  onApplyAll?: () => void
+  onIgnoreIssue?: (index: number) => void
   saving: boolean
   onChange: (text: string) => void
   onSave: () => void
@@ -34,19 +49,39 @@ export function BlockEditor({
   block,
   value,
   ideas = [],
+  issues,
+  ignored,
+  staleCheck = false,
+  checking = false,
+  checkDisabled = false,
+  checkError,
+  onCheck,
+  onApplyIssue,
+  onApplyAll,
+  onIgnoreIssue,
   saving,
   onChange,
   onSave,
 }: Props) {
   const assist = useAssist(letterId)
-  const [selection, setSelection] = useState<Range>()
-  const [suggestion, setSuggestion] = useState<Range & { text: string }>()
+  const textarea = useRef<HTMLTextAreaElement>(null)
+  // A selection and an AI suggestion carry offsets into the text they were made on: once the
+  // text changes (typing, a spelling correction...) they no longer apply, so they are ignored
+  // instead of being spliced into the wrong place.
+  const [picked, setPicked] = useState<Range & { base: string }>()
+  const [proposed, setProposed] = useState<Range & { text: string; base: string }>()
+  const selection = picked?.base === value ? picked : undefined
+  const suggestion = proposed?.base === value ? proposed : undefined
   const hasSelection = selection && selection.end > selection.start
   const dirty = value !== block.text
 
   const reset = () => {
-    setSelection(undefined)
-    setSuggestion(undefined)
+    setPicked(undefined)
+    setProposed(undefined)
+  }
+  const focusText = (caret: number) => {
+    textarea.current?.focus()
+    textarea.current?.setSelectionRange(caret, caret)
   }
 
   return (
@@ -64,6 +99,7 @@ export function BlockEditor({
       )}
       <Textarea
         id={block.key}
+        ref={textarea}
         rows={block.block === 'body' || block.block === 'opening' ? 5 : 2}
         value={value}
         onChange={(e) => {
@@ -71,7 +107,11 @@ export function BlockEditor({
           reset()
         }}
         onSelect={(e) =>
-          setSelection({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd })
+          setPicked({
+            start: e.currentTarget.selectionStart,
+            end: e.currentTarget.selectionEnd,
+            base: e.currentTarget.value,
+          })
         }
       />
       {hasSelection && (
@@ -93,7 +133,10 @@ export function BlockEditor({
                     selection: value.slice(selection.start, selection.end),
                     action,
                   },
-                  { onSuccess: (r) => setSuggestion({ ...selection, text: r.suggestion }) },
+                  {
+                    onSuccess: (r) =>
+                      setProposed({ ...selection, text: r.suggestion, base: value }),
+                  },
                 )
               }
             >
@@ -120,21 +163,50 @@ export function BlockEditor({
             >
               Use suggestion
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setSuggestion(undefined)}>
+            <Button size="sm" variant="outline" onClick={() => setProposed(undefined)}>
               Dismiss
             </Button>
           </div>
         </div>
       )}
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={!dirty || saving}
-        aria-label={`Save ${block.label}`}
-        onClick={onSave}
-      >
-        Save
-      </Button>
+      {onCheck && (
+        <SpellPanel
+          label={block.label}
+          value={value}
+          issues={issues}
+          ignored={ignored}
+          stale={staleCheck}
+          unsaved={dirty}
+          onApplyIssue={(i) => onApplyIssue?.(i)}
+          onApplyAll={() => onApplyAll?.()}
+          onIgnoreIssue={(i) => onIgnoreIssue?.(i)}
+          onFocusText={focusText}
+        />
+      )}
+      {checkError !== undefined && checkError !== null && <ErrorMessage error={checkError} />}
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!dirty || saving}
+          aria-label={`Save ${block.label}`}
+          onClick={onSave}
+        >
+          Save
+        </Button>
+        {onCheck && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={checking || checkDisabled || !value.trim()}
+            aria-busy={checking}
+            aria-label={`Check spelling of ${block.label}`}
+            onClick={onCheck}
+          >
+            {checking ? 'Checking…' : 'Check spelling'}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

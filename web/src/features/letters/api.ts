@@ -100,6 +100,18 @@ export const useAssist = (id: string) =>
       ),
   })
 
+/** Spelling and grammar corrections for some paragraphs; nothing is saved. */
+export const useSpellcheck = (id: string) =>
+  useMutation({
+    mutationFn: async (items: { key: string; text: string }[]) =>
+      unwrap(
+        await api.POST('/api/v1/letters/{letter_id}/spellcheck', {
+          params: { path: { letter_id: id } },
+          body: { items },
+        }),
+      ),
+  })
+
 export const useVersions = (id: string) =>
   useQuery({
     queryKey: ['versions', id],

@@ -12,13 +12,19 @@ import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { useTask } from '@/lib/api/tasks'
 import { describeError } from '@/lib/problem'
 import { DeleteLetterButton } from './DeleteLetterButton'
-import { useEditBlock, useLetter, usePdfPreview, useRender } from './api'
+import { useEditBlock, useLetter, usePdfPreview, useRender, useSpellcheck } from './api'
 import { BlockEditor } from './BlockEditor'
 import { editorBlocks, ideasFor } from './blocks'
 import { ExportButtons, QualityPanel, VersionsPanel } from './panels'
+import { activeIssues, applyAll, applyIssue, isStale, type Checked } from './spellcheck'
 
 export function LetterPage() {
   const { letterId = '' } = useParams()
+  // Keyed by id: drafts and spelling results never leak from one letter to the next.
+  return <LetterEditor key={letterId} letterId={letterId} />
+}
+
+function LetterEditor({ letterId }: { letterId: string }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const letter = useLetter(letterId)
@@ -28,6 +34,9 @@ export function LetterPage() {
   const pdf = usePdfPreview(letterId, letter.data?.pdf_document_id ?? null)
   // Unsaved edits only; everything else is read from the server copy.
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  // Spelling results, each tied to the text it was computed for (see `activeIssues`).
+  const [checked, setChecked] = useState<Record<string, Checked>>({})
+  const spell = useSpellcheck(letterId)
 
   const status = task.data?.status
   useEffect(() => {
@@ -52,6 +61,60 @@ export function LetterPage() {
   const incomplete = editorBlocks(letter.data.content).some(
     (b) => b.block !== 'subject' && !b.text.trim(),
   )
+  const blocks = editorBlocks(letter.data.content)
+  type Block = (typeof blocks)[number]
+  const textOf = (b: Block) => drafts[b.key] ?? b.text
+  const issuesOf = (b: Block) => activeIssues(checked[b.key], textOf(b))
+  const checkable = blocks.filter((b) => textOf(b).trim())
+  // One call checks several paragraphs (the whole letter) or just one. A result is stored with
+  // the text it was computed for: if the user typed meanwhile it shows as "edited since the
+  // last check" rather than vanishing.
+  const check = (keys: string[]) => {
+    const items = checkable
+      .filter((b) => keys.includes(b.key))
+      .map((b) => ({ key: b.key, text: textOf(b) }))
+    if (items.length === 0) return
+    spell.mutate(items, {
+      onSuccess: (r) =>
+        setChecked((prev) => ({
+          ...prev,
+          ...Object.fromEntries(
+            items.map((it) => [
+              it.key,
+              { text: it.text, issues: r.issues.filter((i) => i.key === it.key), ignored: 0 },
+            ]),
+          ),
+        })),
+    })
+  }
+  const keep = (b: Block, text: string, issues: Checked['issues'], ignored = 0) =>
+    setChecked((prev) => ({
+      ...prev,
+      [b.key]: { text, issues, ignored: (prev[b.key]?.ignored ?? 0) + ignored },
+    }))
+  const accept = (b: Block, text: string, issues: Checked['issues']) => {
+    setDrafts((d) => ({ ...d, [b.key]: text }))
+    keep(b, text, issues)
+  }
+  const checking = spell.isPending ? (spell.variables ?? []).map((v) => v.key) : []
+  const errorKeys = spell.isError ? (spell.variables ?? []).map((v) => v.key) : []
+  const allIssues = blocks.flatMap((b) => issuesOf(b) ?? [])
+  const checkedCount = checkable.filter((b) => issuesOf(b) !== undefined).length
+  const corrections = `${allIssues.length} ${allIssues.length === 1 ? 'correction' : 'corrections'}`
+  const unsaved = blocks.filter((b) => drafts[b.key] !== undefined && drafts[b.key] !== b.text)
+  // Several paragraphs corrected at once would otherwise need one Save each.
+  const saveAll = async () => {
+    for (const b of unsaved) {
+      const text = drafts[b.key]
+      if (!text.trim()) continue
+      try {
+        await edit.mutateAsync({ block: b.block, index: b.index, text })
+      } catch {
+        return // the error is shown below; the remaining drafts stay
+      }
+      setDrafts(({ [b.key]: _saved, ...rest }) => rest)
+    }
+  }
   const rendering = render.isPending || status === 'queued'
   const renderFailed = status === 'failed' || render.isError
 
@@ -84,13 +147,79 @@ export function LetterPage() {
     >
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          {editorBlocks(letter.data.content).map((b) => (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={spell.isPending || checkable.length === 0}
+              aria-busy={spell.isPending && checking.length > 1}
+              onClick={() => check(blocks.map((b) => b.key))}
+            >
+              {spell.isPending && checking.length > 1
+                ? 'Checking spelling…'
+                : 'Check spelling of the whole letter'}
+            </Button>
+            {allIssues.length > 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  blocks.forEach((b) => {
+                    const issues = issuesOf(b)
+                    if (issues?.length) accept(b, applyAll(textOf(b), issues), [])
+                  })
+                }
+              >
+                Apply all {allIssues.length} corrections
+              </Button>
+            )}
+            {unsaved.length > 1 && (
+              <Button size="sm" disabled={edit.isPending} onClick={saveAll}>
+                {edit.isPending ? 'Saving…' : `Save ${unsaved.length} changes`}
+              </Button>
+            )}
+            <span role="status" aria-live="polite" className="text-sm text-muted-foreground">
+              {checkedCount === 0
+                ? ''
+                : checkedCount < checkable.length
+                  ? `Checked ${checkedCount} of ${checkable.length} paragraphs: ${
+                      allIssues.length === 0 ? 'no issue so far' : `${corrections} suggested`
+                    }.`
+                  : allIssues.length === 0
+                    ? 'No spelling or grammar issue found.'
+                    : `${corrections} suggested below.`}
+            </span>
+          </div>
+          {spell.isError && errorKeys.length > 1 && <ErrorMessage error={spell.error} />}
+          {blocks.map((b) => (
             <BlockEditor
               key={b.key}
               letterId={letterId}
               block={b}
               value={drafts[b.key] ?? b.text}
               ideas={ideasFor(letter.data.ideas, b)}
+              issues={issuesOf(b)}
+              ignored={checked[b.key]?.ignored}
+              staleCheck={isStale(checked[b.key], textOf(b))}
+              checking={checking.includes(b.key)}
+              checkDisabled={spell.isPending}
+              checkError={
+                errorKeys.length === 1 && errorKeys[0] === b.key ? spell.error : undefined
+              }
+              onCheck={() => check([b.key])}
+              onApplyIssue={(i) => {
+                const r = applyIssue(textOf(b), issuesOf(b) ?? [], i)
+                accept(b, r.text, r.issues)
+              }}
+              onApplyAll={() => accept(b, applyAll(textOf(b), issuesOf(b) ?? []), [])}
+              onIgnoreIssue={(i) =>
+                keep(
+                  b,
+                  textOf(b),
+                  (issuesOf(b) ?? []).filter((_, n) => n !== i),
+                  1,
+                )
+              }
               saving={edit.isPending}
               onChange={(text) => setDrafts({ ...drafts, [b.key]: text })}
               onSave={() =>
