@@ -593,7 +593,11 @@ export interface paths {
         get: operations["get_conversation_api_v1_coach_conversations__conversation_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Conversation
+         * @description Permanently deletes the conversation and all its messages.
+         */
+        delete: operations["delete_conversation_api_v1_coach_conversations__conversation_id__delete"];
         options?: never;
         head?: never;
         /**
@@ -615,6 +619,23 @@ export interface paths {
         put?: never;
         /** Send Message */
         post: operations["send_message_api_v1_coach_conversations__conversation_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coach/conversations/{conversation_id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate */
+        post: operations["regenerate_api_v1_coach_conversations__conversation_id__regenerate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1440,18 +1461,6 @@ export interface components {
              */
             references?: components["schemas"]["Reference"][] | null;
         };
-        /**
-         * Capabilities
-         * @description What the model behind the coach can do; the UI says so when web research is missing.
-         */
-        Capabilities: {
-            /** Function Calling */
-            function_calling: boolean;
-            /** Web Grounding */
-            web_grounding: boolean;
-            /** Streaming */
-            streaming: boolean;
-        };
         /** Citation */
         Citation: {
             /** Title */
@@ -1460,19 +1469,6 @@ export interface components {
             uri: string;
             /** Domain */
             domain?: string | null;
-            /**
-             * Segments
-             * @description [start, end) character ranges of the reply this source supports.
-             */
-            segments?: [
-                number,
-                number
-            ][];
-        };
-        /** CitationsEvent */
-        CitationsEvent: {
-            /** Items */
-            items: components["schemas"]["Citation"][];
         };
         /** CompanyInfo */
         CompanyInfo: {
@@ -1578,9 +1574,6 @@ export interface components {
              */
             started_at: string;
             focus?: components["schemas"]["FocusJob"] | null;
-            capabilities: components["schemas"]["Capabilities"];
-            /** Job Focus Enabled */
-            job_focus_enabled: boolean;
         };
         /** ConversationPatch */
         ConversationPatch: {
@@ -1659,22 +1652,6 @@ export interface components {
              * Format: uuid
              */
             document_id: string;
-        };
-        /** DoneEvent */
-        DoneEvent: {
-            /** Message Id */
-            message_id?: string | null;
-            /** Request Id */
-            request_id?: string | null;
-        };
-        /** ErrorEvent */
-        ErrorEvent: {
-            /** Code */
-            code: string;
-            /** Detail */
-            detail: string;
-            /** Request Id */
-            request_id?: string | null;
         };
         /** EventOut */
         EventOut: {
@@ -2324,6 +2301,13 @@ export interface components {
             /** Model */
             model: string;
             job_ref?: components["schemas"]["JobRef"] | null;
+            /**
+             * Context
+             * @description What the prompt held: lengths and truncation flags of job, profile, fit, history.
+             */
+            context?: {
+                [key: string]: unknown;
+            };
             /** Steps */
             steps?: components["schemas"]["StepMeta"][];
             /** Citations */
@@ -2412,11 +2396,6 @@ export interface components {
         MotivationQuestionsOut: {
             /** Questions */
             questions: components["schemas"]["MotivationQuestion"][];
-        };
-        /** NoticeEvent */
-        NoticeEvent: {
-            /** Code */
-            code: string;
         };
         /** OnboardingOut */
         OnboardingOut: {
@@ -2911,20 +2890,6 @@ export interface components {
             /** Note */
             note?: string | null;
         };
-        /** StepEvent */
-        StepEvent: {
-            /** Id */
-            id: string;
-            /** Tool */
-            tool: string;
-            /** Label */
-            label: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "running" | "done" | "error";
-        };
         /** StepMeta */
         StepMeta: {
             /** Tool */
@@ -2936,11 +2901,6 @@ export interface components {
             status: "done" | "error";
             /** Ms */
             ms: number;
-        };
-        /** SuggestionsEvent */
-        SuggestionsEvent: {
-            /** Html */
-            html: string;
         };
         /** TaskAccepted */
         TaskAccepted: {
@@ -2962,11 +2922,6 @@ export interface components {
             error_code: string | null;
             /** Download Url */
             download_url?: string | null;
-        };
-        /** TokenEvent */
-        TokenEvent: {
-            /** Text */
-            text: string;
         };
         /** UnifiedJobSearchResponse */
         UnifiedJobSearchResponse: {
@@ -5366,6 +5321,56 @@ export interface operations {
             };
         };
     };
+    delete_conversation_api_v1_coach_conversations__conversation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     patch_conversation_api_v1_coach_conversations__conversation_id__patch: {
         parameters: {
             query?: never;
@@ -5496,14 +5501,75 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Server-Sent Events (`event: <name>` + `data: <json>`): zero or more `step`, `token`, then `citations` / `suggestions` / `notice` as they apply, and exactly one terminal `done` or `error`. */
+            /** @description Server-Sent Events: `token` {text}, then one `done` or `error` {code, detail}. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/event-stream": unknown;
-                    "application/json": components["schemas"]["StepEvent"] | components["schemas"]["TokenEvent"] | components["schemas"]["CitationsEvent"] | components["schemas"]["SuggestionsEvent"] | components["schemas"]["NoticeEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    regenerate_api_v1_coach_conversations__conversation_id__regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-Sent Events, as for a new message; replaces the last reply. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Authentication is required or the provided credentials are invalid. */

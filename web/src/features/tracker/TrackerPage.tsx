@@ -382,7 +382,7 @@ function Attention({ apps }: { apps: Application[] }) {
               </Link>
             ) : (
               <Link
-                to={`/?ask=${encodeURIComponent(`Help me write a short follow-up email to ${app.company_name}${app.job_title ? ` about the ${app.job_title} role` : ''}. I applied ${days} days ago and have had no reply.`)}`}
+                to={`/?${app.job_id ? `job=${app.job_id}&` : ''}ask=${encodeURIComponent(`Help me write a short follow-up email to ${app.company_name}${app.job_title ? ` about the ${app.job_title} role` : ''}. I applied ${days} days ago and have had no reply.`)}`}
                 className={buttonVariants({ size: 'sm', variant: 'outline' })}
               >
                 Draft a follow-up

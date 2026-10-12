@@ -58,10 +58,14 @@ async def test_stream_a_reply_then_read_the_stored_turn(
     assert resp.headers["content-type"].startswith("text/event-stream")
     assert resp.headers["cache-control"] == "no-cache"
     events = parse_sse(resp.text)
-    assert events == [
-        ("token", {"text": "Votre "}), ("token", {"text": "CV "}),
-        ("token", {"text": "est solide."}), ("done", {}),
+    names = [n for n, _ in events]
+    assert names == ["context", "token", "token", "token", "done"]
+    assert [d["text"] for n, d in events if n == "token"] == [
+        "Votre ", "CV ", "est solide.",
     ]  # fmt: skip
+    context = events[0][1]
+    assert context["job"]["title"] == "Dev Python" and context["job"]["chars"] > 0
+    assert context["job"]["truncated"] is False
 
     stored = (await client.get(f"{BASE}/{conv_id}/messages", headers=ada)).json()
     assert [(m["role"], m["content"]) for m in stored] == [
@@ -124,12 +128,14 @@ async def test_an_error_after_the_first_token_ends_the_stream_with_an_error_even
 
     assert resp.status_code == 200  # the stream had already started
     events = parse_sse(resp.text)
-    assert events[0] == ("token", {"text": "Bon"})
-    assert events[-1] == (
+    assert events[1] == ("token", {"text": "Bon"})
+    name, data = events[-1]
+    assert (name, data["code"], data["detail"]) == (
         "error",
-        {"code": "ai_timeout", "detail": "The AI provider timed out."},
+        "ai_timeout",
+        "The AI provider timed out.",
     )
-    assert [name for name, _ in events].count("done") == 0 and len(events) == 2
+    assert [name for name, _ in events].count("done") == 0 and len(events) == 3
     assert (await client.get(f"{BASE}/{conv_id}/messages", headers=ada)).json() == []
 
     # an unexpected bug mid-stream is reported generically, never with its text
@@ -216,7 +222,7 @@ async def test_the_turn_is_committed_when_each_request_has_its_own_session(
         f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Salut"}
     )
 
-    assert [n for n, _ in parse_sse(resp.text)] == ["token", "token", "done"]
+    assert [n for n, _ in parse_sse(resp.text)] == ["context", "token", "token", "done"]
     stored = (await real_client.get(f"{BASE}/{conv_id}/messages", headers=ada)).json()
     assert [(m["role"], m["content"]) for m in stored] == [
         ("user", "Salut"),
@@ -232,12 +238,6 @@ async def test_focus_job_attach_switch_detach_and_tenancy(
     assert got.status_code == 200
     body = got.json()
     assert body["focus"]["job_id"] == body["job_id"]
-    assert body["capabilities"] == {
-        "function_calling": True,
-        "web_grounding": True,
-        "streaming": True,
-    }
-    assert body["job_focus_enabled"] is False
 
     detached = await client.patch(
         f"{BASE}/{conv_id}", headers=ada, json={"job_id": None}
@@ -294,3 +294,85 @@ async def test_unreadable_meta_does_not_break_history(
 
     resp = await client.get(f"{BASE}/{conv_id}/messages", headers=ada)
     assert resp.status_code == 200 and resp.json()[1]["meta"] is None
+
+
+async def test_chat_without_a_job_sees_the_saved_jobs_list(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    await _add_profile(client, fake_llm, ada)
+    await _add_job(client, fake_llm, ada)
+    conv_id = (await client.post(BASE, headers=ada, json={})).json()["id"]
+    fake_llm.queue_stream(PROMPT_VERSION, ["Voici."])
+    await client.post(
+        f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Mes offres ?"}
+    )
+    prompt = fake_llm.calls[-1].parts[0].text
+    assert '<saved_jobs count="1"' in prompt
+
+    # Another org's jobs never appear.
+    await _add_profile(client, fake_llm, bob)
+    mine = (await client.post(BASE, headers=bob, json={})).json()["id"]
+    fake_llm.queue_stream(PROMPT_VERSION, ["Aucune."])
+    await client.post(
+        f"{BASE}/{mine}/messages", headers=bob, json={"content": "Mes offres ?"}
+    )
+    assert '<saved_jobs count="0"' in fake_llm.calls[-1].parts[0].text
+
+
+async def test_delete_conversation_removes_it_and_its_messages(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob, db_session
+):
+    conv_id = await _conversation(client, fake_llm, ada)
+    fake_llm.queue_stream(PROMPT_VERSION, ["Ok."])
+    await client.post(f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Hi"})
+
+    assert (await client.delete(f"{BASE}/{conv_id}", headers=bob)).status_code == 404
+    assert (await client.get(f"{BASE}/{conv_id}", headers=ada)).status_code == 200
+
+    assert (await client.delete(f"{BASE}/{conv_id}", headers=ada)).status_code == 204
+    assert (await client.get(f"{BASE}/{conv_id}", headers=ada)).status_code == 404
+    left = await db_session.scalar(text("SELECT count(*) FROM messages"))
+    assert left == 0
+
+
+async def test_regenerate_replaces_the_last_reply_only(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    conv_id = await _conversation(client, fake_llm, ada)
+    nothing = await client.post(f"{BASE}/{conv_id}/regenerate", headers=ada)
+    assert nothing.status_code == 422  # no reply to regenerate yet
+
+    fake_llm.queue_stream(PROMPT_VERSION, ["Première réponse."])
+    await client.post(
+        f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Salut"}
+    )
+    fake_llm.queue_stream(PROMPT_VERSION, ["Seconde réponse."])
+    resp = await client.post(f"{BASE}/{conv_id}/regenerate", headers=ada)
+
+    assert resp.status_code == 200
+    assert parse_sse(resp.text)[-1][0] == "done"
+    stored = (await client.get(f"{BASE}/{conv_id}/messages", headers=ada)).json()
+    assert [(m["role"], m["content"]) for m in stored] == [
+        ("user", "Salut"),
+        ("assistant", "Seconde réponse."),
+    ]
+    assert (
+        await client.post(f"{BASE}/{conv_id}/regenerate", headers=bob)
+    ).status_code == 404
+
+
+async def test_a_silent_step_sends_heartbeats(monkeypatch):
+    import asyncio
+
+    from recruitai.modules.coach import router
+
+    monkeypatch.setattr(router, "HEARTBEAT_S", 0.01)
+
+    async def slow():
+        await asyncio.sleep(0.05)
+        yield ("token", {"text": "ok"})
+
+    out = [chunk async for chunk in router._events(slow(), ("context", {}))]
+
+    assert out[0].startswith("event: context") and out[-1].startswith("event: token")
+    assert ": ping\n\n" in out

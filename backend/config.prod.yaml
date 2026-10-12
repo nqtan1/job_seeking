@@ -5,6 +5,9 @@
 # invalid output is retried once: 2 x 60 s still fits the API's 120 s Cloud Run request timeout.
 ai_call_timeout_s: 120
 
+# Job-focused coach (ADR 0023): off until the owner enables it.
+coach_job_focus: false
+
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
   job_extract: {provider: gemini, model: gemini-3.5-flash-lite}

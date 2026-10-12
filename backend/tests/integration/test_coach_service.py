@@ -5,12 +5,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway, TextPart
 from recruitai.ai.prompts import fit
-from recruitai.ai.prompts.coach import PROMPT_VERSION, SYSTEM_PROMPT_CAREER_COACH
+from recruitai.ai.prompts.coach import (
+    JOB_FOCUS_OVERLAY,
+    PROMPT_VERSION,
+    SYSTEM_PROMPT_CAREER_COACH,
+)
 from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.modules.coach import repository, service
 from recruitai.modules.coach.service import HISTORY_MAX_CHARS, HISTORY_MAX_MESSAGES
 from recruitai.modules.matching import service as matching
 from recruitai.modules.matching.schemas import FitCheck
+from tests.integration.coach_replies import replies
 from tests.integration.test_letters_service import _tenant
 from tests.unit.test_schemas import VALID
 
@@ -21,7 +26,7 @@ async def _say(
     llm.queue_stream(PROMPT_VERSION, list(chunks))
     out = [
         c
-        async for c in service.stream_reply(
+        async for c in replies(
             db, llm, org_id=org.id, conversation_id=conversation.id, content=text
         )
     ]
@@ -53,12 +58,14 @@ async def test_three_turns_each_store_exactly_two_messages_and_send_the_history(
     )
     assert r1 == "Votre CV est solide."
     first = fake_llm.calls[-1]
-    assert first.system == SYSTEM_PROMPT_CAREER_COACH and first.model == "smart"
+    assert (
+        first.system == SYSTEM_PROMPT_CAREER_COACH + JOB_FOCUS_OVERLAY
+        and first.model == "smart"
+    )
     assert first.feature == PROMPT_VERSION and first.schema is None
     p1 = _prompt(fake_llm)
-    assert (
-        "Lucas Martel" in p1 and "Dev Python" in p1
-    )  # profile and job under discussion
+    assert "Dev Python" in p1  # the job under discussion
+    assert "Lucas Martel" not in p1  # the candidate's identity is never sent
     assert "Good stack match" in p1  # the latest fit report is part of the context
     assert "(no messages yet)" in p1
 
@@ -131,7 +138,7 @@ async def test_a_failed_or_empty_reply_stores_nothing_and_a_retry_works(
     )
     got: list[str] = []
     with pytest.raises(UpstreamUnavailable):
-        async for chunk in service.stream_reply(
+        async for chunk in replies(
             db_session,
             fake_llm,
             org_id=org.id,

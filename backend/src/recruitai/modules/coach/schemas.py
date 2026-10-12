@@ -2,7 +2,7 @@
 stored history to the model explicitly (the gateway itself keeps no memory)."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -28,14 +28,6 @@ class MessageIn(BaseModel):
     content: str = Field(..., min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
-class Capabilities(BaseModel):
-    """What the model behind the coach can do; the UI says so when web research is missing."""
-
-    function_calling: bool
-    web_grounding: bool
-    streaming: bool
-
-
 class FocusJob(BaseModel):
     job_id: UUID
     title: str | None
@@ -46,10 +38,6 @@ class Citation(BaseModel):
     title: str
     uri: str
     domain: str | None = None
-    segments: list[tuple[int, int]] = Field(
-        default_factory=list,
-        description="[start, end) character ranges of the reply this source supports.",
-    )
 
 
 class StepMeta(BaseModel):
@@ -70,6 +58,10 @@ class MessageMeta(BaseModel):
     prompt_version: str
     model: str
     job_ref: JobRef | None = None
+    context: dict[str, Any] = Field(
+        default_factory=dict,
+        description="What the prompt held: lengths and truncation flags of job, profile, fit, history.",
+    )
     steps: list[StepMeta] = Field(default_factory=list)
     citations: list[Citation] = Field(default_factory=list)
     queries: list[str] = Field(default_factory=list)
@@ -91,42 +83,6 @@ class MessageOut(BaseModel):
     meta: MessageMeta | None = None
 
 
-# --- SSE events of POST .../messages (documented here so OpenAPI/clients share one definition).
-# The wire format is `event: <name>` + `data: <json of the model>`.
-class StepEvent(BaseModel):  # event: step
-    id: str
-    tool: str
-    label: str
-    status: Literal["running", "done", "error"]
-
-
-class TokenEvent(BaseModel):  # event: token
-    text: str
-
-
-class CitationsEvent(BaseModel):  # event: citations (after the last token)
-    items: list[Citation]
-
-
-class SuggestionsEvent(BaseModel):  # event: suggestions
-    html: str
-
-
-class NoticeEvent(BaseModel):  # event: notice
-    code: str
-
-
-class DoneEvent(BaseModel):  # event: done
-    message_id: UUID | None = None
-    request_id: str | None = None
-
-
-class ErrorEvent(BaseModel):  # event: error
-    code: str
-    detail: str
-    request_id: str | None = None
-
-
 class ConversationSummary(BaseModel):
     id: UUID
     job_id: UUID | None
@@ -142,5 +98,3 @@ class ConversationOut(BaseModel):
     job_id: UUID | None
     started_at: datetime
     focus: FocusJob | None = None
-    capabilities: Capabilities
-    job_focus_enabled: bool

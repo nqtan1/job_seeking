@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.modules.coach.models import Conversation, Message
@@ -164,3 +164,24 @@ async def set_job(
         .where(Conversation.org_id == org_id, Conversation.id == conversation_id)
         .values(job_id=job_id)
     )
+
+
+async def delete_conversation(
+    session: AsyncSession, *, org_id: UUID, conversation_id: UUID
+) -> None:
+    """Messages go with it (``ON DELETE CASCADE``)."""
+    await session.execute(
+        delete(Conversation).where(
+            Conversation.org_id == org_id, Conversation.id == conversation_id
+        )
+    )
+
+
+async def delete_messages(
+    session: AsyncSession, *, org_id: UUID, message_ids: list[UUID]
+) -> int:
+    """How many were deleted (fewer than asked means someone else already removed them)."""
+    result = await session.execute(
+        delete(Message).where(Message.org_id == org_id, Message.id.in_(message_ids))
+    )
+    return int(result.rowcount)  # type: ignore[attr-defined]  # CursorResult for a DELETE

@@ -113,13 +113,11 @@ class Settings(BaseSettings):
     # signs up is a normal user with a personal org (core/auth.py ``is_admin``).
     admin_emails: list[str] = []
 
-    # Job-focused coach (ADR 0023, docs/design/coach-job-focus.md). Off = the plain coach.
-    # The turn deadline stays under Firebase Hosting's 60 s rewrite limit.
+    # Job-focused coach (ADR 0023, docs/design/coach-job-focus.md). Off = one plain model call
+    # per message, no tools. The turn deadline stays under Firebase Hosting's 60 s rewrite limit.
     coach_job_focus: bool = False
     coach_max_steps: int = Field(5, ge=1, le=8)
     coach_turn_timeout_s: float = Field(50.0, gt=0)
-    # Whether the OpenAI-compatible server was started with tool calling enabled (unverified: off).
-    qwen_tools: bool = False
 
     # Kill switch for the scheduled job radar (ADR 0021); the API's "Run now" is separate.
     radar_enabled: bool = True

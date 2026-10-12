@@ -106,7 +106,7 @@ export function PrepPage() {
       back={back}
       actions={
         <Link
-          to={`/?ask=${encodeURIComponent(practicePrompt(app))}`}
+          to={`/?${app.job_id ? `job=${app.job_id}&` : ''}ask=${encodeURIComponent(practicePrompt(app))}`}
           className={buttonVariants({ size: 'sm' })}
         >
           Practise with the coach

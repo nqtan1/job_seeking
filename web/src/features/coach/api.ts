@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { getAppCheckHeaders } from '@/lib/app-check'
 import { getAuthHeaders } from '@/lib/auth'
+import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
 
 export const useConversations = () =>
@@ -9,6 +10,46 @@ export const useConversations = () =>
     queryKey: ['conversations'],
     queryFn: async () => unwrap(await api.GET('/api/v1/coach/conversations')),
   })
+
+export const useConversation = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['conversation', id],
+    enabled: !!id,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/coach/conversations/{conversation_id}', {
+          params: { path: { conversation_id: id! } },
+        }),
+      ),
+  })
+
+/** Attach, switch (a job id) or detach (null) the job in focus. */
+export function useSetFocus(id: string | undefined) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (jobId: string | null) =>
+      unwrap(
+        await api.PATCH('/api/v1/coach/conversations/{conversation_id}', {
+          params: { path: { conversation_id: id! } },
+          body: { job_id: jobId },
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversation', id] }),
+  })
+}
+
+export function useDeleteConversation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) =>
+      unwrap(
+        await api.DELETE('/api/v1/coach/conversations/{conversation_id}', {
+          params: { path: { conversation_id: id } },
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
+  })
+}
 
 export const useMessages = (id: string | undefined) =>
   useQuery({
@@ -25,16 +66,17 @@ export const useMessages = (id: string | undefined) =>
 export const createConversation = async (jobId?: string) =>
   unwrap(await api.POST('/api/v1/coach/conversations', { body: { job_id: jobId ?? null } }))
 
-/** POST a message and read the Server-Sent Events reply, calling `onToken` for each chunk.
- *  Throws the problem+json body for a refusal before the first token, or `{detail}` for an
- *  `error` event in the stream (both render through `describeError`). */
-export async function streamMessage(
-  conversationId: string,
-  content: string,
-  onToken: (text: string) => void,
-  signal?: AbortSignal,
-) {
-  const res = await fetch(`/api/v1/coach/conversations/${conversationId}/messages`, {
+export type Citation = components['schemas']['Citation']
+export type Meta = NonNullable<components['schemas']['MessageOut']['meta']>
+export type StreamData = Record<string, unknown>
+export type OnEvent = (name: string, data: StreamData) => void
+
+/** POST and read the Server-Sent Events reply, calling `onEvent` for each event (`context`,
+ *  `step`, `token`, `citations`, `suggestions`, `notice`, `done`). Throws the problem+json body
+ *  for a refusal before the first event, or `{detail, request_id}` for an `error` event (both
+ *  render through `describeError`). */
+async function stream(path: string, body: unknown, onEvent: OnEvent, signal?: AbortSignal) {
+  const res = await fetch(path, {
     method: 'POST',
     signal,
     headers: {
@@ -42,7 +84,7 @@ export async function streamMessage(
       ...(await getAuthHeaders()),
       ...(await getAppCheckHeaders()),
     },
-    body: JSON.stringify({ content }),
+    body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!res.ok || !res.body) throw await res.json().catch(() => ({}))
 
@@ -55,14 +97,23 @@ export async function streamMessage(
     const blocks = buffer.split('\n\n')
     buffer = blocks.pop() ?? ''
     for (const block of blocks) {
-      const event = /^event: (.*)$/m.exec(block)?.[1]
-      const data = JSON.parse(/^data: (.*)$/m.exec(block)?.[1] ?? '{}') as {
-        text?: string
-        detail?: string
-      }
-      if (event === 'token') onToken(data.text ?? '')
-      else if (event === 'error') throw { detail: data.detail }
-      else if (event === 'done') return
+      const name = /^event: (.*)$/m.exec(block)?.[1]
+      if (!name) continue // a `: ping` heartbeat
+      const data = JSON.parse(/^data: (.*)$/m.exec(block)?.[1] ?? '{}') as StreamData
+      if (name === 'error') throw { detail: data.detail, request_id: data.request_id }
+      onEvent(name, data)
+      if (name === 'done') return
     }
   }
 }
+
+export const streamMessage = (
+  conversationId: string,
+  content: string,
+  onEvent: OnEvent,
+  signal?: AbortSignal,
+) => stream(`/api/v1/coach/conversations/${conversationId}/messages`, { content }, onEvent, signal)
+
+/** Re-answer the last message; the new reply replaces the old one. */
+export const regenerateReply = (conversationId: string, onEvent: OnEvent, signal?: AbortSignal) =>
+  stream(`/api/v1/coach/conversations/${conversationId}/regenerate`, undefined, onEvent, signal)
