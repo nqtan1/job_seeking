@@ -18,8 +18,69 @@ class ConversationIn(BaseModel):
     )
 
 
+class ConversationPatch(BaseModel):
+    job_id: UUID | None = Field(
+        description="The job to focus on (replaces the current one), or null to detach."
+    )
+
+
 class MessageIn(BaseModel):
     content: str = Field(..., min_length=1, max_length=MAX_MESSAGE_CHARS)
+
+
+class Capabilities(BaseModel):
+    """What the model behind the coach can do; the UI says so when web research is missing."""
+
+    function_calling: bool
+    web_grounding: bool
+    streaming: bool
+
+
+class FocusJob(BaseModel):
+    job_id: UUID
+    title: str | None
+    company: str | None
+
+
+class Citation(BaseModel):
+    title: str
+    uri: str
+    domain: str | None = None
+    segments: list[tuple[int, int]] = Field(
+        default_factory=list,
+        description="[start, end) character ranges of the reply this source supports.",
+    )
+
+
+class StepMeta(BaseModel):
+    tool: str
+    status: Literal["done", "error"]
+    ms: int
+
+
+class JobRef(BaseModel):
+    job_id: UUID
+    content_hash: str = Field(description="sha256 of the job data used for this reply.")
+
+
+class MessageMeta(BaseModel):
+    """What an assistant reply was grounded in (stored with the message, ``schema_version`` 1)."""
+
+    schema_version: Literal[1] = 1
+    prompt_version: str
+    model: str
+    job_ref: JobRef | None = None
+    steps: list[StepMeta] = Field(default_factory=list)
+    citations: list[Citation] = Field(default_factory=list)
+    queries: list[str] = Field(default_factory=list)
+    search_suggestions_html: str | None = Field(
+        default=None,
+        description="Google Search Suggestion markup; render unmodified in a sandboxed iframe.",
+    )
+    degraded: list[str] = Field(
+        default_factory=list,
+        description="Notice codes: web_unavailable, step_limit, turn_timeout, tool_error.",
+    )
 
 
 class MessageOut(BaseModel):
@@ -27,6 +88,43 @@ class MessageOut(BaseModel):
     role: Role
     content: str
     created_at: datetime
+    meta: MessageMeta | None = None
+
+
+# --- SSE events of POST .../messages (documented here so OpenAPI/clients share one definition).
+# The wire format is `event: <name>` + `data: <json of the model>`.
+class StepEvent(BaseModel):  # event: step
+    id: str
+    tool: str
+    label: str
+    status: Literal["running", "done", "error"]
+
+
+class TokenEvent(BaseModel):  # event: token
+    text: str
+
+
+class CitationsEvent(BaseModel):  # event: citations (after the last token)
+    items: list[Citation]
+
+
+class SuggestionsEvent(BaseModel):  # event: suggestions
+    html: str
+
+
+class NoticeEvent(BaseModel):  # event: notice
+    code: str
+
+
+class DoneEvent(BaseModel):  # event: done
+    message_id: UUID | None = None
+    request_id: str | None = None
+
+
+class ErrorEvent(BaseModel):  # event: error
+    code: str
+    detail: str
+    request_id: str | None = None
 
 
 class ConversationSummary(BaseModel):
@@ -43,3 +141,6 @@ class ConversationOut(BaseModel):
     candidate_id: UUID
     job_id: UUID | None
     started_at: datetime
+    focus: FocusJob | None = None
+    capabilities: Capabilities
+    job_focus_enabled: bool

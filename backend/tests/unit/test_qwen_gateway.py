@@ -372,3 +372,17 @@ def test_any_failure_reading_a_pdf_is_a_validation_error_not_a_500(monkeypatch):
     monkeypatch.setattr(qwen, "PdfReader", Weird)
     with pytest.raises(ValidationFailed):
         qwen._pdf_text(b"%PDF-1.4")
+
+
+def test_capabilities_follow_the_qwen_tools_setting() -> None:
+    def caps(**o):
+        return QwenGateway(
+            client=_mock_client(),
+            settings=_settings(**o),
+            db=MagicMock(),
+            org_id=uuid4(),
+            user_id=uuid4(),
+        ).capabilities("coach@2")
+
+    assert not caps().function_calling and not caps().web_grounding
+    assert caps(qwen_tools=True).function_calling

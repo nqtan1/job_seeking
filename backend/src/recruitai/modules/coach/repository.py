@@ -1,9 +1,10 @@
 """All SQL for the coach module. Every query filters by org_id."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.modules.coach.models import Conversation, Message
@@ -65,6 +66,7 @@ async def add_turn(
     conversation_id: UUID,
     user_text: str,
     assistant_text: str,
+    assistant_meta: dict[str, Any] | None = None,
 ) -> list[Message]:
     """The two messages of one turn, in the caller's transaction. Timestamps are explicit and
     1 ms apart, and always after the conversation's latest message: with ``now()`` both rows
@@ -97,6 +99,7 @@ async def add_turn(
             ("assistant", assistant_text, 1),
         )
     ]
+    rows[1].meta = assistant_meta
     session.add_all(rows)
     await session.flush()
     return rows
@@ -151,3 +154,13 @@ async def all_messages(session: AsyncSession, *, org_id: UUID) -> list[Message]:
         .order_by(Message.conversation_id, Message.created_at, Message.id)
     )
     return list(rows.scalars())
+
+
+async def set_job(
+    session: AsyncSession, *, org_id: UUID, conversation_id: UUID, job_id: UUID | None
+) -> None:
+    await session.execute(
+        update(Conversation)
+        .where(Conversation.org_id == org_id, Conversation.id == conversation_id)
+        .values(job_id=job_id)
+    )

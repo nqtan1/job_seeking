@@ -7,6 +7,8 @@ coach's), so a failed or abandoned reply leaves the conversation as it was and t
 simply send the message again.
 """
 
+import hashlib
+import json
 from collections.abc import AsyncGenerator
 from contextlib import aclosing
 from datetime import datetime
@@ -23,7 +25,7 @@ from recruitai.core.export import rows_as_dicts
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.coach import repository
 from recruitai.modules.coach.models import Conversation, Message
-from recruitai.modules.coach.schemas import MAX_MESSAGE_CHARS
+from recruitai.modules.coach.schemas import MAX_MESSAGE_CHARS, JobRef, MessageMeta
 from recruitai.modules.jobs import service as jobs
 from recruitai.modules.matching import service as matching
 
@@ -95,6 +97,45 @@ async def create_conversation(
     return conversation
 
 
+async def set_job(
+    db: AsyncSession, *, org_id: UUID, conversation_id: UUID, job_id: UUID | None
+) -> Conversation:
+    """Attach, switch or detach the job in focus. 404 for another org's job."""
+    conversation = await get_conversation(
+        db, org_id=org_id, conversation_id=conversation_id
+    )
+    if job_id is not None:
+        await jobs.get_job(db, org_id=org_id, job_id=job_id)
+    await repository.set_job(
+        db, org_id=org_id, conversation_id=conversation_id, job_id=job_id
+    )
+    await db.commit()
+    await db.refresh(conversation)
+    return conversation
+
+
+async def focus_job(
+    db: AsyncSession, conversation: Conversation
+) -> tuple[UUID, str | None, str | None] | None:
+    """(id, title, company) of the job in focus; None when none, or it was deleted since."""
+    if conversation.job_id is None:
+        return None
+    try:
+        job = await jobs.get_job(
+            db, org_id=conversation.org_id, job_id=conversation.job_id
+        )
+    except NotFound:
+        return None
+    company = job.data.get("company")
+    name = company.get("name") if isinstance(company, dict) else None
+    title = job.data.get("title")
+    return (
+        job.id,
+        title if isinstance(title, str) else None,
+        name if isinstance(name, str) else None,
+    )
+
+
 async def get_conversation(
     db: AsyncSession, *, org_id: UUID, conversation_id: UUID
 ) -> Conversation:
@@ -130,24 +171,30 @@ async def list_messages(
 
 async def _context(
     db: AsyncSession, conversation: Conversation
-) -> tuple[dict[str, Any], str, str]:
-    """Profile, plus the job under discussion and its latest fit report when they exist."""
+) -> tuple[dict[str, Any], str, str, JobRef | None]:
+    """Profile, plus the job under discussion and its latest fit report when they exist, and
+    which version of the job that was (a hash: the reply may be read after the job is edited)."""
     org_id = conversation.org_id
     profile = (await candidates.require_profile(db, org_id=org_id)).data
     job_block = fit_block = ""
+    job_ref: JobRef | None = None
     if conversation.job_id is not None:
         try:
             job = await jobs.get_job(db, org_id=org_id, job_id=conversation.job_id)
         except NotFound:
             job = None  # the job was deleted since: carry on as a general conversation
         if job is not None:
+            digest = hashlib.sha256(
+                json.dumps(job.data, sort_keys=True, ensure_ascii=False).encode()
+            ).hexdigest()
+            job_ref = JobRef(job_id=job.id, content_hash=digest)
             job_block = f"\n<job_under_discussion>\n{compact_json(job.data)}\n</job_under_discussion>\n"
             reports = await matching.list_analyses(
                 db, org_id=org_id, job_id=job.id, limit=1
             )
             if reports:
                 fit_block = f"\n<previous_fit_analysis>\n{compact_json(reports[0].data)}\n</previous_fit_analysis>\n"
-    return profile, job_block, fit_block
+    return profile, job_block, fit_block, job_ref
 
 
 async def stream_reply(
@@ -171,7 +218,7 @@ async def stream_reply(
     conversation = await get_conversation(
         db, org_id=org_id, conversation_id=conversation_id
     )
-    profile, job_block, fit_block = await _context(db, conversation)
+    profile, job_block, fit_block, job_ref = await _context(db, conversation)
     history = window(
         await repository.recent_messages(
             db,
@@ -214,6 +261,11 @@ async def stream_reply(
         conversation_id=conversation_id,
         user_text=content,
         assistant_text=reply,
+        assistant_meta=MessageMeta(
+            prompt_version=PROMPT_VERSION,
+            model=llm.model_name("smart", PROMPT_VERSION),
+            job_ref=job_ref,
+        ).model_dump(mode="json"),
     )
     await db.commit()
 

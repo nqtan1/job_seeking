@@ -14,15 +14,19 @@ has already started cannot be). So:
 import json
 import logging
 from collections.abc import AsyncGenerator, AsyncIterator
-from typing import Annotated
+from dataclasses import asdict
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.dependencies import get_llm_gateway
 from recruitai.ai.gateway import LLMGateway
+from recruitai.ai.prompts.coach import PROMPT_VERSION
+from recruitai.config import get_settings
 from recruitai.core.app_check import verify_app_check
 from recruitai.core.db import get_db
 from recruitai.core.errors import (
@@ -38,27 +42,65 @@ from recruitai.core.tenancy import OrgContext, get_org_context
 from recruitai.modules.coach import service
 from recruitai.modules.coach.models import Conversation, Message
 from recruitai.modules.coach.schemas import (
+    Capabilities,
+    CitationsEvent,
     ConversationIn,
     ConversationOut,
+    ConversationPatch,
     ConversationSummary,
+    DoneEvent,
+    ErrorEvent,
+    FocusJob,
     MessageIn,
+    MessageMeta,
     MessageOut,
+    NoticeEvent,
     Role,
+    StepEvent,
+    SuggestionsEvent,
+    TokenEvent,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/coach/conversations", tags=["coach"])
 
 
-def _conversation_out(c: Conversation) -> ConversationOut:
+async def _conversation_out(
+    db: AsyncSession, llm: LLMGateway, c: Conversation
+) -> ConversationOut:
+    focus = await service.focus_job(db, c)
+    caps = llm.capabilities(PROMPT_VERSION)
     return ConversationOut(
-        id=c.id, candidate_id=c.candidate_id, job_id=c.job_id, started_at=c.started_at
+        id=c.id,
+        candidate_id=c.candidate_id,
+        job_id=c.job_id,
+        started_at=c.started_at,
+        focus=FocusJob(job_id=focus[0], title=focus[1], company=focus[2])
+        if focus
+        else None,
+        capabilities=Capabilities(**asdict(caps)),
+        job_focus_enabled=get_settings().coach_job_focus,
     )
+
+
+def _meta(raw: dict[str, Any] | None) -> MessageMeta | None:
+    """An unreadable ``meta`` (another schema_version) must not break reading the history."""
+    try:
+        return MessageMeta.model_validate(raw) if raw else None
+    except ValidationError:
+        logger.warning("coach message meta not readable")
+        return None
 
 
 def _message_out(m: Message) -> MessageOut:
     role: Role = m.role  # type: ignore[assignment]  # the DB CHECK allows only user/assistant
-    return MessageOut(id=m.id, role=role, content=m.content, created_at=m.created_at)
+    return MessageOut(
+        id=m.id,
+        role=role,
+        content=m.content,
+        created_at=m.created_at,
+        meta=_meta(m.meta),
+    )
 
 
 def _event(name: str, data: dict[str, str]) -> str:
@@ -93,11 +135,48 @@ async def create_conversation(
     body: ConversationIn,
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
 ) -> ConversationOut:
     conversation = await service.create_conversation(
         db, org_id=ctx.org_id, job_id=body.job_id
     )
-    return _conversation_out(conversation)
+    return await _conversation_out(db, llm, conversation)
+
+
+@router.get(
+    "/{conversation_id}",
+    response_model=ConversationOut,
+    responses=problem_responses(Unauthorized, NotFound),
+)
+async def get_conversation(
+    conversation_id: UUID,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> ConversationOut:
+    conversation = await service.get_conversation(
+        db, org_id=ctx.org_id, conversation_id=conversation_id
+    )
+    return await _conversation_out(db, llm, conversation)
+
+
+@router.patch(
+    "/{conversation_id}",
+    response_model=ConversationOut,
+    responses=problem_responses(Unauthorized, NotFound),
+)
+async def patch_conversation(
+    conversation_id: UUID,
+    body: ConversationPatch,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> ConversationOut:
+    """Attach, switch or detach the job in focus (one per conversation)."""
+    conversation = await service.set_job(
+        db, org_id=ctx.org_id, conversation_id=conversation_id, job_id=body.job_id
+    )
+    return await _conversation_out(db, llm, conversation)
 
 
 @router.get(
@@ -157,8 +236,17 @@ async def list_messages(
             Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
         ),
         200: {
-            "description": "Server-Sent Events: `token` {text}, then one `done` or `error` {code, detail}.",
+            "description": "Server-Sent Events (`event: <name>` + `data: <json>`): zero or more "
+            "`step`, `token`, then `citations` / `suggestions` / `notice` as they apply, and "
+            "exactly one terminal `done` or `error`.",
             "content": {"text/event-stream": {}},
+            "model": StepEvent
+            | TokenEvent
+            | CitationsEvent
+            | SuggestionsEvent
+            | NoticeEvent
+            | DoneEvent
+            | ErrorEvent,
         },
     },
 )

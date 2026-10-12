@@ -25,7 +25,14 @@ from google.genai import types
 from google.genai.errors import ClientError, ServerError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.ai.gateway import FilePart, Part, T, TextPart, provider_errors
+from recruitai.ai.gateway import (
+    BackendCapabilities,
+    FilePart,
+    Part,
+    T,
+    TextPart,
+    provider_errors,
+)
 from recruitai.ai.usage import CallStats, tracked_call
 from recruitai.config import Settings
 from recruitai.core.errors import UpstreamUnavailable
@@ -33,6 +40,10 @@ from recruitai.core.errors import UpstreamUnavailable
 _RETRYABLE_CODES = frozenset({429, 500, 502, 503, 504})
 # What this SDK (and its HTTP layer) raises: all of it becomes a clean ``ai_unavailable``.
 _SDK_ERRORS = (ClientError, ServerError, httpx.HTTPError)
+
+
+def capabilities(settings: Settings) -> BackendCapabilities:
+    return BackendCapabilities()  # function calling, Google Search grounding, streaming
 
 
 def build_client(settings: Settings) -> genai.Client:
@@ -79,6 +90,9 @@ class GeminiGateway:
         self._db = db
         self._org_id = org_id
         self._user_id = user_id
+
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        return capabilities(self._settings)
 
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None
