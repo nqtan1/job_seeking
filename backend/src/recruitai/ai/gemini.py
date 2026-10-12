@@ -27,10 +27,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import (
     BackendCapabilities,
+    ChatEvent,
     FilePart,
+    GroundedAnswer,
     Part,
+    Source,
     T,
+    TextDelta,
     TextPart,
+    ToolCall,
+    ToolCalls,
+    ToolCallTurn,
+    ToolResultTurn,
+    ToolSpec,
+    Turn,
+    UserTurn,
     provider_errors,
 )
 from recruitai.ai.usage import CallStats, tracked_call
@@ -40,10 +51,31 @@ from recruitai.core.errors import UpstreamUnavailable
 _RETRYABLE_CODES = frozenset({429, 500, 502, 503, 504})
 # What this SDK (and its HTTP layer) raises: all of it becomes a clean ``ai_unavailable``.
 _SDK_ERRORS = (ClientError, ServerError, httpx.HTTPError)
+_NO_LIMIT = 1_000_000
 
 
-def capabilities(settings: Settings) -> BackendCapabilities:
-    return BackendCapabilities()  # function calling, Google Search grounding, streaming
+def _contents(turns: list[Turn]) -> list[types.Content]:
+    out: list[types.Content] = []
+    for turn in turns:
+        if isinstance(turn, UserTurn):
+            out.append(
+                types.Content(role="user", parts=[types.Part.from_text(text=turn.text)])
+            )
+        elif isinstance(turn, ToolCallTurn):
+            out.append(turn.raw)  # the model's own message, signatures included
+        elif isinstance(turn, ToolResultTurn):
+            out.append(
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_function_response(
+                            name=r.name, response=r.result
+                        )
+                        for r in turn.results
+                    ],
+                )
+            )
+    return out
 
 
 def build_client(settings: Settings) -> genai.Client:
@@ -91,9 +123,6 @@ class GeminiGateway:
         self._org_id = org_id
         self._user_id = user_id
 
-    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
-        return capabilities(self._settings)
-
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None
     ) -> str:
@@ -129,8 +158,11 @@ class GeminiGateway:
                 delay *= 2
         raise AssertionError("unreachable")  # the loop always returns or raises
 
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        return BackendCapabilities()  # function calling and Google Search grounding
+
     def _tracked(
-        self, feature: str, model_name: str
+        self, feature: str, model_name: str, *, continuation: bool = False
     ) -> AbstractAsyncContextManager[CallStats]:
         return tracked_call(
             self._db,
@@ -138,7 +170,8 @@ class GeminiGateway:
             user_id=self._user_id,
             feature=feature,
             model=model_name,
-            quota=self._settings.ai_daily_quota_per_user,
+            # A follow-up call of a turn the user already started is counted, not refused.
+            quota=_NO_LIMIT if continuation else self._settings.ai_daily_quota_per_user,
         )
 
     async def generate(
@@ -213,3 +246,129 @@ class GeminiGateway:
                         )
                     if chunk.text:
                         yield chunk.text
+
+    async def converse(
+        self,
+        *,
+        system: str,
+        turns: list[Turn],
+        tools: list[ToolSpec],
+        feature: str,
+        model: Literal["fast", "smart"] = "fast",
+        allow_tools: bool = True,
+        continuation: bool = False,
+    ) -> AsyncGenerator[ChatEvent]:
+        model_name = _model_name(self._settings, model, feature)
+        timeout = self._settings.ai_call_timeout_s
+        declarations = [
+            types.FunctionDeclaration(
+                name=t.name,
+                description=t.description,
+                parameters_json_schema=t.parameters,
+            )
+            for t in tools
+        ]
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+            tools=[types.Tool(function_declarations=declarations)]
+            if declarations
+            else None,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                disable=True
+            ),
+            # NONE keeps the declarations (the history holds earlier calls) but forbids new ones.
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode=types.FunctionCallingConfigMode.NONE
+                )
+            )
+            if declarations and not allow_tools
+            else None,
+        )
+        async with self._tracked(
+            feature, model_name, continuation=continuation
+        ) as call:
+            with provider_errors(*_SDK_ERRORS):
+                chunks = await asyncio.wait_for(
+                    self._client.aio.models.generate_content_stream(
+                        model=model_name,
+                        contents=_contents(turns),  # type: ignore[arg-type]  # list invariance, as above
+                        config=config,
+                    ),
+                    timeout=timeout,
+                )
+                iterator = chunks.__aiter__()
+                parts: list[types.Part] = []
+                calls: list[ToolCall] = []
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            iterator.__anext__(), timeout=timeout
+                        )
+                    except StopAsyncIteration:
+                        break
+                    if chunk.usage_metadata is not None:
+                        call.input_tokens = chunk.usage_metadata.prompt_token_count or 0
+                        call.output_tokens = (
+                            chunk.usage_metadata.candidates_token_count or 0
+                        )
+                    candidate = chunk.candidates[0] if chunk.candidates else None
+                    for part in (
+                        (candidate.content.parts or [])
+                        if candidate and candidate.content
+                        else []
+                    ):
+                        parts.append(part)
+                        if part.function_call is not None:
+                            calls.append(
+                                ToolCall(
+                                    name=part.function_call.name or "",
+                                    args=dict(part.function_call.args or {}),
+                                )
+                            )
+                        elif part.text and not part.thought:
+                            yield TextDelta(part.text)
+        if calls:
+            yield ToolCalls(calls=calls, raw=types.Content(role="model", parts=parts))
+
+    async def ground(self, *, query: str, system: str, feature: str) -> GroundedAnswer:
+        model_name = _model_name(self._settings, "smart", feature)
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+        )
+        async with self._tracked(feature, model_name, continuation=True) as call:
+            with provider_errors(*_SDK_ERRORS):
+                response = await self._call_with_retries(
+                    model_name=model_name,
+                    contents=[types.Part.from_text(text=query)],
+                    config=config,
+                )
+            usage = response.usage_metadata
+            if usage is not None:
+                call.input_tokens = usage.prompt_token_count or 0
+                call.output_tokens = usage.candidates_token_count or 0
+        candidate = response.candidates[0] if response.candidates else None
+        meta = candidate.grounding_metadata if candidate else None
+        sources: list[Source] = []
+        for chunk in (meta.grounding_chunks or []) if meta else []:
+            web = chunk.web
+            if (
+                web is not None
+                and web.uri
+                and web.uri.startswith(("https://", "http://"))
+            ):
+                sources.append(
+                    Source(
+                        title=web.title or web.domain or web.uri,
+                        uri=web.uri,
+                        domain=web.domain,
+                    )
+                )
+        entry = meta.search_entry_point if meta else None
+        return GroundedAnswer(
+            text=(response.text or "").strip(),
+            sources=sources,
+            queries=list(meta.web_search_queries or []) if meta else [],
+            suggestions_html=entry.rendered_content if entry else None,
+        )

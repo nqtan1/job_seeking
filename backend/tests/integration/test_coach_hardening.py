@@ -1,18 +1,21 @@
 """Coach edge cases that need real connections or an abandoned stream (P2-23e)."""
 
 import asyncio
+from unittest.mock import ANY
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from recruitai.ai.gateway import FakeLLMGateway
+from recruitai.ai.gateway import BackendCapabilities, FakeLLMGateway, TextDelta
 from recruitai.ai.prompts.coach import PROMPT_VERSION
+from recruitai.config import get_settings
 from recruitai.core.auth import CurrentUser
 from recruitai.core.tenancy import get_org_context
 from recruitai.modules.candidates import repository as candidates_repo
 from recruitai.modules.candidates.schemas import CVInformation, PersonalInfo, RawSkill
 from recruitai.modules.coach import service
 from tests.fixtures.db import purge_tenant
+from tests.integration.coach_replies import replies
 from tests.integration.test_letters_service import _tenant
 
 
@@ -24,15 +27,17 @@ async def test_an_abandoned_reply_stores_nothing_and_the_conversation_still_work
     conversation = await service.create_conversation(db_session, org_id=org.id)
     fake_llm.queue_stream(PROMPT_VERSION, ["Bon", "jour", " à tous"])
 
-    replies = service.stream_reply(
+    stream = service.stream_reply(
         db_session,
         fake_llm,
+        get_settings(),
         org_id=org.id,
         conversation_id=conversation.id,
         content="Salut",
     )
-    assert await anext(replies) == "Bon"
-    await replies.aclose()  # what the server does when the connection drops
+    assert (await anext(stream))[0] == "context"
+    assert await anext(stream) == ("token", {"text": "Bon"})
+    await stream.aclose()  # what the server does when the connection drops
 
     assert (
         await service.list_messages(
@@ -43,7 +48,7 @@ async def test_an_abandoned_reply_stores_nothing_and_the_conversation_still_work
     fake_llm.queue_stream(PROMPT_VERSION, ["Bonjour !"])
     retried = [
         c
-        async for c in service.stream_reply(
+        async for c in replies(
             db_session,
             fake_llm,
             org_id=org.id,
@@ -84,7 +89,7 @@ async def test_simultaneous_messages_in_one_conversation_never_interleave(
         llm = FakeLLMGateway()
         llm.queue_stream(PROMPT_VERSION, [f"answer {i}"])
         async with AsyncSession(db_engine, expire_on_commit=False) as session:
-            async for _ in service.stream_reply(
+            async for _ in replies(
                 session,
                 llm,
                 org_id=ctx.org_id,
@@ -118,10 +123,16 @@ class _SpyGateway:
     def __init__(self) -> None:
         self.closed = False
 
-    async def stream(self, **_: object):
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        return BackendCapabilities()
+
+    def model_name(self, *_: object, **__: object) -> str:
+        return "spy"
+
+    async def converse(self, **_: object):
         try:
-            yield "Bon"
-            yield "jour"
+            yield TextDelta("Bon")
+            yield TextDelta("jour")
         finally:
             self.closed = True
 
@@ -133,15 +144,17 @@ async def test_closing_the_reply_closes_the_model_stream_immediately(
     conversation = await service.create_conversation(db_session, org_id=org.id)
     spy = _SpyGateway()
 
-    replies = service.stream_reply(
+    stream = service.stream_reply(
         db_session,
-        spy,
+        spy,  # type: ignore[arg-type]
+        get_settings(),
         org_id=org.id,
         conversation_id=conversation.id,
-        content="Salut",  # type: ignore[arg-type]
+        content="Salut",
     )
-    assert await anext(replies) == "Bon"
+    assert await anext(stream) == ("context", ANY)
+    assert await anext(stream) == ("token", {"text": "Bon"})
     assert spy.closed is False
-    await replies.aclose()  # the client went away
+    await stream.aclose()  # the client went away
 
     assert spy.closed is True  # not "whenever the garbage collector gets to it"

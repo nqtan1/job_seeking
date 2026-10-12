@@ -188,7 +188,12 @@ async def test_the_whole_v1_journey_from_sign_in_to_account_deletion(
             headers=who,
             json={"content": "Conseils ?"},
         )
-        assert [n for n, _ in parse_sse(reply.text)] == ["token", "token", "done"]
+        assert [n for n, _ in parse_sse(reply.text)] == [
+            "context",
+            "token",
+            "token",
+            "done",
+        ]
         history = (
             await api.get(
                 f"/api/v1/coach/conversations/{conversation['id']}/messages",

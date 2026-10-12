@@ -358,3 +358,82 @@ async def test_a_dropped_connection_is_retried_then_a_clean_upstream_error(
     assert (
         client.aio.models.generate_content.await_count == 3
     )  # 1 try + 2 retries, not a bare 500
+
+
+async def _converse_chunks(*part_lists):
+    from google.genai import types
+
+    for parts in part_lists:
+        yield MagicMock(
+            candidates=[MagicMock(content=types.Content(role="model", parts=parts))],
+            usage_metadata=MagicMock(prompt_token_count=20, candidates_token_count=5),
+        )
+
+
+async def test_converse_yields_text_and_whole_tool_calls_and_skips_thoughts(db_session):
+    from google.genai import types
+
+    from recruitai.ai.gateway import TextDelta, ToolCalls, ToolSpec, UserTurn
+
+    org_id, user_id = await _org_user(db_session)
+    parts = [
+        types.Part(text="hidden reasoning", thought=True),
+        types.Part(text="Let me look."),
+        types.Part(function_call=types.FunctionCall(name="get_job", args={})),
+    ]
+    gateway, client = _stream_gateway(
+        db_session, org_id, user_id, _converse_chunks(parts[:2], parts[2:])
+    )
+
+    out = [
+        e
+        async for e in gateway.converse(
+            system="s",
+            turns=[UserTurn("hi")],
+            tools=[
+                ToolSpec(
+                    "get_job", "Read the job.", {"type": "object", "properties": {}}
+                )
+            ],
+            feature="coach@3",
+            allow_tools=False,
+        )
+    ]
+
+    assert out[0] == TextDelta("Let me look.")  # thought parts are never shown
+    assert isinstance(out[1], ToolCalls) and out[1].calls[0].name == "get_job"
+    assert len(out[1].raw.parts) == 3  # replayed verbatim next step
+    config = client.aio.models.generate_content_stream.await_args.kwargs["config"]
+    assert config.tool_config.function_calling_config.mode == "NONE"  # forced answer
+    row = (
+        await db_session.execute(select(AiCall).where(AiCall.user_id == user_id))
+    ).scalar_one()
+    assert (row.status, row.input_tokens) == ("ok", 20)
+
+
+async def test_a_follow_up_call_of_the_turn_is_counted_but_not_refused_by_quota(
+    db_session,
+):
+    from recruitai.ai.gateway import UserTurn
+
+    org_id, user_id = await _org_user(db_session)
+    gateway, _ = _stream_gateway(
+        db_session,
+        org_id,
+        user_id,
+        _converse_chunks([]),
+        ai_daily_quota_per_user=0,
+    )
+    with pytest.raises(QuotaExceeded):  # a new turn is refused over quota
+        async for _ in gateway.converse(
+            system="s", turns=[UserTurn("hi")], tools=[], feature="coach@3"
+        ):
+            pass
+    async for _ in gateway.converse(  # but its own follow-up step runs
+        system="s",
+        turns=[UserTurn("hi")],
+        tools=[],
+        feature="coach@3",
+        continuation=True,
+    ):
+        pass

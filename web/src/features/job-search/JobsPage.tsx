@@ -232,6 +232,12 @@ function JobList() {
                 >
                   {letters[0] ? 'Open letter' : 'Write letter'}
                 </Link>
+                <Link
+                  to={`/?job=${j.id}`}
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  Discuss this job
+                </Link>
                 <ApplyActions
                   jobId={j.id}
                   jobSource={j.source}

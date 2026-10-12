@@ -22,10 +22,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import (
     BackendCapabilities,
+    ChatEvent,
     FilePart,
+    GroundedAnswer,
     Part,
     T,
+    TextDelta,
     TextPart,
+    ToolSpec,
+    Turn,
+    UserTurn,
     provider_errors,
 )
 from recruitai.ai.usage import CallStats, tracked_call
@@ -45,13 +51,6 @@ def _sanitize_base_url(url: str | None) -> str | None:
     if not url.endswith("/v1") and "/v1/" not in url:
         url = f"{url}/v1"
     return url
-
-
-def capabilities(settings: Settings) -> BackendCapabilities:
-    # No native web grounding on an OpenAI-compatible server; tools only if it was started for them.
-    return BackendCapabilities(
-        function_calling=settings.qwen_tools, web_grounding=False
-    )
 
 
 def build_client(settings: Settings) -> AsyncOpenAI:
@@ -147,9 +146,6 @@ class QwenGateway:
         self._db = db
         self._org_id = org_id
         self._user_id = user_id
-
-    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
-        return capabilities(self._settings)
 
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None
@@ -269,3 +265,30 @@ class QwenGateway:
                         call.output_tokens = chunk.usage.completion_tokens
                     if chunk.choices and chunk.choices[0].delta.content:
                         yield chunk.choices[0].delta.content
+
+    def capabilities(self, feature: str | None = None) -> BackendCapabilities:
+        # ponytail: no tool calling or web grounding on the OpenAI-compatible backend yet
+        # (the vLLM server needs --enable-auto-tool-choice; unverified). Plain answers only.
+        return BackendCapabilities(function_calling=False, web_grounding=False)
+
+    async def converse(
+        self,
+        *,
+        system: str,
+        turns: list[Turn],
+        tools: list[ToolSpec],
+        feature: str,
+        model: Literal["fast", "smart"] = "fast",
+        allow_tools: bool = True,
+        continuation: bool = False,
+    ) -> AsyncGenerator[ChatEvent]:
+        text = "\n".join(t.text for t in turns if isinstance(t, UserTurn))
+        async for chunk in self.stream(
+            system=system, parts=[TextPart(text)], feature=feature, model=model
+        ):
+            yield TextDelta(chunk)
+
+    async def ground(self, *, query: str, system: str, feature: str) -> GroundedAnswer:
+        raise UpstreamUnavailable(
+            "Web research is not available with this model.", code="web_unavailable"
+        )

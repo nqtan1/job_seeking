@@ -110,7 +110,7 @@ def test_prompt_keeps_its_grounding_and_language_rules_and_is_versioned():
     assert "RecruitAI Career Coach" in p
     assert "Do not invent facts" in p  # grounded in the provided data
     assert "same language the candidate" in p  # answers in the candidate's language
-    assert coach.PROMPT_VERSION == "coach@1"
+    assert coach.PROMPT_VERSION == "coach@3"
 
 
 def test_message_bounds_and_optional_job():

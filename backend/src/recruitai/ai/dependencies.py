@@ -59,11 +59,17 @@ class _RoutingGateway:
             raise ValueError(
                 "capabilities needs the agent's feature to pick a provider"
             )
-        # From settings alone: answering must not build a provider client (a missing key or URL
-        # would fail routes that never call a model).
+        # Provider-level facts: answered without building a client (a missing key or URL
+        # must not fail a route that never calls a model).
         if self._settings.provider_for(feature) == "qwen":
-            return qwen.capabilities(self._settings)
-        return gemini.capabilities(self._settings)
+            return BackendCapabilities(function_calling=False, web_grounding=False)
+        return BackendCapabilities()
+
+    def converse(self, **kwargs: Any) -> AsyncGenerator[Any]:
+        return self._for(kwargs["feature"]).converse(**kwargs)
+
+    async def ground(self, **kwargs: Any) -> Any:
+        return await self._for(kwargs["feature"]).ground(**kwargs)
 
     def model_name(
         self, model: Literal["fast", "smart"] = "fast", feature: str | None = None

@@ -5,6 +5,9 @@
 # invalid output is retried once: 2 x 60 s still fits the API's 120 s Cloud Run request timeout.
 ai_call_timeout_s: 120
 
+# Job-focused coach (tools + web research): on for dev, off in config.prod.yaml until enabled.
+coach_job_focus: true
+
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
   job_extract: {provider: gemini, model: gemini-3.5-flash-lite}
@@ -12,4 +15,4 @@ agents:
   # gemini-3.5-flash hangs >50 s on Vertex eu in ~2 of 3 letter calls (measured 2026-10-07); lite takes ~2.5 s
   letter: {provider: gemini, model: gemini-3.1-pro-previewo}
   letter_assist: {provider: gemini, model: gemini-3.5-flash-lite}
-  coach: {provider: gemini, model: gemini-2.5-pro}
+  coach: {provider: gemini, model: gemini-3.8-flash}

@@ -14,6 +14,7 @@ from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts import coach as coach_prompt
 from recruitai.ai.prompts import fit as fit_prompt
 from recruitai.ai.prompts import letters as letters_prompt
+from recruitai.config import get_settings
 from recruitai.core.storage import LocalStorage
 from recruitai.core.tasks import TaskRun
 from recruitai.modules.applications import service as applications
@@ -100,6 +101,7 @@ async def seed_org(
     async for _ in coach.stream_reply(
         db,
         llm,
+        get_settings(),
         org_id=org.id,
         conversation_id=conversation.id,
         content=f"coach-question-{tag}",

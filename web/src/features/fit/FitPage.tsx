@@ -113,17 +113,25 @@ export function FitPage() {
       description={job.data.data.company.name}
       back={{ to: '/jobs', label: 'Jobs' }}
       actions={
-        fit && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to={`/letters?job=${jobId}`}
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              Write a cover letter
-            </Link>
-            <ApplyActions jobId={jobId} jobSource={job.data.source} />
-          </div>
-        )
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={`/?job=${jobId}`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            Discuss this job
+          </Link>
+          {fit && (
+            <>
+              <Link
+                to={`/letters?job=${jobId}`}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                Write a cover letter
+              </Link>
+              <ApplyActions jobId={jobId} jobSource={job.data.source} />
+            </>
+          )}
+        </div>
       }
     >
       <Card>

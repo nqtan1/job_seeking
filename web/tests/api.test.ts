@@ -28,7 +28,7 @@ describe('streamMessage', () => {
       'event: token\ndata: {"text": "Hi "}\n\nevent: token\ndata: {"text": "you"}\n\nevent: done\ndata: {}\n\n',
     )
     const got: string[] = []
-    await streamMessage('c', 'x', (t) => got.push(t))
+    await streamMessage('c', 'x', (name, d) => name === 'token' && got.push(String(d.text)))
     expect(got.join('')).toBe('Hi you')
   })
 
@@ -37,7 +37,10 @@ describe('streamMessage', () => {
     sse(
       'event: token\ndata: {"text": "a"}\n\nevent: error\ndata: {"code": "x", "detail": "Nope."}\n\n',
     )
-    await expect(streamMessage('c', 'x', () => {})).rejects.toEqual({ detail: 'Nope.' })
+    await expect(streamMessage('c', 'x', () => {})).rejects.toEqual({
+      detail: 'Nope.',
+      request_id: undefined,
+    })
     sse('{"detail": "Upload your CV first."}', false)
     await expect(streamMessage('c', 'x', () => {})).rejects.toEqual({
       detail: 'Upload your CV first.',
