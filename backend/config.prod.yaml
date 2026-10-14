@@ -11,7 +11,7 @@ coach_job_focus: false
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
   job_extract: {provider: gemini, model: gemini-3.5-flash-lite}
-  fit: {provider: gemini, model: gemini-3.8-flash}
+  fit: {provider: gemini, model: gemini-3.8-flash}git
   # gemini-3.5-flash hangs >50 s on Vertex eu in ~2 of 3 letter calls (measured 2026-10-07); lite takes ~2.5 s
   letter: {provider: gemini, model: gemini-3.1-pro-preview}
   letter_assist: {provider: gemini, model: gemini-3.5-flash-lite}

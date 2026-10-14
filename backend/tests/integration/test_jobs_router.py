@@ -58,7 +58,7 @@ async def test_three_entry_paths_then_list_and_read(
     file_jobs = await client.post(
         "/api/v1/jobs/from-file",
         headers=ada,
-        json={"source": "file", "document_id": doc},
+        json={"source": "file", "document_ids": [doc]},
     )
     assert file_jobs.status_code == 201
     assert [j["source"] for j in file_jobs.json()] == ["file", "file"]
@@ -139,7 +139,7 @@ async def test_org_b_cannot_read_list_or_reference_org_as_jobs(
     stolen = await client.post(
         "/api/v1/jobs/from-file",
         headers=bob,
-        json={"source": "file", "document_id": ada_doc},
+        json={"source": "file", "document_ids": [ada_doc]},
     )
     assert stolen.status_code == 404
     assert len(fake_llm.calls) == 1  # Bob's attempt never reached the model

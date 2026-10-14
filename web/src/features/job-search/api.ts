@@ -22,19 +22,31 @@ export function useApplyUrl(jobId: string | null | undefined): string | null {
 
 const post = async (body: JobIn) => [unwrap(await api.POST('/api/v1/jobs', { body }))]
 
-/** One mutation for the three entry paths, always resolving to a list of the jobs created:
- *  a File is uploaded as a `jd` document first and may hold several offers. */
+/** One mutation for the manual and France Travail entry paths, resolving to the jobs created. */
 export function useAddJob() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { text: string } | { file: File } | { externalId: string }) => {
-      if ('text' in input) return post({ source: 'manual', text: input.text })
-      if ('externalId' in input) {
-        return post({ source: 'france_travail', external_id: input.externalId })
-      }
-      const document_id = await uploadDocument('jd', input.file)
+    mutationFn: async (input: { text: string } | { externalId: string }) =>
+      'text' in input
+        ? post({ source: 'manual', text: input.text })
+        : post({ source: 'france_travail', external_id: input.externalId }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+export const MAX_FILES = 10 // keep in sync with MAX_FILES in backend jobs/schemas.py
+
+/** Add job description files (PDF/image/TXT) as ONE batch: the model reads them together, so
+ *  pages of one offer merge and the cost is one pass, not one per file. All-or-nothing; the
+ *  user retries the batch. ponytail: files uploaded before a failure stay as unused documents
+ *  until the retention sweep. */
+export function useAddJobFiles() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (files: File[]) => {
+      const document_ids = await Promise.all(files.map((f) => uploadDocument('jd', f)))
       return unwrap(
-        await api.POST('/api/v1/jobs/from-file', { body: { source: 'file', document_id } }),
+        await api.POST('/api/v1/jobs/from-file', { body: { source: 'file', document_ids } }),
       )
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),

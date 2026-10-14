@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = 1
 
+MAX_FILES = 10  # per batch; keep in sync with web/src/features/job-search/api.ts
 MAX_OFFERS = 20  # one upload; bounds the AI cost and the output size
 
 JobSource = Literal["manual", "file", "france_travail"]
@@ -189,8 +190,10 @@ class ManualJobIn(BaseModel):
 
 
 class FileJobIn(BaseModel):
+    """One or several uploaded ``jd`` documents, analysed together in one pass."""
+
     source: Literal["file"]
-    document_id: UUID
+    document_ids: list[UUID] = Field(..., min_length=1, max_length=MAX_FILES)
 
 
 class SearchJobIn(BaseModel):

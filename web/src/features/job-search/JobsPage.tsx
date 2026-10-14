@@ -19,7 +19,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useAddJob, useJobs, useSearchJobs, type SearchParams } from './api'
+import {
+  MAX_FILES,
+  useAddJob,
+  useAddJobFiles,
+  useJobs,
+  useSearchJobs,
+  type SearchParams,
+} from './api'
 
 function ManualEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
   const { register, handleSubmit, reset, formState } = useForm<{ text: string }>()
@@ -49,25 +56,51 @@ function ManualEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
   )
 }
 
-function FileEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
-  const file = useRef<HTMLInputElement>(null)
+function FileEntry() {
+  const add = useAddJobFiles()
+  const input = useRef<HTMLInputElement>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const tooMany = files.length > MAX_FILES
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload a job description file</CardTitle>
+        <CardTitle>Upload job description files</CardTitle>
         <CardDescription>
-          PDF, DOCX or image. A file with several offers is split into one job each.
+          PDF, TXT, PNG or JPEG, up to {MAX_FILES} files at once. They are read together: pages of
+          one offer become one job, and every distinct offer becomes its own job.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Label htmlFor="jd-file">Job description file</Label>
-        <Input id="jd-file" type="file" accept=".pdf,.docx,image/*" ref={file} />
-        <Button
-          disabled={add.isPending}
-          onClick={() => {
-            const f = file.current?.files?.[0]
-            if (f) add.mutate({ file: f })
+        <Label htmlFor="jd-file">Job description files</Label>
+        <Input
+          id="jd-file"
+          type="file"
+          multiple
+          accept=".pdf,.txt,.png,.jpg,.jpeg,application/pdf,text/plain,image/png,image/jpeg"
+          ref={input}
+          onChange={(e) => {
+            setFiles([...(e.target.files ?? [])])
+            add.reset()
           }}
+        />
+        {tooMany && (
+          <p role="alert" className="text-sm text-destructive">
+            Choose at most {MAX_FILES} files.
+          </p>
+        )}
+        {add.isPending && <StepProgress steps={STEPS} />}
+        {add.isError && <ErrorMessage error={add.error} />}
+        <Button
+          disabled={add.isPending || files.length === 0 || tooMany}
+          onClick={() =>
+            add.mutate(files, {
+              onSuccess: (jobs) => {
+                toast(`${jobs.length} job${jobs.length > 1 ? 's' : ''} added`)
+                if (input.current) input.current.value = ''
+                setFiles([])
+              },
+            })
+          }
         >
           {add.isPending ? 'Analysing…' : 'Upload and add'}
         </Button>
@@ -277,7 +310,7 @@ export function JobsPage() {
         </section>
         <div className="space-y-6">
           <ManualEntry add={add} />
-          <FileEntry add={add} />
+          <FileEntry />
           <Search add={add} />
         </div>
       </div>

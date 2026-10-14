@@ -95,9 +95,9 @@ async def add_jobs_from_file(
     storage: Annotated[Storage, Depends(get_storage_dependency)],
     llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
 ) -> list[JobOut]:
-    """A job description file holds one offer, or several: each becomes its own job."""
+    """Job description files (one or several) are read together; each offer becomes a job."""
     jobs = await service.add_from_file(
-        db, storage, llm, org_id=ctx.org_id, document_id=body.document_id
+        db, storage, llm, org_id=ctx.org_id, document_ids=body.document_ids
     )
     return [_out(j) for j in jobs]
 

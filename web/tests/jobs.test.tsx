@@ -76,23 +76,24 @@ test('search results can be added by external id; a search error shows message +
   expect(await screen.findByText(/not configured\. \(request id: rq9\)/)).toBeInTheDocument()
 })
 
-test('a file with several offers is uploaded once and reports every job created', async () => {
+test('several files are uploaded, then analysed together in one call', async () => {
   const user = userEvent.setup()
-  mocks.POST.mockImplementation(async (url: string) =>
+  mocks.POST.mockImplementation(async (url: string, opts: { body: { file?: File } }) =>
     url === '/api/v1/documents'
-      ? { data: { document_id: 'd1' } }
+      ? { data: { document_id: `id-${opts.body.file?.name}` } }
       : { data: [job, { ...job, id: 'j2' }] },
   )
   renderPage()
-  await user.upload(
-    screen.getByLabelText('Job description file'),
-    new File(['%PDF'], 'offers.pdf', { type: 'application/pdf' }),
-  )
+  await user.upload(screen.getByLabelText('Job description files'), [
+    new File(['%PDF'], 'a.pdf', { type: 'application/pdf' }),
+    new File(['x'], 'b.png', { type: 'image/png' }),
+  ])
   await user.click(screen.getByRole('button', { name: 'Upload and add' }))
   await waitFor(() =>
     expect(mocks.POST).toHaveBeenCalledWith('/api/v1/jobs/from-file', {
-      body: { source: 'file', document_id: 'd1' },
+      body: { source: 'file', document_ids: ['id-a.pdf', 'id-b.png'] },
     }),
   )
-  expect(await screen.findByText('2 jobs added from the file')).toBeInTheDocument()
+  expect(mocks.POST.mock.calls.filter(([u]) => u === '/api/v1/jobs/from-file')).toHaveLength(1)
+  expect(await screen.findByText('2 jobs added')).toBeInTheDocument()
 })

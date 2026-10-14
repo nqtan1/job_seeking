@@ -83,6 +83,9 @@ async def add_manual(
 
 # Model calls in flight at once for one file: fast enough for 20 offers, gentle on Vertex quota.
 _PARALLEL_EXTRACTIONS = 5
+# Files of one batch travel inline in each model request (Vertex caps a request near 20 MB,
+# and base64 adds a third), hence the sum cap, on top of the per-file upload cap.
+MAX_TOTAL_BYTES = 12 * 1024 * 1024
 
 
 async def add_from_file(
@@ -91,23 +94,42 @@ async def add_from_file(
     llm: LLMGateway,
     *,
     org_id: UUID,
-    document_id: UUID,
+    document_ids: list[UUID],
 ) -> list[JobPosting]:
-    """One file, one or several offers (a brochure): one inbox job per offer.
+    """One or several files, read together as ONE input: one inbox job per distinct offer.
+    Several files may be pages/screenshots of one offer or different offers; the model sees
+    them all in the same calls, so a batch costs one index call plus one call per offer, not
+    one pipeline per file.
 
     Step 1 lists the offers (one short call); step 2 extracts each offer with its own call, in
     parallel, so 20 offers take about as long as the slowest one, not 20 times as long.
     All-or-nothing: if any offer fails, nothing is saved and the user retries the file.
     ponytail: a failed offer could be skipped and reported instead, if retries get annoying."""
-    document, data = await documents.read_document(
-        db, storage, org_id=org_id, document_id=document_id, kind="jd"
-    )
-    file_part = FilePart(data=data, mime_type=document.mime)
+    files: list[Part] = []
+    total = 0
+    for document_id in dict.fromkeys(document_ids):  # a repeated id is read once
+        document, data = await documents.read_document(
+            db, storage, org_id=org_id, document_id=document_id, kind="jd"
+        )
+        total += len(data)
+        if total > MAX_TOTAL_BYTES:  # one model request carries every file inline
+            raise ValidationFailed(
+                f"These files are too large together (max {MAX_TOTAL_BYTES // 2**20} MB)."
+            )
+        files.append(FilePart(data=data, mime_type=document.mime))
+    if len(files) > 1:
+        files.insert(
+            0,
+            TextPart(
+                "The job description comes as several files (pages or screenshots of one "
+                "offer, or different offers). Read them all together."
+            ),
+        )
     index = await generate_retrying_invalid(
         llm,
         schema=OfferIndex,
         system=SYSTEM_PROMPT_OFFER_INDEX,
-        parts=[TextPart(_DATA_NOTICE), file_part],
+        parts=[TextPart(_DATA_NOTICE), *files],
         feature=INDEX_PROMPT_VERSION,
     )
     if len(index.offers) > MAX_OFFERS:
@@ -130,7 +152,7 @@ async def add_from_file(
                 llm,
                 schema=JobPosition,
                 system=SYSTEM_PROMPT_JOB_EXTRACTION,
-                parts=[TextPart(_DATA_NOTICE), file_part, *which],
+                parts=[TextPart(_DATA_NOTICE), *files, *which],
                 feature=ONE_PROMPT_VERSION,
             )
 

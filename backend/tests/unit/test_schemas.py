@@ -129,7 +129,7 @@ def test_each_source_kind_validates_to_its_model():
     assert isinstance(
         job_in.validate_python({"source": "manual", "text": "Dev Python"}), ManualJobIn
     )
-    assert FileJobIn.model_validate({"source": "file", "document_id": doc})
+    assert FileJobIn.model_validate({"source": "file", "document_ids": [doc]})
     assert isinstance(
         job_in.validate_python({"source": "france_travail", "external_id": "212MZBL"}),
         SearchJobIn,

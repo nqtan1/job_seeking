@@ -258,7 +258,7 @@ export interface paths {
         put?: never;
         /**
          * Add Jobs From File
-         * @description A job description file holds one offer, or several: each becomes its own job.
+         * @description Job description files (one or several) are read together; each offer becomes a job.
          */
         post: operations["add_jobs_from_file_api_v1_jobs_from_file_post"];
         delete?: never;
@@ -1866,18 +1866,18 @@ export interface components {
              */
             document_id: string;
         };
-        /** FileJobIn */
+        /**
+         * FileJobIn
+         * @description One or several uploaded ``jd`` documents, analysed together in one pass.
+         */
         FileJobIn: {
             /**
              * Source
              * @constant
              */
             source: "file";
-            /**
-             * Document Id
-             * Format: uuid
-             */
-            document_id: string;
+            /** Document Ids */
+            document_ids: string[];
         };
         /** FitAnalysisIn */
         FitAnalysisIn: {

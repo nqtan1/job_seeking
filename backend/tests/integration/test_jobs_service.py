@@ -73,11 +73,11 @@ async def test_file_job_checks_kind_and_ownership_before_any_llm_call(
 
     with pytest.raises(NotFound):
         await service.add_from_file(
-            db_session, fake_storage, fake_llm, org_id=b.id, document_id=jd.id
+            db_session, fake_storage, fake_llm, org_id=b.id, document_ids=[jd.id]
         )
     with pytest.raises(ValidationFailed):
         await service.add_from_file(
-            db_session, fake_storage, fake_llm, org_id=a.id, document_id=cv.id
+            db_session, fake_storage, fake_llm, org_id=a.id, document_ids=[cv.id]
         )
     assert fake_llm.calls == []
 
@@ -90,7 +90,7 @@ async def test_file_job_checks_kind_and_ownership_before_any_llm_call(
         blank_job(title="Data Eng", source_meta={"apply_url": "https://made.up"}),
     )
     postings = await service.add_from_file(
-        db_session, fake_storage, fake_llm, org_id=a.id, document_id=jd.id
+        db_session, fake_storage, fake_llm, org_id=a.id, document_ids=[jd.id]
     )
     assert [c.feature for c in fake_llm.calls] == [
         INDEX_PROMPT_VERSION,
@@ -109,6 +109,38 @@ async def test_file_job_checks_kind_and_ownership_before_any_llm_call(
     )
 
 
+async def test_several_files_are_read_together_in_one_pass(
+    db_session: AsyncSession,
+    fake_llm: FakeLLMGateway,
+    fake_storage: LocalStorage,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    org = await _org(db_session, "a")
+    docs = [
+        await documents.upload(
+            db_session, fake_storage, org_id=org.id, uploaded_by=None, kind="jd", data=d
+        )
+        for d in (PDF, PDF + b"2")
+    ]
+    ids = [d.id for d in docs]
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["Dev Python"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="Dev Python"))
+    postings = await service.add_from_file(
+        db_session, fake_storage, fake_llm, org_id=org.id, document_ids=ids
+    )
+    assert len(postings) == 1
+    assert len(fake_llm.calls) == 2  # index + one offer, not one pipeline per file
+    for call in fake_llm.calls:
+        assert sum(isinstance(p, FilePart) for p in call.parts) == 2
+
+    monkeypatch.setattr(service, "MAX_TOTAL_BYTES", len(PDF))
+    with pytest.raises(ValidationFailed):
+        await service.add_from_file(
+            db_session, fake_storage, fake_llm, org_id=org.id, document_ids=ids
+        )
+    assert len(fake_llm.calls) == 2  # refused before any model call
+
+
 async def test_a_file_with_too_many_offers_is_refused_and_saves_nothing(
     db_session: AsyncSession, fake_llm: FakeLLMGateway, fake_storage: LocalStorage
 ):
@@ -119,7 +151,7 @@ async def test_a_file_with_too_many_offers_is_refused_and_saves_nothing(
     fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["x"] * (MAX_OFFERS + 1)))
     with pytest.raises(ValidationFailed):
         await service.add_from_file(
-            db_session, fake_storage, fake_llm, org_id=org.id, document_id=jd.id
+            db_session, fake_storage, fake_llm, org_id=org.id, document_ids=[jd.id]
         )
     assert await service.list_jobs(db_session, org_id=org.id) == []
     assert len(fake_llm.calls) == 1  # only the cheap index call was paid for
