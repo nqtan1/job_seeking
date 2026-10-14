@@ -26,12 +26,19 @@ import {
   type Search,
   type SearchIn,
 } from './api'
+import { ConsentBanner } from './Consent'
+import { StatusBadge } from '@/components/StatusBadge'
 import { Insights } from './Insights'
 import { InProgress, NewMatches, Rejected } from './Matches'
 import { StatusStrip } from './StatusStrip'
 import { Timeline } from './Timeline'
 
 const MAX_SEARCHES = 3
+const PAUSE_LABEL = {
+  consent: 'needs consent',
+  inactive: 'no sign-in for 60 days',
+  failures: 'repeated failures',
+} as const
 
 function SearchForm() {
   const create = useCreateSearch()
@@ -216,7 +223,12 @@ function SearchCard({ search }: { search: Search }) {
     <li className="space-y-2 rounded-xl border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="font-medium">{search.name}</p>
+          <p className="flex items-center gap-2 font-medium">
+            {search.name}
+            {search.paused_reason && (
+              <StatusBadge tone="warning">paused: {PAUSE_LABEL[search.paused_reason]}</StatusBadge>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground">
             {[search.query, placesLabel(search.department), search.contract_type]
               .filter(Boolean)
@@ -331,6 +343,7 @@ export function RadarPage() {
       description="Looks for offers every morning and scores how well you fit. You decide what happens next: it never applies for you."
       wide
     >
+      <ConsentBanner />
       <StatusStrip />
       {count > 0 && (
         <>

@@ -5,18 +5,20 @@ import { renderWithApp } from './utils'
 
 const mocks = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn(), signOut: vi.fn() }))
 vi.mock('@/lib/api/client', () => ({ api: mocks }))
-vi.mock('@/lib/auth', () => ({ signOut: mocks.signOut }))
+vi.mock('@/lib/auth', () => ({ signOut: mocks.signOut, signInAgeSeconds: async () => 0 }))
 
 const renderPage = () => renderWithApp(<SettingsPage />)
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.signOut.mockResolvedValue(undefined)
-  mocks.GET.mockImplementation(async (url: string) =>
-    url === '/api/v1/me'
-      ? { data: { user: { email: 'a@b.co' } } }
-      : { data: { status: 'done', download_url: '/dl/export.zip' } },
-  )
+  mocks.GET.mockImplementation(async (url: string) => {
+    if (url === '/api/v1/me')
+      return { data: { user: { email: 'a@b.co' }, session: { stepup_max_age_seconds: 300 } } }
+    if (url === '/api/v1/radar/consent')
+      return { data: { state: 'none', policy_version: 'v1', history: [] } }
+    return { data: { status: 'done', download_url: '/dl/export.zip' } }
+  })
 })
 
 test('export: request → task polled → a download link appears', async () => {

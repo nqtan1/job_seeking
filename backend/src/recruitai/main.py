@@ -25,6 +25,7 @@ from recruitai.modules.jobs.router import router as jobs_router
 from recruitai.modules.letters.router import router as letters_router
 from recruitai.modules.matching.router import router as matching_router
 from recruitai.modules.privacy.router import router as privacy_router
+from recruitai.modules.radar.public_router import router as radar_public_router
 from recruitai.modules.radar.router import router as radar_router
 
 
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(applications_router)
     app.include_router(privacy_router)
     app.include_router(radar_router)
+    app.include_router(radar_public_router)
     app.include_router(tasks_router)
 
     if settings.env != "prod":

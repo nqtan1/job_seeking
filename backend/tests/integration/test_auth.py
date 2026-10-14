@@ -17,8 +17,8 @@ from firebase_admin import auth as firebase_auth
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.config import get_settings
-from recruitai.core.auth import CurrentUser, get_current_user, get_firebase_app
+from recruitai.config import Settings, get_settings
+from recruitai.core.auth import get_current_user, get_firebase_app
 from recruitai.core.errors import Unauthorized
 
 
@@ -32,11 +32,17 @@ async def test_valid_token_resolves_current_user_and_writes_no_row(
 ):
     token = emulator_token("uid-auth-valid", "auth-valid@example.test")
 
-    user = await get_current_user(firebase_app, authorization=f"Bearer {token}")
-
-    assert user == CurrentUser(
-        firebase_uid="uid-auth-valid", email="auth-valid@example.test"
+    user = await get_current_user(
+        firebase_app,
+        Settings.model_construct(session_absolute_days=7, auth_time_leeway_seconds=30),
+        authorization=f"Bearer {token}",
     )
+
+    assert (user.firebase_uid, user.email) == (
+        "uid-auth-valid",
+        "auth-valid@example.test",
+    )
+    assert user.auth_time > 0
     count = (await db_session.execute(text("SELECT count(*) FROM users"))).scalar()
     assert count == 0
 
@@ -47,7 +53,13 @@ async def test_valid_token_resolves_current_user_and_writes_no_row(
 )
 async def test_missing_malformed_or_invalid_token_is_401(firebase_app, authorization):
     with pytest.raises(Unauthorized):
-        await get_current_user(firebase_app, authorization=authorization)
+        await get_current_user(
+            firebase_app,
+            Settings.model_construct(
+                session_absolute_days=7, auth_time_leeway_seconds=30
+            ),
+            authorization=authorization,
+        )
 
 
 async def test_expired_token_is_401(firebase_app):
@@ -59,4 +71,10 @@ async def test_expired_token_is_401(firebase_app):
         ),
         pytest.raises(Unauthorized),
     ):
-        await get_current_user(firebase_app, authorization="Bearer irrelevant")
+        await get_current_user(
+            firebase_app,
+            Settings.model_construct(
+                session_absolute_days=7, auth_time_leeway_seconds=30
+            ),
+            authorization="Bearer irrelevant",
+        )

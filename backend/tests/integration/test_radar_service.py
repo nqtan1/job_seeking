@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts import fit
 from recruitai.core.auth import CurrentUser
+from recruitai.core.errors import Conflict
 from recruitai.core.tenancy import get_org_context
 from recruitai.modules.candidates.models import CandidateProfile
 from recruitai.modules.jobs import repository as jobs_repo
@@ -19,10 +21,11 @@ from recruitai.modules.jobs.schemas import (
     UnifiedJobSearchResult,
 )
 from recruitai.modules.matching.schemas import FitCheck
-from recruitai.modules.radar import repository, service
+from recruitai.modules.radar import links, repository, service
 from recruitai.modules.radar.models import RadarResult
 from tests.unit.test_schemas import VALID
 
+PV = "v1"  # the consent policy version every test user has agreed to
 NOW = datetime.now(
     UTC
 )  # rows are stamped by the database clock, so "today" must be real
@@ -68,6 +71,14 @@ async def _user(db: AsyncSession, *, profile: bool = True):
         ),
         db,
         x_org_id=None,
+    )
+    await repository.add_consent(
+        db,
+        org_id=ctx.org_id,
+        user_id=ctx.user_id,
+        policy_version=PV,
+        event="granted",
+        source="ui",
     )
     if profile:
         db.add(
@@ -312,11 +323,11 @@ async def test_only_enabled_searches_of_active_owners_that_have_not_run_today_ar
     await db_session.execute(
         update(User)
         .where(User.id == idle.user_id)
-        .values(last_active_at=NOW - timedelta(days=40))
+        .values(last_active_at=NOW - timedelta(days=70))
     )
     await db_session.flush()
 
-    due = await service.due_searches(db_session, now=NOW)
+    due = await service.due_searches(db_session, now=NOW, policy_version=PV)
 
     mine = {org for _, org, _ in due} & {
         c.org_id for c in (good, off, blocked, idle, done)
@@ -337,10 +348,22 @@ async def test_the_daily_run_runs_each_due_search_once_and_the_digest_lists_new_
     factory = _Factory(db_session)
 
     first = await service.run_due_searches(
-        factory, _llm_for(fake_llm), Provider(["A"]), quota=50, now=NOW
+        factory,
+        _llm_for(fake_llm),
+        Provider(["A"]),
+        quota=50,
+        now=NOW,
+        policy_version=PV,
+        failures_before_pause=5,
     )
     second = await service.run_due_searches(
-        factory, _llm_for(fake_llm), Provider(["A"]), quota=50, now=NOW
+        factory,
+        _llm_for(fake_llm),
+        Provider(["A"]),
+        quota=50,
+        now=NOW,
+        policy_version=PV,
+        failures_before_pause=5,
     )
 
     runs = await repository.list_runs(db_session, org_id=ctx.org_id, limit=10)
@@ -858,27 +881,35 @@ async def test_interrupted_daily_searches_are_retried_automatically_a_few_times_
     await failed(5)
     assert not [
         t
-        for t in await service.interrupted_searches(db_session, now=now)
+        for t in await service.interrupted_searches(
+            db_session, now=now, policy_version=PV
+        )
         if t[0] == search.id
     ]  # too soon
     await failed(30)  # an older failure; the latest is still the 5-minute-old one
     assert not [
         t
-        for t in await service.interrupted_searches(db_session, now=now)
+        for t in await service.interrupted_searches(
+            db_session, now=now, policy_version=PV
+        )
         if t[0] == search.id
     ]
 
     now = now + timedelta(minutes=25)  # 30 minutes after the latest failure
     assert [
         t[0]
-        for t in await service.interrupted_searches(db_session, now=now)
+        for t in await service.interrupted_searches(
+            db_session, now=now, policy_version=PV
+        )
         if t[0] == search.id
     ] == [search.id]
     search.enabled = False
     await db_session.flush()
     assert not [
         t
-        for t in await service.interrupted_searches(db_session, now=now)
+        for t in await service.interrupted_searches(
+            db_session, now=now, policy_version=PV
+        )
         if t[0] == search.id
     ]  # Daily is off
 
@@ -920,3 +951,183 @@ async def test_retry_closes_a_run_the_worker_abandoned_so_nothing_blocks_it(
     assert closed.finished_at is not None and service.is_interrupted(
         closed, datetime.now(UTC)
     )
+
+
+async def test_consent_gates_every_background_run(db_session: AsyncSession):
+    """No consent, withdrawn, or an older policy text: the search is not selected; granting the
+    current text releases it; the withdrawal holds the radars in the same transaction."""
+    ctx = await _user(db_session)
+    search = await _search(db_session, ctx)
+
+    async def selected(version: str = PV) -> bool:
+        due = await service.due_searches(db_session, now=NOW, policy_version=version)
+        return any(t[0] == search.id for t in due)
+
+    assert await selected()
+    assert not await selected("v2")  # the text changed: radars wait for a new consent
+
+    out = await service.withdraw_consent(
+        db_session, org_id=ctx.org_id, user_id=ctx.user_id, policy_version=PV, now=NOW
+    )
+    assert out.state == "withdrawn"
+    assert not await selected()
+    await db_session.refresh(search)
+    assert search.paused_reason == "consent"
+
+    out = await service.grant_consent(
+        db_session,
+        org_id=ctx.org_id,
+        user_id=ctx.user_id,
+        seen_version=PV,
+        policy_version=PV,
+    )
+    assert out.state == "granted" and [h.event for h in out.history][:2] == [
+        "granted",
+        "withdrawn",
+    ]
+    await db_session.refresh(search)
+    assert search.paused_reason is None
+    assert await selected()
+
+
+async def test_consent_is_per_org_and_a_stale_dialog_cannot_grant(
+    db_session: AsyncSession,
+):
+    from recruitai.core.errors import Conflict
+
+    a, b = await _user(db_session), await _user(db_session)
+    await service.withdraw_consent(
+        db_session, org_id=a.org_id, user_id=a.user_id, policy_version=PV
+    )
+    assert (
+        await service.get_consent(db_session, org_id=b.org_id, policy_version=PV)
+    ).state == "granted"
+    with pytest.raises(Conflict):
+        await service.grant_consent(
+            db_session,
+            org_id=a.org_id,
+            user_id=a.user_id,
+            seen_version="old",
+            policy_version=PV,
+        )
+
+
+class _DownProvider(Provider):
+    """The job source is unavailable: every search ends in an error."""
+
+    async def search(self, **_):
+        from recruitai.core.errors import UpstreamUnavailable
+
+        raise UpstreamUnavailable()
+
+
+async def _run_day(db, day: int, sent: list[str]) -> None:
+    from datetime import timedelta
+
+    async def notify(user_id, template, context):
+        sent.append(template)
+
+    await service.run_due_searches(
+        _Factory(db),
+        _llm_for(FakeLLMGateway()),
+        _DownProvider([]),
+        quota=50,
+        policy_version=PV,
+        now=NOW + timedelta(days=day),
+        notify=notify,
+        failures_before_pause=5,
+    )
+
+
+async def test_five_failed_days_pause_the_radar_and_tell_the_user(
+    db_session: AsyncSession,
+):
+    ctx = await _user(db_session)
+    search = await _search(db_session, ctx)
+    sent: list[str] = []
+
+    for day in range(4):
+        await _run_day(db_session, day, sent)
+        await db_session.refresh(search)
+        assert (search.paused_reason, sent) == (None, [])
+    assert search.consecutive_failures == 4
+
+    await _run_day(db_session, 4, sent)
+    await db_session.refresh(search)
+    assert search.paused_reason == "failures" and sent == ["radar_paused_failures"]
+
+    await _run_day(db_session, 5, sent)  # held: not selected again, no second mail
+    assert sent == ["radar_paused_failures"]
+
+
+async def _held(db, search):
+    await db.refresh(search)
+    return search.paused_reason
+
+
+async def test_inactive_radars_get_a_notice_at_53_days_and_pause_at_60(
+    db_session: AsyncSession,
+):
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from recruitai.modules.identity.models import User
+
+    ctx = await _user(db_session)
+    search = await _search(db_session, ctx)
+    mails: list[tuple[str, dict]] = []
+
+    async def notice(to, context):
+        mails.append((to, context))
+        return True
+
+    async def idle_for(days: int):
+        await db_session.execute(
+            update(User)
+            .where(User.id == ctx.user_id)
+            .values(last_active_at=NOW - timedelta(days=days))
+        )
+        await db_session.flush()
+        await service.pause_inactive(db_session, notice, now=NOW)
+
+    await idle_for(52)
+    assert mails == [] and await _held(db_session, search) is None
+
+    await idle_for(54)
+    await idle_for(54)  # again: one notice per idle period
+    assert len(mails) == 1 and await _held(db_session, search) is None
+
+    await idle_for(61)
+    assert await _held(db_session, search) == "inactive"
+
+    with pytest.raises(Conflict) as refused:  # a resume is never a way around consent
+        await service.resume(db_session, org_id=ctx.org_id, policy_version="v2")
+    assert refused.value.code == "consent_required"
+    await service.resume(db_session, org_id=ctx.org_id, policy_version=PV)
+    assert await _held(db_session, search) is None
+
+
+async def test_a_signed_link_only_withdraws_consent_and_replays_are_harmless(
+    db_session: AsyncSession,
+):
+    ctx = await _user(db_session)
+    search = await _search(db_session, ctx)
+    claims = links.verify(
+        "s" * 32,
+        service.withdraw_link(
+            "s" * 32, org_id=ctx.org_id, user_id=ctx.user_id, ttl_s=60
+        ),
+    )
+    assert claims is not None
+
+    await service.apply_link(db_session, claims, policy_version=PV)
+    await service.apply_link(db_session, claims, policy_version=PV)  # replay
+
+    state = await service.get_consent(db_session, org_id=ctx.org_id, policy_version=PV)
+    assert state.state == "withdrawn"
+    assert [(h.event, h.source) for h in state.history][:2] == [
+        ("withdrawn", "email_link"),
+        ("granted", "ui"),
+    ]
+    assert await _held(db_session, search) == "consent"

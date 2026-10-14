@@ -20,3 +20,7 @@ export function useSetReminders() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }
+
+/** "Sign out of all devices": needs a recent sign-in (the caller runs `ensureRecentAuth`). */
+export const useRevokeSessions = () =>
+  useMutation({ mutationFn: async () => void unwrap(await api.POST('/api/v1/me/sessions/revoke')) })

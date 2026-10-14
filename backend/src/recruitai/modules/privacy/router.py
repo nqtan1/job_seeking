@@ -1,5 +1,6 @@
 """HTTP only. ``/api/v1/me/export`` lives here, next to ``/api/v1/me`` in identity."""
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -12,8 +13,8 @@ from starlette.concurrency import run_in_threadpool
 
 from recruitai.core.auth import (
     CurrentUser,
-    get_current_user_strict,
     get_firebase_app,
+    require_recent_auth,
 )
 from recruitai.core.db import get_db
 from recruitai.core.errors import (
@@ -25,6 +26,8 @@ from recruitai.core.ratelimit import RateLimited, limit_sensitive
 from recruitai.core.storage import Storage, get_storage_dependency
 from recruitai.core.tenancy import OrgContext, get_org_context
 from recruitai.modules.privacy import service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/me", tags=["privacy"])
 
@@ -42,8 +45,8 @@ class TaskAccepted(BaseModel):
     dependencies=[Depends(limit_sensitive)],
 )
 async def export_my_data(
-    # Sensitive: the archive holds everything, so a revoked token is refused (ADR 0007).
-    _current_user: Annotated[CurrentUser, Depends(get_current_user_strict)],
+    # Sensitive: the archive holds everything: revoked or stale sign-in is refused (ADR 0024).
+    _current_user: Annotated[CurrentUser, Depends(require_recent_auth)],
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TaskAccepted:
@@ -61,8 +64,8 @@ async def export_my_data(
     dependencies=[Depends(limit_sensitive)],
 )
 async def delete_my_account(
-    # Sensitive: the token is also checked against revocation (ADR 0007).
-    current_user: Annotated[CurrentUser, Depends(get_current_user_strict)],
+    # Sensitive: revocation + recent sign-in (step-up, ADR 0024).
+    current_user: Annotated[CurrentUser, Depends(require_recent_auth)],
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[Storage, Depends(get_storage_dependency)],
@@ -87,4 +90,29 @@ async def delete_my_account(
     await service.delete_account(
         db, storage, user_id=ctx.user_id, delete_identity=delete_identity
     )
+    return Response(status_code=204)
+
+
+@router.post(
+    "/sessions/revoke",
+    status_code=204,
+    responses=problem_responses(Unauthorized, UpstreamUnavailable, RateLimited),
+    dependencies=[Depends(limit_sensitive)],
+)
+async def sign_out_everywhere(
+    current_user: Annotated[CurrentUser, Depends(require_recent_auth)],
+    app: Annotated[firebase_admin.App, Depends(get_firebase_app)],
+) -> Response:
+    """Revoke every refresh token of the account: other devices are signed out at their next
+    token refresh (an already-issued ID token lives up to 1 h; sensitive endpoints refuse it
+    at once)."""
+    try:
+        await run_in_threadpool(
+            firebase_auth.revoke_refresh_tokens, current_user.firebase_uid, app=app
+        )
+    except Exception as exc:
+        raise UpstreamUnavailable(
+            "Could not sign out other devices. Try again."
+        ) from exc
+    logger.info("revoke_all")
     return Response(status_code=204)

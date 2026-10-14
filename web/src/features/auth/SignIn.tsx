@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { z } from 'zod'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { clearEndReason, peekEndReason } from '@/lib/session'
 import { signInWithEmail, signInWithGoogle, signUpWithEmail } from '@/lib/auth'
 
 const schema = z.object({
@@ -31,7 +32,16 @@ const MESSAGES: Record<string, string> = {
 const errorMessage = (e: unknown) =>
   MESSAGES[(e as { code?: string }).code ?? ''] ?? 'Sign-in failed. Please try again.'
 
+const REASONS: Record<string, string> = {
+  idle: 'You were signed out because of inactivity.',
+  reauth: 'Your session has expired. Please sign in again.',
+  'other-tab': 'You signed out in another tab.',
+}
+
 export function SignIn() {
+  const [reason] = useState(() => REASONS[peekEndReason() ?? ''])
+  useEffect(() => clearEndReason, [])
+  const [remember, setRemember] = useState(false)
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [error, setError] = useState<string>()
   const {
@@ -51,7 +61,9 @@ export function SignIn() {
 
   const onSubmit = ({ email, password }: Values) =>
     run(() =>
-      mode === 'signin' ? signInWithEmail(email, password) : signUpWithEmail(email, password),
+      mode === 'signin'
+        ? signInWithEmail(email, password, remember)
+        : signUpWithEmail(email, password, remember),
     )
 
   return (
@@ -103,6 +115,19 @@ export function SignIn() {
                   </p>
                 )}
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                Keep me signed in
+              </label>
+              {reason && !error && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {reason}
+                </p>
+              )}
               {error && <ErrorMessage error={{ detail: error }} />}
               <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
                 {mode === 'signin' ? 'Sign in' : 'Sign up'}
@@ -117,7 +142,7 @@ export function SignIn() {
               variant="outline"
               size="lg"
               className="w-full"
-              onClick={() => run(signInWithGoogle)}
+              onClick={() => run(() => signInWithGoogle(remember))}
             >
               Continue with Google
             </Button>

@@ -4,7 +4,11 @@ by id must document its 404, so the generated client types the error cases."""
 
 from recruitai.main import create_app
 
-PUBLIC = {"/health", "/ready"}
+PUBLIC = {
+    "/health",
+    "/ready",
+    "/api/public/radar-link",
+}  # the link token is the credential
 
 
 def test_every_authenticated_operation_documents_401_and_id_lookups_document_404():
@@ -51,14 +55,20 @@ def test_every_api_route_requires_authentication():
     tree must reach the Firebase token check (directly or through the org context)."""
     from fastapi.routing import APIRoute
 
-    from recruitai.core.auth import get_current_user, get_current_user_strict
+    from recruitai.core.auth import (
+        get_current_user,
+        get_current_user_strict,
+        require_recent_auth,
+    )
 
     app = create_app()
     unprotected = []
     for route in app.routes:
         if isinstance(route, APIRoute) and route.path.startswith("/api/v1"):
             calls = _dependency_calls(route.dependant)
-            if not ({get_current_user, get_current_user_strict} & calls):
+            if not (
+                {get_current_user, get_current_user_strict, require_recent_auth} & calls
+            ):
                 unprotected.append(f"{sorted(route.methods)} {route.path}")
     assert unprotected == []
     assert (

@@ -7,6 +7,7 @@ import { LetterPage } from '@/features/letters/LetterPage'
 import { LettersPage } from '@/features/letters/LettersPage'
 import { AdminUsersPage } from '@/features/admin/AdminUsersPage'
 import { AdminAiPage } from '@/features/admin/AdminAiPage'
+import { LinkPage } from '@/features/radar/LinkPage'
 import { RadarPage } from '@/features/radar/RadarPage'
 import { PrepPage } from '@/features/tracker/PrepPage'
 import { TrackerPage } from '@/features/tracker/TrackerPage'
@@ -19,6 +20,7 @@ import { SignInRoute } from './SignInRoute'
 export const routes: RouteObject[] = [
   { path: '/signin', element: <SignInRoute /> },
   { path: '/privacy', element: <PrivacyPage /> },
+  { path: '/radar/link', element: <LinkPage /> },
   {
     element: <RequireAuth />,
     children: [

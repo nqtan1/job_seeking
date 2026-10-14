@@ -1,6 +1,6 @@
 """/api/v1/radar through real HTTP (A-04): searches, queued runs, results actions, tenancy."""
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -12,7 +12,7 @@ from recruitai.modules.jobs import repository as jobs_repo
 from recruitai.modules.jobs.models import JobPosting
 from recruitai.modules.jobs.schemas import UnifiedJobSearchResult
 from recruitai.modules.jobs.service import to_job_position
-from recruitai.modules.radar import repository
+from recruitai.modules.radar import repository, service
 from tests.integration.test_matching_router import _add_profile
 from tests.integration.test_radar_service import Provider, _fit
 
@@ -344,3 +344,49 @@ async def test_status_insights_and_review_anyway_over_http(
     ).status_code == 404
     again = await client.post(f"{BASE}/results/{rejected[0]['id']}/keep", headers=ada)
     assert again.status_code == 404  # no longer a rejected result
+
+
+async def test_consent_over_http_and_the_public_link(
+    client: httpx.AsyncClient, ada, bob, caplog
+):
+    from recruitai.config import get_settings
+
+    version = get_settings().radar_consent_policy_version
+    assert (await client.get(f"{BASE}/consent", headers=ada)).json()["state"] == "none"
+    assert (
+        await client.put(f"{BASE}/consent", headers=ada, json={"policy_version": "old"})
+    ).json()["code"] == "consent_version_mismatch"
+    granted = await client.put(
+        f"{BASE}/consent", headers=ada, json={"policy_version": version}
+    )
+    assert granted.json()["state"] == "granted"
+    # Tenancy: bob never sees ada's consent.
+    assert (await client.get(f"{BASE}/consent", headers=bob)).json()["state"] == "none"
+    # Resume without a consent is refused for bob.
+    assert (await client.post(f"{BASE}/resume", headers=bob)).json()[
+        "code"
+    ] == "consent_required"
+
+    me = (await client.get("/api/v1/me", headers=ada)).json()
+    secret = "k" * 32
+    settings = get_settings()
+    settings.radar_link_secret = secret
+    try:
+        token = service.withdraw_link(
+            secret,
+            org_id=UUID(me["active_org_id"]),
+            user_id=UUID(me["user"]["id"]),
+            ttl_s=60,
+        )
+        bad = await client.post("/api/public/radar-link", json={"token": token + "x"})
+        assert (bad.status_code, bad.json()["code"]) == (422, "link_invalid")
+        ok = await client.post(
+            "/api/public/radar-link", json={"token": token}
+        )  # no auth
+        assert ok.status_code == 204 and ok.content == b""
+        assert token not in caplog.text and "ada@example.com" not in caplog.text
+    finally:
+        settings.radar_link_secret = None
+    assert (await client.get(f"{BASE}/consent", headers=ada)).json()[
+        "state"
+    ] == "withdrawn"

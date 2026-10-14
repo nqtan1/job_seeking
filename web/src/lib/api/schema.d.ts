@@ -774,6 +774,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/sessions/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Out Everywhere
+         * @description Revoke every refresh token of the account: other devices are signed out at their next
+         *     token refresh (an already-issued ID token lives up to 1 h; sensitive endpoints refuse it
+         *     at once).
+         */
+        post: operations["sign_out_everywhere_api_v1_me_sessions_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/radar/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Consent */
+        get: operations["get_consent_api_v1_radar_consent_get"];
+        /** Grant Consent */
+        put: operations["grant_consent_api_v1_radar_consent_put"];
+        post?: never;
+        /** Withdraw Consent */
+        delete: operations["withdraw_consent_api_v1_radar_consent_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/radar/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Radars
+         * @description Resume radars paused for inactivity or repeated failures (needs a current consent).
+         */
+        post: operations["resume_radars_api_v1_radar_resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/radar/searches": {
         parameters: {
             query?: never;
@@ -990,6 +1051,29 @@ export interface paths {
          * @description "Review anyway": put a job the radar did not shortlist into the user's jobs. No AI call.
          */
         post: operations["keep_result_api_v1_radar_results__result_id__keep_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/radar-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Radar Link
+         * @description Pause one radar or withdraw radar consent from an e-mailed link. POST only (mail scanners
+         *     prefetch GETs); the token is the only credential and buys exactly that one action. It
+         *     reads nothing, returns nothing, signs nobody in; the answer does not depend on whether the
+         *     account or radar still exists.
+         */
+        post: operations["radar_link_api_public_radar_link_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1534,6 +1618,50 @@ export interface components {
              * @description Tickets Restaurant / Swile
              */
             meal_vouchers?: boolean | null;
+        };
+        /** ConsentEvent */
+        ConsentEvent: {
+            /**
+             * Event
+             * @enum {string}
+             */
+            event: "granted" | "withdrawn";
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "ui" | "email_link";
+        };
+        /**
+         * ConsentIn
+         * @description The version the user actually saw, so a stale dialog cannot consent to new text.
+         */
+        ConsentIn: {
+            /** Policy Version */
+            policy_version: string;
+        };
+        /**
+         * ConsentOut
+         * @description ``needs_reconsent``: it was granted for an older policy text. Background radars run only
+         *     in state ``granted``.
+         */
+        ConsentOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "granted" | "withdrawn" | "needs_reconsent";
+            /** Policy Version */
+            policy_version: string;
+            /** History */
+            history: components["schemas"]["ConsentEvent"][];
         };
         /** ContentCounts */
         ContentCounts: {
@@ -2250,6 +2378,11 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** LinkIn */
+        LinkIn: {
+            /** Token */
+            token: string;
+        };
         /** ManualJobIn */
         ManualJobIn: {
             /**
@@ -2279,6 +2412,7 @@ export interface components {
              * @default true
              */
             email_reminders: boolean;
+            session: components["schemas"]["SessionPolicyOut"];
         };
         /** MessageIn */
         MessageIn: {
@@ -2476,6 +2610,8 @@ export interface components {
             errors?: {
                 [key: string]: string;
             }[] | null;
+            /** Recent */
+            recent?: boolean | null;
             /** Request Id */
             request_id?: string | null;
         };
@@ -2676,6 +2812,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Paused Reason */
+            paused_reason?: ("consent" | "inactive" | "failures") | null;
             /** Last Run At */
             last_run_at: string | null;
             /**
@@ -2826,6 +2964,20 @@ export interface components {
             source: "france_travail";
             /** External Id */
             external_id: string;
+        };
+        /**
+         * SessionPolicyOut
+         * @description What the web app enforces on the client (ADR 0024); the server enforces the rest.
+         */
+        SessionPolicyOut: {
+            /** Idle Minutes */
+            idle_minutes: number;
+            /** Idle Minutes Remembered */
+            idle_minutes_remembered: number;
+            /** Absolute Days */
+            absolute_days: number;
+            /** Stepup Max Age Seconds */
+            stepup_max_age_seconds: number;
         };
         /** SourceMeta */
         SourceMeta: {
@@ -6182,6 +6334,248 @@ export interface operations {
             };
         };
     };
+    sign_out_everywhere_api_v1_me_sessions_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many requests. Please slow down and try again shortly. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    get_consent_api_v1_radar_consent_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_consent_api_v1_radar_consent_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_consent_api_v1_radar_consent_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_radars_api_v1_radar_resume_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RadarSearchOut"][];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_searches_api_v1_radar_searches_get: {
         parameters: {
             query?: never;
@@ -6838,6 +7232,37 @@ export interface operations {
             };
             /** @description A service we depend on is temporarily unavailable. Please try again. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    radar_link_api_public_radar_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

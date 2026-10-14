@@ -14,6 +14,7 @@ import firebase_admin
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.config import Settings, get_settings
 from recruitai.core.auth import get_current_user, get_firebase_app
 from recruitai.core.db import get_db
 from recruitai.core.errors import NotFound, Unauthorized
@@ -45,13 +46,14 @@ async def _caller_org(
     request: Request,
     app: Annotated[firebase_admin.App, Depends(get_firebase_app)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> UUID | None:
     """The caller's org when the request is authenticated, else None. A signed link works
     without a login (a browser ``<a href>`` sends none), like a GCS signed URL."""
     authorization = request.headers.get("authorization")
     if authorization is None:
         return None
-    user = await get_current_user(app, authorization)
+    user = await get_current_user(app, settings, authorization)
     ctx = await get_org_context(user, db, request.headers.get("x-org-id"))
     return ctx.org_id
 
