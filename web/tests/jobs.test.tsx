@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { JobsPage } from '@/features/job-search/JobsPage'
 import { renderWithApp } from './utils'
@@ -84,10 +84,21 @@ test('several files are uploaded, then analysed together in one call', async () 
       : { data: [job, { ...job, id: 'j2' }] },
   )
   renderPage()
-  await user.upload(screen.getByLabelText('Job description files'), [
-    new File(['%PDF'], 'a.pdf', { type: 'application/pdf' }),
-    new File(['x'], 'b.png', { type: 'image/png' }),
-  ])
+  const picker = screen.getByLabelText('Job description files')
+  const a = new File(['%PDF'], 'a.pdf', { type: 'application/pdf' })
+  const b = new File(['x'], 'b.png', { type: 'image/png' })
+  const c = new File(['y'], 'c.png', { type: 'image/png' })
+  await user.upload(picker, [a]) // a second pick ADDS to the batch, it does not replace it
+  await user.upload(picker, [a, b, c]) // a is already there: not added twice
+  // A drop bypasses the dialog's `accept` filter: unsupported types are skipped in code.
+  fireEvent.drop(picker.parentElement!, {
+    dataTransfer: { files: [new File(['d'], 'notes.docx'), new File(['e'], 'e.pdf')] },
+  })
+  expect(screen.getByText(/Skipped notes\.docx/)).toBeInTheDocument()
+  expect(screen.getByText('e.pdf')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Remove e.pdf' }))
+  await user.click(screen.getByRole('button', { name: 'Remove c.png' }))
+  expect(screen.queryByText('c.png')).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Upload and add' }))
   await waitFor(() =>
     expect(mocks.POST).toHaveBeenCalledWith('/api/v1/jobs/from-file', {

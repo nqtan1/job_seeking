@@ -103,8 +103,8 @@ export function MotivationBlock({
           <Button
             type="button"
             variant="outline"
-            disabled={!jobId || ask.isPending}
-            aria-busy={ask.isPending}
+            loading={ask.isPending}
+            disabled={!jobId}
             onClick={() =>
               ask.mutate(
                 { job_id: jobId, language },

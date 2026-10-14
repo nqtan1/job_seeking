@@ -3,6 +3,7 @@ import { api } from '@/lib/api/client'
 import { uploadDocument } from '@/lib/api/documents'
 import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
+import { toast } from '@/lib/toast'
 
 export type SearchParams = { query?: string; department?: string; contract_type?: string }
 type JobIn = components['schemas']['ManualJobIn'] | components['schemas']['SearchJobIn']
@@ -20,9 +21,9 @@ export function useApplyUrl(jobId: string | null | undefined): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null
 }
 
-const post = async (body: JobIn) => [unwrap(await api.POST('/api/v1/jobs', { body }))]
+const post = async (body: JobIn) => unwrap(await api.POST('/api/v1/jobs', { body }))
 
-/** One mutation for the manual and France Travail entry paths, resolving to the jobs created. */
+/** The manual and France Travail entry paths: one job each. */
 export function useAddJob() {
   const qc = useQueryClient()
   return useMutation({
@@ -30,7 +31,10 @@ export function useAddJob() {
       'text' in input
         ? post({ source: 'manual', text: input.text })
         : post({ source: 'france_travail', external_id: input.externalId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: (job) => {
+      toast(`Job added: ${job.data.title}`)
+      return qc.invalidateQueries({ queryKey: KEY })
+    },
   })
 }
 
@@ -49,7 +53,10 @@ export function useAddJobFiles() {
         await api.POST('/api/v1/jobs/from-file', { body: { source: 'file', document_ids } }),
       )
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: (jobs) => {
+      toast(`${jobs.length} job${jobs.length > 1 ? 's' : ''} added`)
+      return qc.invalidateQueries({ queryKey: KEY })
+    },
   })
 }
 

@@ -120,3 +120,17 @@ def test_agent_model_override(monkeypatch):
         "gemini",
         "dflt",
     )
+
+
+def test_shipped_config_files_load_as_prod(monkeypatch):
+    """config.prod.yaml is baked into the images: a typo there only shows at deploy time, when
+    the migrate job dies parsing it (2026-10-14)."""
+    from pathlib import Path
+
+    root = Path(__file__).parents[2]
+    for name in ("config.yaml", "config.prod.yaml"):
+        _set(monkeypatch, {"CONFIG_FILE": str(root / name)})
+        if name == "config.yaml":  # the dev file may name non-prod providers
+            monkeypatch.setenv("ENV", "local")
+            monkeypatch.setenv("STORAGE_BACKEND", "local")
+        assert set(Settings(_env_file=None).agents) >= set(AGENTS), name  # type: ignore[call-arg]

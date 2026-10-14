@@ -57,14 +57,14 @@ export function ProfilePage() {
         <Input
           id="cv"
           type="file"
-          accept=".pdf,.docx,image/*"
+          accept=".pdf,.txt,.png,.jpg,.jpeg"
           ref={file}
           disabled={extract.isPending}
         />
         {extract.isError && <ErrorMessage error={extract.error} />}
         {extract.isPending && <StepProgress steps={STEPS} />}
         <Button
-          disabled={extract.isPending}
+          loading={extract.isPending}
           onClick={() => {
             const f = file.current?.files?.[0]
             if (f)
@@ -77,7 +77,7 @@ export function ProfilePage() {
               })
           }}
         >
-          <FileUp />
+          {!extract.isPending && <FileUp />}
           {extract.isPending ? 'Extracting your profile…' : 'Extract profile'}
         </Button>
       </CardContent>
