@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.config import Settings, get_settings
 from recruitai.core.app_check import verify_app_check
+from recruitai.core.auth import require_recent_auth
 from recruitai.core.db import get_db
 from recruitai.core.errors import (
+    Conflict,
     NotFound,
     Unauthorized,
     UpstreamUnavailable,
@@ -25,6 +27,8 @@ from recruitai.modules.radar import service
 from recruitai.modules.radar.models import RadarRun, RadarSearch
 from recruitai.modules.radar.schemas import (
     AiUseOut,
+    ConsentIn,
+    ConsentOut,
     Highlights,
     InsightsOut,
     KeepOut,
@@ -73,10 +77,80 @@ def _search_out(s: RadarSearch) -> RadarSearchOut:
             "min_score": s.min_score,
             "daily_limit": s.daily_limit,
             "enabled": s.enabled,
+            "paused_reason": s.paused_reason,
             "last_run_at": s.last_run_at,
             "created_at": s.created_at,
         }
     )
+
+
+@router.get(
+    "/consent", response_model=ConsentOut, responses=problem_responses(Unauthorized)
+)
+async def get_consent(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ConsentOut:
+    return await service.get_consent(
+        db, org_id=ctx.org_id, policy_version=settings.radar_consent_policy_version
+    )
+
+
+@router.put(
+    "/consent",
+    response_model=ConsentOut,
+    # Step-up: granting is the act that lets us work in the background, so the sign-in must be
+    # recent. Withdrawing is not step-up gated (ADR 0024, D1): the e-mail link does it unauthenticated.
+    dependencies=[Depends(require_recent_auth)],
+    responses=problem_responses(Unauthorized, Conflict),
+)
+async def grant_consent(
+    body: ConsentIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ConsentOut:
+    return await service.grant_consent(
+        db,
+        org_id=ctx.org_id,
+        user_id=ctx.user_id,
+        seen_version=body.policy_version,
+        policy_version=settings.radar_consent_policy_version,
+    )
+
+
+@router.delete(
+    "/consent", response_model=ConsentOut, responses=problem_responses(Unauthorized)
+)
+async def withdraw_consent(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ConsentOut:
+    return await service.withdraw_consent(
+        db,
+        org_id=ctx.org_id,
+        user_id=ctx.user_id,
+        policy_version=settings.radar_consent_policy_version,
+    )
+
+
+@router.post(
+    "/resume",
+    response_model=list[RadarSearchOut],
+    responses=problem_responses(Unauthorized, Conflict),
+)
+async def resume_radars(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> list[RadarSearchOut]:
+    """Resume radars paused for inactivity or repeated failures (needs a current consent)."""
+    searches = await service.resume(
+        db, org_id=ctx.org_id, policy_version=settings.radar_consent_policy_version
+    )
+    return [_search_out(s) for s in searches]
 
 
 @router.post(

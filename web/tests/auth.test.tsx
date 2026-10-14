@@ -22,6 +22,12 @@ vi.mock('@/lib/firebase', () => ({
 }))
 vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: class {},
+  EmailAuthProvider: class {},
+  setPersistence: vi.fn().mockResolvedValue(undefined),
+  browserLocalPersistence: {},
+  browserSessionPersistence: {},
+  reauthenticateWithCredential: vi.fn(),
+  reauthenticateWithPopup: vi.fn(),
   createUserWithEmailAndPassword: fb.createUser,
   sendEmailVerification: fb.sendVerification,
   signInWithEmailAndPassword: fb.signIn,

@@ -46,6 +46,8 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deletion_warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the "radars pause soon" notice was sent (ADR 0024); older than last_active_at = stale.
+    radar_notice_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Set by an admin: every request of a blocked user is refused (core/tenancy.py).
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Daily digest of follow-ups and interviews (identity/service.send_application_reminders).

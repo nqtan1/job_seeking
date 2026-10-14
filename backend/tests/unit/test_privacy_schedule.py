@@ -14,4 +14,5 @@ def test_the_sweeps_reminders_and_radar_are_scheduled_on_the_worker():
         "identity:send_application_reminders",
         "radar:run_all",
         "radar:retry_interrupted",
+        "radar:pause_inactive",
     }

@@ -59,6 +59,7 @@ def _problem(
     *,
     errors: list[dict[str, str]] | None = None,
     headers: dict[str, str] | None = None,
+    extensions: dict[str, bool] | None = None,
 ) -> JSONResponse:
     body: dict[str, Any] = {
         "type": "about:blank",
@@ -69,6 +70,7 @@ def _problem(
     }
     if errors:
         body["errors"] = errors
+    body.update(extensions or {})
     out_headers = dict(headers or {})
     # Read from the ASGI scope, not a contextvar: unhandled-error responses are built by the
     # outermost middleware, after the request context has already been reset.
@@ -90,6 +92,7 @@ async def _app_error(request: Request, exc: Exception) -> JSONResponse:
         exc.detail,
         errors=exc.errors,
         headers=exc.headers,
+        extensions=exc.extensions,
     )
 
 

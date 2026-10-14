@@ -119,6 +119,26 @@ class Settings(BaseSettings):
     coach_max_steps: int = Field(5, ge=1, le=8)
     coach_turn_timeout_s: float = Field(50.0, gt=0)
 
+    # Session policy (ADR 0024). The server enforces the absolute lifetime and the step-up age
+    # from the token's ``auth_time``; the idle timeouts are enforced by the web app, which reads
+    # them from GET /me. ``leeway`` absorbs clock skew between us and Firebase.
+    session_absolute_days: int = Field(7, ge=1)
+    session_idle_minutes: int = Field(30, ge=1)
+    session_idle_minutes_remembered: int = Field(1440, ge=1)
+    stepup_max_age_seconds: int = Field(300, ge=30)
+    auth_time_leeway_seconds: int = Field(30, ge=0)
+
+    # Bump when the radar consent text changes materially: radars pause until re-consent.
+    radar_consent_policy_version: str = "2026-10-v1"
+
+    # Signed pause/unsubscribe links in radar e-mails (modules/radar/links.py). No secret = no
+    # links are issued and the public endpoint refuses everything.
+    radar_link_secret: str | None = None
+    radar_link_ttl_days: int = Field(30, ge=1)
+    app_base_url: str = "http://localhost:5173"
+    radar_inactive_notice_days: int = Field(53, ge=1)
+    radar_failures_before_pause: int = Field(5, ge=1)
+
     # Kill switch for the scheduled job radar (ADR 0021); the API's "Run now" is separate.
     radar_enabled: bool = True
 

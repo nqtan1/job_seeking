@@ -41,3 +41,4 @@ def _fresh_rate_limits():
     from recruitai.core import ratelimit
 
     ratelimit._hits.clear()
+    ratelimit._public_hits.clear()

@@ -186,3 +186,35 @@ export function useRadarJobIds(): Set<string> {
     [...(fresh.data ?? []), ...(kept.data ?? [])].flatMap((r) => (r.job_id ? [r.job_id] : [])),
   )
 }
+
+// ---- background consent (ADR 0024)
+
+export type Consent = components['schemas']['ConsentOut']
+const CONSENT = ['radar-consent']
+
+export const useConsent = () =>
+  useQuery({
+    queryKey: CONSENT,
+    queryFn: async () => unwrap(await api.GET('/api/v1/radar/consent')),
+  })
+
+function useConsentChange<T>(fn: (arg: T) => Promise<unknown>) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      Promise.all([CONSENT, SEARCHES, STATUS].map((k) => qc.invalidateQueries({ queryKey: k }))),
+  })
+}
+
+/** Needs a recent sign-in (the caller runs `ensureRecentAuth` first). */
+export const useGrantConsent = () =>
+  useConsentChange(async (policy_version: string) =>
+    unwrap(await api.PUT('/api/v1/radar/consent', { body: { policy_version } })),
+  )
+
+export const useWithdrawConsent = () =>
+  useConsentChange<void>(async () => unwrap(await api.DELETE('/api/v1/radar/consent')))
+
+export const useResumeRadars = () =>
+  useConsentChange<void>(async () => unwrap(await api.POST('/api/v1/radar/resume')))

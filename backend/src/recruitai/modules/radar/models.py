@@ -32,6 +32,10 @@ class RadarSearch(Base):
     __table_args__ = (
         CheckConstraint("min_score BETWEEN 0 AND 100", name="min_score"),
         CheckConstraint("daily_limit BETWEEN 1 AND 10", name="daily_limit"),
+        CheckConstraint(
+            "paused_reason IN ('consent', 'inactive', 'failures')",
+            name="paused_reason",
+        ),
         Index("ix_radar_searches_org_id", "org_id"),
     )
 
@@ -49,6 +53,12 @@ class RadarSearch(Base):
     )
     enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=true()
+    )
+    # Why a background run is held back (ADR 0024): consent|inactive|failures. NULL = not held.
+    paused_reason: Mapped[str | None] = mapped_column(String)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    consecutive_failures: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
     )
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # When a run was last asked for: tells "queued, not started yet" from "finished".
@@ -132,3 +142,31 @@ class RadarRun(Base):
         Integer, nullable=False, server_default="0"
     )
     error_code: Mapped[str | None] = mapped_column(String)
+
+
+class Consent(Base):
+    """Append-only consent log (ADR 0024). The current state is the newest row of an org+scope;
+    a row is never updated, so the history is the proof of what was agreed and when."""
+
+    __tablename__ = "consents"
+    __table_args__ = (
+        CheckConstraint("scope IN ('radar')", name="scope"),
+        CheckConstraint("event IN ('granted', 'withdrawn')", name="event"),
+        CheckConstraint("source IN ('ui', 'email_link')", name="source"),
+        Index("ix_consents_org_id_scope_at", "org_id", "scope", "at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    scope: Mapped[str] = mapped_column(String, nullable=False)
+    policy_version: Mapped[str] = mapped_column(String, nullable=False)
+    event: Mapped[str] = mapped_column(String, nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

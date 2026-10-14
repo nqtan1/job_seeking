@@ -5,6 +5,7 @@ import { routes } from '@/app/routes'
 
 const state = vi.hoisted(() => ({ user: undefined as unknown }))
 vi.mock('@/lib/auth', () => ({ useAuthUser: () => state.user, signOut: vi.fn() }))
+vi.mock('@/features/auth/SessionGuard', () => ({ SessionGuard: () => null }))
 vi.mock('@/features/coach/ChatPage', () => ({ ChatPage: () => <h1>Coach</h1> }))
 vi.mock('@/features/coach/api', () => ({ useConversations: () => ({ data: [] }) }))
 vi.mock('@/features/letters/api', () => ({ useLetters: () => ({ data: [] }) }))

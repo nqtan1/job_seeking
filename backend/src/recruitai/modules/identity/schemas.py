@@ -16,12 +16,22 @@ class OnboardingOut(BaseModel):
     has_profile: bool
 
 
+class SessionPolicyOut(BaseModel):
+    """What the web app enforces on the client (ADR 0024); the server enforces the rest."""
+
+    idle_minutes: int
+    idle_minutes_remembered: int
+    absolute_days: int
+    stepup_max_age_seconds: int
+
+
 class MeResponse(BaseModel):
     user: UserOut
     active_org_id: UUID
     onboarding: OnboardingOut
     is_admin: bool = False
     email_reminders: bool = True
+    session: SessionPolicyOut
 
 
 class AdminUserOut(BaseModel):

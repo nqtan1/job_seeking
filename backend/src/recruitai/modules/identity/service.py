@@ -129,6 +129,45 @@ async def inactive_users(
     ]
 
 
+@dataclass(frozen=True)
+class IdleOwner:
+    user_id: UUID
+    org_id: UUID
+    email: str
+    last_active: datetime
+    radar_notice_at: datetime | None
+
+
+async def idle_owners(
+    db: AsyncSession, *, idle_since: datetime, limit: int
+) -> list[IdleOwner]:
+    """Owners of an org who were last active at or before ``idle_since`` (radar pause sweep)."""
+    active = func.coalesce(User.last_active_at, User.created_at)
+    rows = await db.execute(
+        select(User, Membership.org_id, active)
+        .join(Membership, Membership.user_id == User.id)
+        .where(
+            Membership.role == "owner", active <= idle_since, User.blocked_at.is_(None)
+        )
+        .order_by(active)
+        .limit(limit)
+    )
+    return [
+        IdleOwner(u.id, org_id, u.email, last_active, u.radar_notice_at)
+        for u, org_id, last_active in rows.all()
+    ]
+
+
+async def mark_radar_notice(db: AsyncSession, *, user_id: UUID, at: datetime) -> None:
+    await db.execute(update(User).where(User.id == user_id).values(radar_notice_at=at))
+
+
+async def email_of(db: AsyncSession, *, user_id: UUID) -> str | None:
+    return (
+        await db.execute(select(User.email).where(User.id == user_id))
+    ).scalar_one_or_none()
+
+
 async def mark_warned(db: AsyncSession, *, user_id: UUID, at: datetime) -> None:
     await db.execute(
         update(User).where(User.id == user_id).values(deletion_warned_at=at)
