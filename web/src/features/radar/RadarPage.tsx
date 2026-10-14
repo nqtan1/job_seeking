@@ -246,7 +246,7 @@ function SearchCard({ search }: { search: Search }) {
             />
             Daily
           </label>
-          <Button size="sm" disabled={running} onClick={() => run.mutate(search.id)}>
+          <Button size="sm" loading={running} onClick={() => run.mutate(search.id)}>
             {running ? 'Searching…' : 'Run now'}
           </Button>
           <Button

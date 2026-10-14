@@ -47,7 +47,7 @@ function ManualEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
               Paste the job description first.
             </p>
           )}
-          <Button type="submit" disabled={add.isPending}>
+          <Button type="submit" loading={add.isPending}>
             {add.isPending ? 'Analysing…' : 'Add job'}
           </Button>
         </form>
@@ -91,7 +91,8 @@ function FileEntry() {
         {add.isPending && <StepProgress steps={STEPS} />}
         {add.isError && <ErrorMessage error={add.error} />}
         <Button
-          disabled={add.isPending || files.length === 0 || tooMany}
+          loading={add.isPending}
+          disabled={files.length === 0 || tooMany}
           onClick={() =>
             add.mutate(files, {
               onSuccess: (jobs) => {
