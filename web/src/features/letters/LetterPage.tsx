@@ -132,7 +132,8 @@ function LetterEditor({ letterId }: { letterId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
-            disabled={rendering || incomplete}
+            loading={rendering}
+            disabled={incomplete}
             title={incomplete ? 'Write and save every paragraph first' : undefined}
             onClick={() => render.mutate()}
           >
@@ -151,8 +152,8 @@ function LetterEditor({ letterId }: { letterId: string }) {
             <Button
               size="sm"
               variant="outline"
+              loading={spell.isPending && checking.length > 1}
               disabled={spell.isPending || checkable.length === 0}
-              aria-busy={spell.isPending && checking.length > 1}
               onClick={() => check(blocks.map((b) => b.key))}
             >
               {spell.isPending && checking.length > 1
@@ -174,7 +175,7 @@ function LetterEditor({ letterId }: { letterId: string }) {
               </Button>
             )}
             {unsaved.length > 1 && (
-              <Button size="sm" disabled={edit.isPending} onClick={saveAll}>
+              <Button size="sm" loading={edit.isPending} onClick={saveAll}>
                 {edit.isPending ? 'Saving…' : `Save ${unsaved.length} changes`}
               </Button>
             )}

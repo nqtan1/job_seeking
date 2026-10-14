@@ -149,7 +149,7 @@ export function FitPage() {
               <NativeSelectOption value="phd">PhD / research</NativeSelectOption>
             </NativeSelect>
           </div>
-          <Button disabled={run.isPending} onClick={() => run.mutate(type)}>
+          <Button loading={run.isPending} onClick={() => run.mutate(type)}>
             {run.isPending ? 'Analysing…' : fit ? 'Re-run analysis' : 'Analyse my fit'}
           </Button>
         </CardContent>

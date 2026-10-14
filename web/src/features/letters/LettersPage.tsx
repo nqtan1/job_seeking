@@ -160,7 +160,7 @@ function NewLetter() {
               </div>
             )}
             {create.isError && <ErrorMessage error={create.error} />}
-            <Button type="submit" className="sm:w-fit" disabled={create.isPending}>
+            <Button type="submit" className="sm:w-fit" loading={create.isPending}>
               {create.isPending
                 ? 'Preparing your letter…'
                 : mode === 'own_words'

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { ErrorMessage } from '@/components/ErrorMessage'
+import { Spinner } from '@/components/Spinner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -125,6 +126,7 @@ export function BlockEditor({
               key={action}
               size="sm"
               variant="outline"
+              loading={assist.isPending && assist.variables?.action === action}
               disabled={assist.isPending}
               onClick={() =>
                 assist.mutate(
@@ -145,7 +147,11 @@ export function BlockEditor({
           ))}
         </div>
       )}
-      {assist.isPending && <p className="text-sm text-muted-foreground">Asking the AI…</p>}
+      {assist.isPending && (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner className="size-3.5" /> The AI is rewriting your selection…
+        </p>
+      )}
       {assist.isError && hasSelection && <ErrorMessage error={assist.error} />}
       {suggestion && (
         <div className="space-y-2 rounded-md border border-primary/50 p-2 text-sm">
