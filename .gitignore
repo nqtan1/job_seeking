@@ -86,3 +86,6 @@ crash.log
 # Local runtime data (uploaded CVs/letters in dev) and Firebase CLI cache
 backend/.data/
 .firebase/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
