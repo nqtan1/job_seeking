@@ -36,6 +36,7 @@ from recruitai.modules.identity.schemas import (
     MeResponse,
     OnboardingOut,
     PreferencesIn,
+    SessionPolicyOut,
     UserOut,
 )
 
@@ -62,6 +63,12 @@ async def read_me(
         onboarding=OnboardingOut(has_profile=result.has_profile),
         is_admin=is_admin(current, settings),
         email_reminders=result.email_reminders,
+        session=SessionPolicyOut(
+            idle_minutes=settings.session_idle_minutes,
+            idle_minutes_remembered=settings.session_idle_minutes_remembered,
+            absolute_days=settings.session_absolute_days,
+            stepup_max_age_seconds=settings.stepup_max_age_seconds,
+        ),
     )
 
 

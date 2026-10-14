@@ -26,6 +26,7 @@ class AppError(Exception):
         code: str | None = None,
         errors: list[dict[str, str]] | None = None,
         headers: dict[str, str] | None = None,
+        extensions: dict[str, bool] | None = None,
     ) -> None:
         if code is not None and not _CODE_RE.fullmatch(code):
             raise ValueError("error code must be snake_case ([a-z][a-z0-9_]*)")
@@ -33,6 +34,9 @@ class AppError(Exception):
         self.code = code or type(self).code
         self.errors = errors
         self.headers = headers or {}
+        self.extensions = (
+            extensions or {}
+        )  # extra problem+json members, e.g. ``recent``
         super().__init__(self.detail)
 
 
@@ -45,8 +49,30 @@ class Unauthorized(AppError):
         "Authentication is required or the provided credentials are invalid."
     )
 
-    def __init__(self, detail: str | None = None, *, code: str | None = None) -> None:
-        super().__init__(detail, code=code, headers={"WWW-Authenticate": "Bearer"})
+    def __init__(
+        self,
+        detail: str | None = None,
+        *,
+        code: str | None = None,
+        extensions: dict[str, bool] | None = None,
+    ) -> None:
+        super().__init__(
+            detail,
+            code=code,
+            headers={"WWW-Authenticate": "Bearer"},
+            extensions=extensions,
+        )
+
+
+class ReauthRequired(Unauthorized):
+    """The sign-in is too old (``recent=False``: absolute session lifetime) or too old for a
+    sensitive action (``recent=True``: step-up). The web app signs out or re-authenticates."""
+
+    code = "reauth_required"
+    default_detail = "Please sign in again to continue."
+
+    def __init__(self, *, recent: bool) -> None:
+        super().__init__(extensions={"recent": recent})
 
 
 class NotFound(AppError):
@@ -61,6 +87,12 @@ class Forbidden(AppError):
     status_code = HTTPStatus.FORBIDDEN
     code = "forbidden"
     default_detail = "You do not have permission to perform this action."
+
+
+class Conflict(AppError):
+    status_code = HTTPStatus.CONFLICT
+    code = "conflict"
+    default_detail = "The request conflicts with the current state."
 
 
 class ValidationFailed(AppError):
@@ -103,6 +135,7 @@ class ProblemDetail(BaseModel):
     detail: str
     code: str
     errors: list[dict[str, str]] | None = None
+    recent: bool | None = None  # only on ``reauth_required``
     request_id: str | None = None
 
 

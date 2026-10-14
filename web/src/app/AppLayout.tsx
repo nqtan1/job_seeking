@@ -2,6 +2,7 @@ import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router'
 import { Toaster } from '@/components/Toaster'
+import { SessionGuard } from '@/features/auth/SessionGuard'
 import { useRadarTitle } from '@/features/radar/useRadarTitle'
 import { cn } from 'cn'
 import { Sidebar } from './Sidebar'
@@ -32,6 +33,7 @@ export function AppLayout() {
 
   return (
     <div className="flex h-dvh bg-background">
+      <SessionGuard />
       <aside
         className={cn(
           'hidden shrink-0 border-r bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:block',

@@ -10,7 +10,27 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useTask } from '@/lib/api/tasks'
 import { signOut } from '@/lib/auth'
-import { useDeleteAccount, useMe, useSetReminders, useStartExport } from './api'
+import { ConsentSettings } from '@/features/radar/Consent'
+import { ensureRecentAuth } from '@/lib/stepup'
+import { useDeleteAccount, useMe, useRevokeSessions, useSetReminders, useStartExport } from './api'
+
+/** Runs `action` after a recent sign-in (asks again only when the last one is too old). */
+function useStepUp() {
+  const me = useMe()
+  const [denied, setDenied] = useState(false)
+  const guard = async (action: () => void) => {
+    setDenied(false)
+    if (await ensureRecentAuth(me.data?.session.stepup_max_age_seconds ?? 300)) action()
+    else setDenied(true)
+  }
+  return { guard, denied }
+}
+
+const Denied = () => (
+  <p role="alert" className="text-sm text-destructive">
+    We could not confirm it is you, so nothing was done.
+  </p>
+)
 
 const CONFIRM_WORD = 'DELETE'
 
@@ -44,6 +64,7 @@ function RemindersCard() {
 
 function ExportCard() {
   const start = useStartExport()
+  const step = useStepUp()
   const task = useTask(start.data?.task_id)
   const running = start.isPending || task.data?.status === 'queued'
   return (
@@ -56,9 +77,10 @@ function ExportCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Button disabled={running} onClick={() => start.mutate()}>
+        <Button disabled={running} onClick={() => step.guard(() => start.mutate())}>
           {running ? 'Preparing your export…' : 'Request export'}
         </Button>
+        {step.denied && <Denied />}
         {start.isError && <ErrorMessage error={start.error} />}
         {task.isError && <ErrorMessage error={task.error} />}
         {task.data?.status === 'failed' && (
@@ -76,8 +98,46 @@ function ExportCard() {
   )
 }
 
+function SessionsCard() {
+  const revoke = useRevokeSessions()
+  const step = useStepUp()
+  const qc = useQueryClient()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sign out of all devices</CardTitle>
+        <CardDescription>
+          Ends every session of your account, including this one. Other devices are signed out
+          within an hour at most.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {step.denied && <Denied />}
+        {revoke.isError && <ErrorMessage error={revoke.error} />}
+        <Button
+          variant="outline"
+          disabled={revoke.isPending}
+          onClick={() =>
+            step.guard(() =>
+              revoke.mutate(undefined, {
+                onSuccess: async () => {
+                  qc.clear()
+                  await signOut().catch(() => {})
+                },
+              }),
+            )
+          }
+        >
+          Sign out everywhere
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 function DeleteCard() {
   const del = useDeleteAccount()
+  const step = useStepUp()
   const qc = useQueryClient()
   const [typed, setTyped] = useState('')
   return (
@@ -97,17 +157,20 @@ function DeleteCard() {
           autoComplete="off"
           onChange={(e) => setTyped(e.target.value)}
         />
+        {step.denied && <Denied />}
         {del.isError && <ErrorMessage error={del.error} />}
         <Button
           variant="destructive"
           disabled={typed !== CONFIRM_WORD || del.isPending}
           onClick={() =>
-            del.mutate(undefined, {
-              onSuccess: async () => {
-                qc.clear() // no cached data of the deleted account stays in memory
-                await signOut().catch(() => {}) // the Firebase user is already gone server-side
-              },
-            })
+            step.guard(() =>
+              del.mutate(undefined, {
+                onSuccess: async () => {
+                  qc.clear() // no cached data of the deleted account stays in memory
+                  await signOut().catch(() => {}) // the Firebase user is already gone server-side
+                },
+              }),
+            )
           }
         >
           {del.isPending ? 'Deleting…' : 'Delete my account'}
@@ -141,6 +204,8 @@ export function SettingsPage() {
           </CardHeader>
         </Card>
         <RemindersCard />
+        <ConsentSettings />
+        <SessionsCard />
         <ExportCard />
         <DeleteCard />
       </div>

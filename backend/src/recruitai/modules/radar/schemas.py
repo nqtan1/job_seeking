@@ -30,6 +30,8 @@ class RadarSearchIn(BaseModel):
 
 class RadarSearchOut(RadarSearchIn):
     id: UUID
+    # consent | inactive | failures: why background runs are held back (null = not held)
+    paused_reason: Literal["consent", "inactive", "failures"] | None = None
     last_run_at: datetime | None
     created_at: datetime
 
@@ -130,3 +132,25 @@ class RadarStatusOut(BaseModel):
     # The last run could not finish (AI or job source down, a crash): it can be retried at once
     interrupted: bool = False
     interrupted_reason: str | None = None
+
+
+class ConsentEvent(BaseModel):
+    event: Literal["granted", "withdrawn"]
+    at: datetime
+    policy_version: str
+    source: Literal["ui", "email_link"]
+
+
+class ConsentOut(BaseModel):
+    """``needs_reconsent``: it was granted for an older policy text. Background radars run only
+    in state ``granted``."""
+
+    state: Literal["none", "granted", "withdrawn", "needs_reconsent"]
+    policy_version: str
+    history: list[ConsentEvent]
+
+
+class ConsentIn(BaseModel):
+    """The version the user actually saw, so a stale dialog cannot consent to new text."""
+
+    policy_version: str

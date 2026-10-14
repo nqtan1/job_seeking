@@ -6,10 +6,11 @@ from uuid import UUID
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.modules.radar.models import RadarResult, RadarRun, RadarSearch
+from recruitai.modules.radar.models import Consent, RadarResult, RadarRun, RadarSearch
 
 # ---- searches
 
@@ -257,6 +258,7 @@ async def due_searches(
         select(RadarSearch)
         .where(
             RadarSearch.enabled.is_(True),
+            RadarSearch.paused_reason.is_(None),
             (RadarSearch.last_run_at.is_(None))
             | (RadarSearch.last_run_at < ran_before),
         )
@@ -402,3 +404,101 @@ async def searches_by_ids(
         select(RadarSearch).where(RadarSearch.id.in_(search_ids))
     )
     return list(rows.scalars())
+
+
+# ---- consent (append-only; ADR 0024)
+
+
+async def add_consent(
+    session: AsyncSession,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    policy_version: str,
+    event: str,
+    source: str,
+) -> Consent:
+    row = Consent(
+        org_id=org_id,
+        user_id=user_id,
+        scope="radar",
+        policy_version=policy_version,
+        event=event,
+        source=source,
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+async def latest_consents(
+    session: AsyncSession, *, org_ids: list[UUID]
+) -> dict[UUID, Consent]:
+    if not org_ids:
+        return {}
+    rows = await session.execute(
+        select(Consent)
+        .ext(distinct_on(Consent.org_id))
+        .where(Consent.org_id.in_(org_ids), Consent.scope == "radar")
+        .order_by(Consent.org_id, Consent.at.desc(), Consent.id.desc())
+    )
+    return {c.org_id: c for c in rows.scalars()}
+
+
+async def consent_history(
+    session: AsyncSession, *, org_id: UUID, limit: int = 50
+) -> list[Consent]:
+    rows = await session.execute(
+        select(Consent)
+        .where(Consent.org_id == org_id, Consent.scope == "radar")
+        .order_by(Consent.at.desc(), Consent.id.desc())
+        .limit(limit)
+    )
+    return list(rows.scalars())
+
+
+async def hold_org_searches(
+    session: AsyncSession, *, org_id: UUID, reason: str, now: datetime
+) -> None:
+    """Hold every not-yet-held search of the org, in the caller's transaction."""
+    await session.execute(
+        update(RadarSearch)
+        .where(RadarSearch.org_id == org_id, RadarSearch.paused_reason.is_(None))
+        .values(paused_reason=reason, paused_at=now)
+    )
+
+
+async def release_org_searches(
+    session: AsyncSession, *, org_id: UUID, reason: str
+) -> None:
+    await session.execute(
+        update(RadarSearch)
+        .where(RadarSearch.org_id == org_id, RadarSearch.paused_reason == reason)
+        .values(paused_reason=None, paused_at=None)
+    )
+
+
+async def reset_failures(session: AsyncSession, *, org_id: UUID) -> None:
+    await session.execute(
+        update(RadarSearch)
+        .where(RadarSearch.org_id == org_id)
+        .values(consecutive_failures=0)
+    )
+
+
+async def orgs_with_live_searches(
+    session: AsyncSession, *, org_ids: list[UUID]
+) -> set[UUID]:
+    """Orgs that have at least one enabled search that is not held."""
+    if not org_ids:
+        return set()
+    rows = await session.execute(
+        select(RadarSearch.org_id)
+        .where(
+            RadarSearch.org_id.in_(org_ids),
+            RadarSearch.enabled.is_(True),
+            RadarSearch.paused_reason.is_(None),
+        )
+        .distinct()
+    )
+    return set(rows.scalars())

@@ -5,7 +5,9 @@ Deliberately does **not** touch the database. Provisioning the ``users`` row is
 first-login provisioning be one atomic transaction instead of a check-then-write race.
 """
 
+import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -15,7 +17,9 @@ from firebase_admin import auth as firebase_auth
 from starlette.concurrency import run_in_threadpool
 
 from recruitai.config import Settings, get_settings
-from recruitai.core.errors import Forbidden, Unauthorized
+from recruitai.core.errors import Forbidden, ReauthRequired, Unauthorized
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -23,6 +27,7 @@ class CurrentUser:
     firebase_uid: str
     email: str
     email_verified: bool = False
+    auth_time: int = 0  # epoch s of the original sign-in; unchanged by silent refresh
 
 
 def get_firebase_app(
@@ -46,8 +51,17 @@ def get_firebase_app(
         )
 
 
+def sign_in_age(user: CurrentUser, now: float | None = None) -> float:
+    return (now if now is not None else time.time()) - user.auth_time
+
+
 async def _verify(
-    app: firebase_admin.App, authorization: str | None, *, check_revoked: bool
+    app: firebase_admin.App,
+    settings: Settings,
+    authorization: str | None,
+    *,
+    check_revoked: bool,
+    max_age_s: int | None = None,
 ) -> CurrentUser:
     if authorization is None:
         raise Unauthorized("Missing Authorization header.")
@@ -65,28 +79,59 @@ async def _verify(
     email = claims.get("email")
     if not email:
         raise Unauthorized("Token has no email claim.")
-    return CurrentUser(
+    user = CurrentUser(
         firebase_uid=claims["uid"],
         email=email,
         email_verified=bool(claims.get("email_verified")),
+        auth_time=int(claims.get("auth_time") or 0),
     )
+    leeway = settings.auth_time_leeway_seconds
+    age = sign_in_age(user)
+    if age < -leeway or age > settings.session_absolute_days * 86400 + leeway:
+        logger.info("reauth_required", extra={"reason": "absolute"})
+        raise ReauthRequired(recent=False)
+    if max_age_s is not None:
+        if age > max_age_s + leeway:
+            logger.info("step_up_fail")
+            raise ReauthRequired(recent=True)
+        logger.info("step_up_ok")
+    return user
 
 
 async def get_current_user(
     app: Annotated[firebase_admin.App, Depends(get_firebase_app)],
+    settings: Annotated[Settings, Depends(get_settings)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> CurrentUser:
-    return await _verify(app, authorization, check_revoked=False)
+    return await _verify(app, settings, authorization, check_revoked=False)
 
 
 async def get_current_user_strict(
     app: Annotated[firebase_admin.App, Depends(get_firebase_app)],
+    settings: Annotated[Settings, Depends(get_settings)],
     authorization: Annotated[str | None, Header()] = None,
 ) -> CurrentUser:
     """For sensitive endpoints (account deletion, ADR 0007): also asks Firebase whether the
     token was revoked or the account disabled/deleted. One extra network call, so not the
     default: an ID token otherwise stays valid for up to an hour."""
-    return await _verify(app, authorization, check_revoked=True)
+    return await _verify(app, settings, authorization, check_revoked=True)
+
+
+async def require_recent_auth(
+    app: Annotated[firebase_admin.App, Depends(get_firebase_app)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> CurrentUser:
+    """Step-up (ADR 0024): strict, and the sign-in itself must be at most
+    ``stepup_max_age_seconds`` old. Otherwise ``401 reauth_required`` with ``recent=true``;
+    the web app re-authenticates and retries."""
+    return await _verify(
+        app,
+        settings,
+        authorization,
+        check_revoked=True,
+        max_age_s=settings.stepup_max_age_seconds,
+    )
 
 
 def is_admin(user: CurrentUser, settings: Settings) -> bool:

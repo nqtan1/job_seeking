@@ -14,11 +14,17 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai import usage
 from recruitai.ai.gateway import LLMGateway, QuotaExceeded
-from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
+from recruitai.core.errors import (
+    Conflict,
+    NotFound,
+    UpstreamUnavailable,
+    ValidationFailed,
+)
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.tasks import enqueue
 from recruitai.modules.applications import service as applications
@@ -28,10 +34,11 @@ from recruitai.modules.jobs import service as jobs
 from recruitai.modules.jobs.providers.base import JobProvider
 from recruitai.modules.jobs.schemas import UnifiedJobSearchResult
 from recruitai.modules.matching import service as matching
-from recruitai.modules.radar import repository
+from recruitai.modules.radar import links, repository
 from recruitai.modules.radar.models import RadarResult, RadarRun, RadarSearch
 from recruitai.modules.radar.schemas import (
     MAX_SEARCHES_PER_ORG,
+    ConsentOut,
     RadarSearchIn,
     RadarSearchUpdate,
 )
@@ -47,7 +54,9 @@ RUN_TASK = "radar:run_search"  # registered by the worker (worker.py, namespace 
 STALE_RUN = timedelta(
     minutes=10
 )  # an unfinished run older than this is treated as abandoned (the worker died)
-INACTIVE_AFTER = timedelta(days=30)  # no automatic runs for accounts idle this long
+IDLE_PAUSE_AFTER = timedelta(
+    days=60
+)  # no automatic runs for accounts idle this long (ADR 0024)
 MAX_RUNS_PER_DAY = (
     500  # ponytail: one worker, runs one after another; shard when users grow
 )
@@ -60,6 +69,12 @@ RETRYABLE_STOPS = {
 }
 RETRY_AFTER = timedelta(minutes=20)  # automatic retry waits this long after the failure
 MAX_AUTO_RETRIES = 3  # automatic retries per search per day
+MAX_AI_CALLS_PER_RUN = (
+    30  # one fit analysis per scored offer: a hard ceiling per run (ADR 0024)
+)
+Notify = Callable[
+    [UUID, str, dict[str, Any]], Awaitable[None]
+]  # (user id, template, context)
 
 
 async def get_search(db: AsyncSession, *, org_id: UUID, search_id: UUID) -> RadarSearch:
@@ -167,7 +182,7 @@ async def _execute(
     left_quota = (
         quota - QUOTA_RESERVE - await usage.count_calls_today(db, user_id=user_id)
     )
-    budget = min(left_limit, left_quota)
+    budget = min(left_limit, left_quota, MAX_AI_CALLS_PER_RUN)
     if budget <= 0:
         reason = "limit" if left_limit <= 0 else "quota"
         return await _finish(db, run, search, now, "ok", reason, counts)
@@ -495,20 +510,50 @@ def _day_start(now: datetime) -> datetime:
     return datetime.combine(now.date(), time.min, tzinfo=UTC)
 
 
+async def consented_orgs(
+    db: AsyncSession, *, org_ids: list[UUID], policy_version: str
+) -> set[UUID]:
+    """Orgs whose newest radar consent is a grant of the *current* policy text."""
+    latest = await repository.latest_consents(db, org_ids=org_ids)
+    return {
+        o
+        for o, c in latest.items()
+        if c.event == "granted" and c.policy_version == policy_version
+    }
+
+
 async def due_searches(
-    db: AsyncSession, *, now: datetime
+    db: AsyncSession, *, now: datetime, policy_version: str
 ) -> list[tuple[UUID, UUID, UUID]]:
     """``(search id, org id, owner user id)`` for enabled searches that have not run today, of
     owners who are neither blocked nor idle for 30 days."""
     searches = await repository.due_searches(
         db, ran_before=_day_start(now), limit=MAX_RUNS_PER_DAY
     )
+    return await _runnable_targets(db, searches, now=now, policy_version=policy_version)
+
+
+async def _runnable_targets(
+    db: AsyncSession,
+    searches: list[RadarSearch],
+    *,
+    now: datetime,
+    policy_version: str,
+) -> list[tuple[UUID, UUID, UUID]]:
+    """The one gate for background runs: enabled, not held, consent current, owner active."""
+    org_ids = list({s.org_id for s in searches})
     owners = await identity.active_owner_ids(
-        db,
-        org_ids=list({s.org_id for s in searches}),
-        active_since=now - INACTIVE_AFTER,
+        db, org_ids=org_ids, active_since=now - IDLE_PAUSE_AFTER
     )
-    return [(s.id, s.org_id, owners[s.org_id]) for s in searches if s.org_id in owners]
+    consented = await consented_orgs(db, org_ids=org_ids, policy_version=policy_version)
+    return [
+        (s.id, s.org_id, owners[s.org_id])
+        for s in searches
+        if s.enabled
+        and s.paused_reason is None
+        and s.org_id in owners
+        and s.org_id in consented
+    ]
 
 
 async def _run_each(
@@ -519,12 +564,21 @@ async def _run_each(
     *,
     quota: int,
     now: datetime,
+    policy_version: str,
+    notify: Notify | None = None,
+    failures_before_pause: int,
 ) -> int:
     """Run each ``(search id, org id, owner user id)`` in its own session, one after another,
-    so one failure cannot touch the others. Returns how many runs were started."""
+    so one failure cannot touch the others. Returns how many runs were started. Consent is
+    checked again right before each run: a withdrawal during a long batch stops the rest."""
     started = 0
     for search_id, org_id, user_id in targets:
         async with session_factory() as session:
+            current = await repository.searches_by_ids(session, search_ids=[search_id])
+            if not await _runnable_targets(
+                session, current, now=now, policy_version=policy_version
+            ):
+                continue
             try:
                 run = await run_search(
                     session,
@@ -536,6 +590,16 @@ async def _run_each(
                     quota=quota,
                     now=now,
                 )
+                if run is not None:
+                    await _record_outcome(
+                        session,
+                        current[0],
+                        run,
+                        user_id=user_id,
+                        now=now,
+                        notify=notify,
+                        limit=failures_before_pause,
+                    )
             except Exception as exc:  # noqa: BLE001  (e.g. the search was deleted meanwhile)
                 logger.error(
                     "radar background run failed",
@@ -546,25 +610,59 @@ async def _run_each(
     return started
 
 
+async def _record_outcome(
+    db: AsyncSession,
+    search: RadarSearch,
+    run: RadarRun,
+    *,
+    user_id: UUID,
+    now: datetime,
+    notify: Notify | None,
+    limit: int,
+) -> None:
+    """A day that ended in error counts as a failure; ``limit`` in a row hold the radar and tell
+    the user. A clean day resets the count (a partial run is neither)."""
+    if run.status == "ok":
+        search.consecutive_failures = 0
+    elif run.status == "error":
+        search.consecutive_failures += 1
+        if search.consecutive_failures >= limit and search.paused_reason is None:
+            search.paused_reason, search.paused_at = "failures", now
+            if notify:
+                await notify(user_id, "radar_paused_failures", {"name": search.name})
+    await db.commit()
+
+
 async def run_due_searches(
     session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]],
     llm_for: Callable[[AsyncSession, UUID, UUID], Awaitable[LLMGateway]],
     provider: JobProvider,
     *,
     quota: int,
+    policy_version: str,
     now: datetime | None = None,
+    notify: Notify | None = None,
+    failures_before_pause: int,
 ) -> int:
     """The daily run: every due search once."""
     now = now or datetime.now(UTC)
     async with session_factory() as session:
-        due = await due_searches(session, now=now)
+        due = await due_searches(session, now=now, policy_version=policy_version)
     return await _run_each(
-        session_factory, llm_for, provider, due, quota=quota, now=now
+        session_factory,
+        llm_for,
+        provider,
+        due,
+        quota=quota,
+        now=now,
+        policy_version=policy_version,
+        notify=notify,
+        failures_before_pause=failures_before_pause,
     )
 
 
 async def interrupted_searches(
-    db: AsyncSession, *, now: datetime
+    db: AsyncSession, *, now: datetime, policy_version: str
 ) -> list[tuple[UUID, UUID, UUID]]:
     """Daily searches whose latest run today was interrupted, a while ago, and that have not used
     their automatic retries: the AI or the job source was down, so the work is simply tried again.
@@ -580,15 +678,8 @@ async def interrupted_searches(
         waited = now - (latest.finished_at or latest.started_at) >= RETRY_AFTER
         if is_interrupted(latest, now) and failures <= MAX_AUTO_RETRIES and waited:
             wanted.append(search_id)
-    searches = [
-        s for s in await repository.searches_by_ids(db, search_ids=wanted) if s.enabled
-    ]
-    owners = await identity.active_owner_ids(
-        db,
-        org_ids=list({s.org_id for s in searches}),
-        active_since=now - INACTIVE_AFTER,
-    )
-    return [(s.id, s.org_id, owners[s.org_id]) for s in searches if s.org_id in owners]
+    searches = await repository.searches_by_ids(db, search_ids=wanted)
+    return await _runnable_targets(db, searches, now=now, policy_version=policy_version)
 
 
 async def retry_interrupted_searches(
@@ -597,18 +688,37 @@ async def retry_interrupted_searches(
     provider: JobProvider,
     *,
     quota: int,
+    policy_version: str,
     now: datetime | None = None,
+    notify: Notify | None = None,
+    failures_before_pause: int,
 ) -> int:
     now = now or datetime.now(UTC)
     async with session_factory() as session:
-        targets = await interrupted_searches(session, now=now)
+        targets = await interrupted_searches(
+            session, now=now, policy_version=policy_version
+        )
     return await _run_each(
-        session_factory, llm_for, provider, targets, quota=quota, now=now
+        session_factory,
+        llm_for,
+        provider,
+        targets,
+        quota=quota,
+        now=now,
+        policy_version=policy_version,
+        notify=notify,
+        failures_before_pause=failures_before_pause,
     )
 
 
-async def new_match_lines(db: AsyncSession, *, now: datetime) -> dict[UUID, list[str]]:
-    """Digest lines per org: how many new shortlisted jobs since yesterday, and the best three."""
+async def new_match_lines(
+    db: AsyncSession,
+    *,
+    now: datetime,
+    link_for: Callable[[UUID, UUID], str] | None = None,
+) -> dict[UUID, list[str]]:
+    """Digest lines per org: how many new shortlisted jobs since yesterday, and the best three,
+    then (if ``link_for`` is given) a no-login link that withdraws the radar consent."""
     since = now - timedelta(days=1)
     counts = await repository.new_counts_since(db, since=since)
     best = await repository.top_new_since(db, since=since, per_org=3)
@@ -623,7 +733,101 @@ async def new_match_lines(db: AsyncSession, *, now: datetime) -> dict[UUID, list
             for r in best.get(org_id, [])
         ]
         lines[org_id] = [head, *top]
+    if link_for and lines:
+        owners = await identity.active_owner_ids(
+            db, org_ids=list(lines), active_since=datetime.min.replace(tzinfo=UTC)
+        )
+        for org_id, user_id in owners.items():
+            lines[org_id].append(
+                "  Stop radars / Arrêter les radars: " + link_for(org_id, user_id)
+            )
     return lines
+
+
+async def get_consent(
+    db: AsyncSession, *, org_id: UUID, policy_version: str
+) -> ConsentOut:
+    history = await repository.consent_history(db, org_id=org_id)
+    state = "none"
+    if history:
+        latest = history[0]
+        if latest.event == "withdrawn":
+            state = "withdrawn"
+        elif latest.policy_version == policy_version:
+            state = "granted"
+        else:
+            state = "needs_reconsent"
+    return ConsentOut.model_validate(
+        {
+            "state": state,
+            "policy_version": policy_version,
+            "history": [
+                {
+                    "event": c.event,
+                    "at": c.at,
+                    "policy_version": c.policy_version,
+                    "source": c.source,
+                }
+                for c in history
+            ],
+        }
+    )
+
+
+async def grant_consent(
+    db: AsyncSession,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    seen_version: str,
+    policy_version: str,
+) -> ConsentOut:
+    if seen_version != policy_version:
+        raise Conflict(
+            "The consent text has changed. Please read it again.",
+            code="consent_version_mismatch",
+        )
+    await repository.add_consent(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        policy_version=policy_version,
+        event="granted",
+        source="ui",
+    )
+    await repository.release_org_searches(db, org_id=org_id, reason="consent")
+    await db.commit()
+    logger.info("radar_consent_granted")
+    return await get_consent(db, org_id=org_id, policy_version=policy_version)
+
+
+async def withdraw_consent(
+    db: AsyncSession,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    policy_version: str,
+    source: str = "ui",
+    now: datetime | None = None,
+) -> ConsentOut:
+    """Append the withdrawal and hold every radar in the same transaction: the next scheduled
+    run, even one already selected, sees it."""
+    latest = (await repository.latest_consents(db, org_ids=[org_id])).get(org_id)
+    if latest is None or latest.event != "withdrawn":  # a replayed link adds no history
+        await repository.add_consent(
+            db,
+            org_id=org_id,
+            user_id=user_id,
+            policy_version=policy_version,
+            event="withdrawn",
+            source=source,
+        )
+    await repository.hold_org_searches(
+        db, org_id=org_id, reason="consent", now=now or datetime.now(UTC)
+    )
+    await db.commit()
+    logger.info("radar_consent_withdrawn")
+    return await get_consent(db, org_id=org_id, policy_version=policy_version)
 
 
 async def export_data(
@@ -631,6 +835,9 @@ async def export_data(
 ) -> dict[str, list[dict[str, object]]]:
     searches, results, runs = await repository.all_for_org(db, org_id=org_id)
     return {
+        "consents": rows_as_dicts(
+            await repository.consent_history(db, org_id=org_id, limit=10_000)
+        ),
         "radar_searches": rows_as_dicts(searches),
         "radar_results": rows_as_dicts(results),
         "radar_runs": rows_as_dicts(runs),
@@ -750,3 +957,79 @@ async def keep_anyway(
     result.job_id, result.status = posting.id, "approved"
     await db.commit()
     return posting.id
+
+
+# ---- lifecycle: resume, inactivity, public links (ADR 0024)
+
+
+async def resume(
+    db: AsyncSession, *, org_id: UUID, policy_version: str
+) -> list[RadarSearch]:
+    """Release radars held for inactivity or repeated failures. Needs a current consent: a
+    resume must never be a way around it."""
+    if org_id not in await consented_orgs(
+        db, org_ids=[org_id], policy_version=policy_version
+    ):
+        raise Conflict("Radar consent is needed first.", code="consent_required")
+    for reason in ("inactive", "failures"):
+        await repository.release_org_searches(db, org_id=org_id, reason=reason)
+    await repository.reset_failures(db, org_id=org_id)
+    await db.commit()
+    return await repository.list_searches(db, org_id=org_id)
+
+
+async def pause_inactive(
+    db: AsyncSession,
+    notice: Callable[[str, dict[str, Any]], Awaitable[bool]],
+    *,
+    now: datetime,
+    notice_days: int = 53,
+    limit: int = 500,
+) -> dict[str, int]:
+    """Notice at ``notice_days`` idle (once per idle period), hold the radars at 60. Only users
+    who still have a live radar are touched, so nobody is mailed about something already off."""
+    out = {"noticed": 0, "paused": 0}
+    idle = await identity.idle_owners(
+        db, idle_since=now - timedelta(days=notice_days), limit=limit
+    )
+    live = await repository.orgs_with_live_searches(
+        db, org_ids=[u.org_id for u in idle]
+    )
+    for u in idle:
+        if u.org_id not in live:
+            continue
+        if now - u.last_active >= IDLE_PAUSE_AFTER:
+            await repository.hold_org_searches(
+                db, org_id=u.org_id, reason="inactive", now=now
+            )
+            await db.commit()
+            out["paused"] += 1
+        elif u.radar_notice_at is None or u.radar_notice_at < u.last_active:
+            pause_on = (u.last_active + IDLE_PAUSE_AFTER).date().isoformat()
+            if await notice(u.email, {"pause_on": pause_on}):
+                await identity.mark_radar_notice(db, user_id=u.user_id, at=now)
+                await db.commit()
+                out["noticed"] += 1
+    return out
+
+
+async def apply_link(
+    db: AsyncSession, claims: links.LinkClaims, *, policy_version: str
+) -> None:
+    """The one thing a signed link may do: withdraw consent. Idempotent; reads and returns
+    nothing. An account deleted since the mail was sent is simply nothing to do."""
+    try:
+        await withdraw_consent(
+            db,
+            org_id=claims.org_id,
+            user_id=claims.user_id,
+            policy_version=policy_version,
+            source="email_link",
+        )
+    except IntegrityError:
+        await db.rollback()
+
+
+def withdraw_link(secret: str, *, org_id: UUID, user_id: UUID, ttl_s: int) -> str:
+    """Token for the no-login "stop radars" link (other modules go through the service)."""
+    return links.sign(secret, org_id=org_id, user_id=user_id, ttl_s=ttl_s)

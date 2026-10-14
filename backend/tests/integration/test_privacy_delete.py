@@ -28,7 +28,7 @@ ORG_TABLES = (
     "memberships", "documents", "ai_calls", "task_runs", "candidate_profiles",
     "job_postings", "fit_analyses", "letters", "letter_versions", "applications",
     "application_events", "conversations", "messages", "radar_searches", "radar_results",
-    "radar_runs",
+    "radar_runs", "consents",
 )  # fmt: skip
 
 
@@ -112,6 +112,13 @@ async def _fill_account(
     assert (
         await client.post("/api/v1/me/export", headers=headers)
     ).status_code == 202  # queued job
+    assert (
+        await client.put(
+            "/api/v1/radar/consent",
+            headers=headers,
+            json={"policy_version": "2026-10-v1"},
+        )
+    ).status_code == 200
     me = (await client.get("/api/v1/me", headers=headers)).json()
     async with db_engine.begin() as conn:
         await conn.execute(

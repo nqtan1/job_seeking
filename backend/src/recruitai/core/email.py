@@ -27,6 +27,27 @@ TEMPLATES: dict[str, tuple[str, str]] = {
             "supprimés le {delete_on}. Pour le conserver, connectez-vous avant cette date.\n"
         ),
     ),
+    "radar_inactivity_notice": (
+        "Your RecruitAI radars will pause on {pause_on} / Vos radars RecruitAI seront mis en pause le {pause_on}",
+        (
+            "Hello,\n\nYou have not signed in for a while. To protect your data, your job "
+            "radars will pause automatically on {pause_on}. Sign in before that date to keep "
+            "them running, or resume them later from the Radar page.\n\n"
+            "Bonjour,\n\nVous ne vous êtes pas connecté depuis un moment. Pour protéger vos "
+            "données, vos radars seront mis en pause automatiquement le {pause_on}. Connectez-"
+            "vous avant cette date pour les garder actifs, ou reprenez-les plus tard depuis "
+            "la page Radar.\n"
+        ),
+    ),
+    "radar_paused_failures": (
+        "A RecruitAI radar was paused / Un radar RecruitAI a été mis en pause",
+        (
+            'Hello,\n\nYour radar "{name}" failed several days in a row, so it was paused. '
+            "Open the Radar page to check it and resume it.\n\n"
+            "Bonjour,\n\nVotre radar « {name} » a échoué plusieurs jours de suite et a été "
+            "mis en pause. Ouvrez la page Radar pour le vérifier et le reprendre.\n"
+        ),
+    ),
     "application_reminders": (
         ("RecruitAI: {count} to follow up / à suivre"),
         (

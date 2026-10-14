@@ -49,3 +49,22 @@ def rate_limit(
 
 limit_ai = rate_limit("ai", limit=20)  # every AI route also costs a model call
 limit_sensitive = rate_limit("sensitive", limit=5)  # export, delete account
+
+
+_public_hits: dict[str, deque[float]] = defaultdict(deque)
+
+
+def limit_public(name: str, *, limit: int, per_s: float = 60.0) -> Callable[[], None]:
+    """For unauthenticated routes: one *global* window per route. There is no trusted client IP
+    behind Hosting + Cloud Run, so this only bounds total abuse, per instance."""
+
+    def dependency() -> None:
+        now = time.monotonic()
+        window = _public_hits[name]
+        while window and window[0] <= now - per_s:
+            window.popleft()
+        if len(window) >= limit:
+            raise RateLimited(headers={"Retry-After": str(int(per_s))})
+        window.append(now)
+
+    return dependency

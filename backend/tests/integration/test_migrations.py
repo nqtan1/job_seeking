@@ -177,6 +177,7 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "applications",
         "candidate_profiles",
         "conversations",
+        "consents",
         "documents",
         "fit_analyses",
         "job_postings",
