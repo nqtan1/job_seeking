@@ -1068,10 +1068,9 @@ export interface paths {
         put?: never;
         /**
          * Radar Link
-         * @description Pause one radar or withdraw radar consent from an e-mailed link. POST only (mail scanners
-         *     prefetch GETs); the token is the only credential and buys exactly that one action. It
-         *     reads nothing, returns nothing, signs nobody in; the answer does not depend on whether the
-         *     account or radar still exists.
+         * @description Withdraw radar consent from an e-mailed link. POST only (mail scanners prefetch GETs);
+         *     the token is the only credential and buys exactly this one action. It reads nothing, returns
+         *     nothing, signs nobody in; the answer does not depend on whether the account still exists.
          */
         post: operations["radar_link_api_public_radar_link_post"];
         delete?: never;
