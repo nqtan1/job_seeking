@@ -27,8 +27,8 @@ export function LinkPage() {
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Confirm to stop RecruitAI from running searches in the background. You can turn them on
-            again later in the app.
+            Confirm to stop RecruitAI from running searches in the background. You can turn them
+            on again later in the app.
           </p>
           {state === 'failed' && (
             <p role="alert" className="text-sm text-destructive">

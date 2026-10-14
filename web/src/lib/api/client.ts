@@ -18,10 +18,7 @@ api.use({
   // `recent: true`, is handled before the action by `ensureRecentAuth`).
   async onResponse({ response }) {
     if (response.status === 401) {
-      const body = await response
-        .clone()
-        .json()
-        .catch(() => null)
+      const body = await response.clone().json().catch(() => null)
       if (body?.code === 'reauth_required' && body.recent === false) endSession('reauth')
     }
     return response

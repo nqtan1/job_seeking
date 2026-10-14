@@ -98,7 +98,11 @@ export function SessionGuard() {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const policy = me.data?.session
-  const limit = policy ? (isRemembered() ? policy.idle_minutes_remembered : policy.idle_minutes) : 0
+  const limit = policy
+    ? isRemembered()
+      ? policy.idle_minutes_remembered
+      : policy.idle_minutes
+    : 0
 
   // Kept in a ref: the registrations below must not be torn down on every navigation.
   const leaveRef = useRef<(reason: EndReason) => Promise<void>>(async () => {})

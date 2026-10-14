@@ -89,10 +89,7 @@ export async function reauthenticate(password?: string) {
   const user = auth.currentUser
   if (!user) throw new Error('not signed in')
   if (usesPassword() && user.email) {
-    await reauthenticateWithCredential(
-      user,
-      EmailAuthProvider.credential(user.email, password ?? ''),
-    )
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password ?? ''))
   } else {
     const provider = new GoogleAuthProvider()
     provider.setCustomParameters({ prompt: 'select_account' })
