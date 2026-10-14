@@ -165,7 +165,8 @@ export function ConsentSettings() {
         {c && (
           <>
             <p className="text-sm">
-              Status: <strong>{c.state === 'needs_reconsent' ? 'needs new consent' : c.state}</strong>
+              Status:{' '}
+              <strong>{c.state === 'needs_reconsent' ? 'needs new consent' : c.state}</strong>
             </p>
             {c.state === 'granted' ? (
               <Button
@@ -183,7 +184,8 @@ export function ConsentSettings() {
                 {c.history.map((h) => (
                   <li key={h.at + h.event}>
                     {h.event === 'granted' ? 'Granted' : 'Withdrawn'} on{' '}
-                    {new Date(h.at).toLocaleDateString()} ({h.source === 'ui' ? 'in the app' : 'email link'})
+                    {new Date(h.at).toLocaleDateString()} (
+                    {h.source === 'ui' ? 'in the app' : 'email link'})
                   </li>
                 ))}
               </ul>

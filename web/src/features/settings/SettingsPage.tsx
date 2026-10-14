@@ -12,13 +12,7 @@ import { useTask } from '@/lib/api/tasks'
 import { signOut } from '@/lib/auth'
 import { ConsentSettings } from '@/features/radar/Consent'
 import { ensureRecentAuth } from '@/lib/stepup'
-import {
-  useDeleteAccount,
-  useMe,
-  useRevokeSessions,
-  useSetReminders,
-  useStartExport,
-} from './api'
+import { useDeleteAccount, useMe, useRevokeSessions, useSetReminders, useStartExport } from './api'
 
 /** Runs `action` after a recent sign-in (asks again only when the last one is too old). */
 function useStepUp() {
