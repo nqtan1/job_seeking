@@ -6,12 +6,11 @@ import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StepProgress } from '@/components/StepProgress'
-import { toast } from '@/lib/toast'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { usePipeline } from '@/features/pipeline/api'
 import { useRadarJobIds } from '@/features/radar/api'
-import { Briefcase } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Briefcase, X } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { Controller, useForm } from 'react-hook-form'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -56,11 +55,37 @@ function ManualEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
   )
 }
 
+const ACCEPT = '.pdf,.txt,.png,.jpg,.jpeg,application/pdf,text/plain,image/png,image/jpeg'
+// Keep in step with ACCEPT and the backend allowlist (documents/service.py). Dropped files
+// bypass the dialog's `accept`, so they are checked here; a screenshot may have no extension.
+const ALLOWED_NAME = /\.(pdf|txt|png|jpe?g)$/i
+const ALLOWED_TYPE = new Set(['application/pdf', 'text/plain', 'image/png', 'image/jpeg'])
+const isAllowed = (f: File) => ALLOWED_NAME.test(f.name) || ALLOWED_TYPE.has(f.type)
+const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
+
 function FileEntry() {
   const add = useAddJobFiles()
-  const input = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
+  const [skipped, setSkipped] = useState<string[]>([])
+  const [dragging, setDragging] = useState(false)
   const tooMany = files.length > MAX_FILES
+
+  // Every pick (dialog or drop) ADDS to the batch: the user builds it up in as many picks as
+  // they like; a file already in the batch is not added twice.
+  const addFiles = (picked: File[]) => {
+    const ok = picked.filter(isAllowed)
+    setSkipped(picked.filter((f) => !isAllowed(f)).map((f) => f.name))
+    setFiles((cur) => {
+      const seen = new Set(cur.map(fileKey))
+      return [...cur, ...ok.filter((f) => !seen.has(fileKey(f)))]
+    })
+    add.reset()
+  }
+  const clear = () => {
+    setFiles([])
+    setSkipped([])
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -70,41 +95,84 @@ function FileEntry() {
           one offer become one job, and every distinct offer becomes its own job.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent
+        className={`space-y-3 transition-colors ${dragging ? 'bg-accent/40' : ''}`}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(e) => {
+          // Moving over a child fires dragleave too: only a real exit ends the highlight.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          addFiles([...e.dataTransfer.files])
+        }}
+      >
         <Label htmlFor="jd-file">Job description files</Label>
         <Input
           id="jd-file"
           type="file"
           multiple
-          accept=".pdf,.txt,.png,.jpg,.jpeg,application/pdf,text/plain,image/png,image/jpeg"
-          ref={input}
+          accept={ACCEPT}
           onChange={(e) => {
-            setFiles([...(e.target.files ?? [])])
-            add.reset()
+            addFiles([...(e.target.files ?? [])])
+            e.target.value = '' // so choosing the same file again still fires onChange
           }}
         />
+        <p className="text-xs text-muted-foreground">
+          Select several at once, pick again to add more, or drop files here.
+        </p>
+        {files.length > 0 && (
+          <ul className="space-y-1 text-sm">
+            {files.map((f) => (
+              <li key={fileKey(f)} className="flex items-center justify-between gap-2">
+                <span className="truncate">{f.name}</span>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label={`Remove ${f.name}`}
+                  disabled={add.isPending}
+                  onClick={() => setFiles((cur) => cur.filter((x) => x !== f))}
+                >
+                  <X />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {skipped.length > 0 && (
+          <p role="alert" className="text-sm text-destructive">
+            Skipped {skipped.join(', ')}: only PDF, TXT, PNG or JPEG are accepted.
+          </p>
+        )}
         {tooMany && (
           <p role="alert" className="text-sm text-destructive">
-            Choose at most {MAX_FILES} files.
+            Choose at most {MAX_FILES} files: remove {files.length - MAX_FILES}.
           </p>
         )}
         {add.isPending && <StepProgress steps={STEPS} />}
         {add.isError && <ErrorMessage error={add.error} />}
-        <Button
-          loading={add.isPending}
-          disabled={files.length === 0 || tooMany}
-          onClick={() =>
-            add.mutate(files, {
-              onSuccess: (jobs) => {
-                toast(`${jobs.length} job${jobs.length > 1 ? 's' : ''} added`)
-                if (input.current) input.current.value = ''
-                setFiles([])
-              },
-            })
-          }
-        >
-          {add.isPending ? 'Analysing…' : 'Upload and add'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            loading={add.isPending}
+            disabled={files.length === 0 || tooMany}
+            onClick={() =>
+              add.mutate(files, {
+                onSuccess: clear,
+              })
+            }
+          >
+            {add.isPending ? 'Analysing…' : 'Upload and add'}
+          </Button>
+          {files.length > 0 && !add.isPending && (
+            <Button variant="ghost" onClick={clear}>
+              Clear
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
@@ -290,16 +358,6 @@ const STEPS = ['Reading the job description…', 'Extracting missions and requir
 
 export function JobsPage() {
   const add = useAddJob()
-  const prev = useRef(add.data)
-  useEffect(() => {
-    if (add.data && add.data !== prev.current)
-      toast(
-        add.data.length === 1
-          ? `Job added: ${add.data[0].data.title}`
-          : `${add.data.length} jobs added from the file`,
-      )
-    prev.current = add.data
-  }, [add.data])
   return (
     <Page title="Jobs" description="Add offers, then check how well you fit." wide>
       {add.isError && <ErrorMessage error={add.error} />}

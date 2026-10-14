@@ -58,6 +58,14 @@ _DATA_NOTICE = (
 )
 
 
+# Added to the model input when a batch has several files (data context, not an instruction
+# from the user's files).
+_SEVERAL_FILES_NOTICE = (
+    "The job description comes as several files (pages or screenshots of one offer, or "
+    "different offers). Read them all together."
+)
+
+
 async def _extract(llm: LLMGateway, content: Part, text: str | None) -> JobPosition:
     job = await generate_retrying_invalid(
         llm,
@@ -88,6 +96,28 @@ _PARALLEL_EXTRACTIONS = 5
 MAX_TOTAL_BYTES = 12 * 1024 * 1024
 
 
+async def _load_parts(
+    db: AsyncSession, storage: Storage, *, org_id: UUID, document_ids: list[UUID]
+) -> list[Part]:
+    """The model input for a batch of ``jd`` documents. Ownership and kind are checked per
+    document before any model call; a size cap bounds what one request carries inline."""
+    parts: list[Part] = []
+    total = 0
+    for document_id in dict.fromkeys(document_ids):  # a repeated id is read once
+        document, data = await documents.read_document(
+            db, storage, org_id=org_id, document_id=document_id, kind="jd"
+        )
+        total += len(data)
+        if total > MAX_TOTAL_BYTES:
+            raise ValidationFailed(
+                f"These files are too large together (max {MAX_TOTAL_BYTES // 2**20} MB)."
+            )
+        parts.append(FilePart(data=data, mime_type=document.mime))
+    if len(parts) > 1:
+        parts.insert(0, TextPart(_SEVERAL_FILES_NOTICE))
+    return parts
+
+
 async def add_from_file(
     db: AsyncSession,
     storage: Storage,
@@ -103,28 +133,9 @@ async def add_from_file(
 
     Step 1 lists the offers (one short call); step 2 extracts each offer with its own call, in
     parallel, so 20 offers take about as long as the slowest one, not 20 times as long.
-    All-or-nothing: if any offer fails, nothing is saved and the user retries the file.
+    All-or-nothing: if any offer fails, nothing is saved and the user retries the batch.
     ponytail: a failed offer could be skipped and reported instead, if retries get annoying."""
-    files: list[Part] = []
-    total = 0
-    for document_id in dict.fromkeys(document_ids):  # a repeated id is read once
-        document, data = await documents.read_document(
-            db, storage, org_id=org_id, document_id=document_id, kind="jd"
-        )
-        total += len(data)
-        if total > MAX_TOTAL_BYTES:  # one model request carries every file inline
-            raise ValidationFailed(
-                f"These files are too large together (max {MAX_TOTAL_BYTES // 2**20} MB)."
-            )
-        files.append(FilePart(data=data, mime_type=document.mime))
-    if len(files) > 1:
-        files.insert(
-            0,
-            TextPart(
-                "The job description comes as several files (pages or screenshots of one "
-                "offer, or different offers). Read them all together."
-            ),
-        )
+    files = await _load_parts(db, storage, org_id=org_id, document_ids=document_ids)
     index = await generate_retrying_invalid(
         llm,
         schema=OfferIndex,
@@ -134,7 +145,7 @@ async def add_from_file(
     )
     if len(index.offers) > MAX_OFFERS:
         raise ValidationFailed(
-            f"This file has more than {MAX_OFFERS} offers; split it and upload the parts."
+            f"This upload has more than {MAX_OFFERS} offers; split it and upload the parts."
         )
 
     slots = asyncio.Semaphore(_PARALLEL_EXTRACTIONS)

@@ -19,7 +19,7 @@ export function StepProgress({ steps, every = 7000 }: { steps: string[]; every?:
       <ol aria-hidden className="space-y-1.5">
         {steps.map((step, i) => (
           <li
-            key={step}
+            key={i}
             className={`flex items-center gap-2 ${
               i === current ? 'font-medium text-accent-foreground' : 'text-muted-foreground'
             }`}

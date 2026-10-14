@@ -57,7 +57,7 @@ export function ProfilePage() {
         <Input
           id="cv"
           type="file"
-          accept=".pdf,.docx,image/*"
+          accept=".pdf,.txt,.png,.jpg,.jpeg"
           ref={file}
           disabled={extract.isPending}
         />
