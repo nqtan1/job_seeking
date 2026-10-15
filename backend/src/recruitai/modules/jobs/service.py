@@ -21,9 +21,11 @@ from recruitai.ai.gateway import (
 )
 from recruitai.ai.prompts.jobs import (
     INDEX_PROMPT_VERSION,
+    JOB_QUERY_VERSION,
     ONE_PROMPT_VERSION,
     PROMPT_VERSION,
     SYSTEM_PROMPT_JOB_EXTRACTION,
+    SYSTEM_PROMPT_JOB_QUERY,
     SYSTEM_PROMPT_OFFER_INDEX,
 )
 from recruitai.core.db import count_rows
@@ -44,7 +46,9 @@ from recruitai.modules.jobs.schemas import (
     JobPosition,
     Modalities,
     OfferIndex,
+    ParsedQuery,
     Profile,
+    QueryOut,
     SourceMeta,
     UnifiedJobSearchResponse,
     UnifiedJobSearchResult,
@@ -280,7 +284,7 @@ def to_job_position(r: UnifiedJobSearchResult) -> JobPosition:
             nice_to_have=[],
         ),
         modalities=Modalities(),
-        source_meta=SourceMeta(apply_url=r.url),
+        source_meta=SourceMeta(apply_url=r.url, posted_on=r.date),
         job_description_text=r.description,
     )
 
@@ -425,7 +429,9 @@ _CONTRACT_CODE = re.compile(r"^[A-Z]{2,4}$")
 def normalize_place(value: str | None) -> str | None:
     """ "Paris, Lyon" or "75, 69" -> "75,69". Anything unrecognised is a validation error that
     says so (raised when a radar is saved, not on its first night)."""
-    return normalize_departments(value)
+    codes = normalize_departments(value)
+    # "Lyon, 69" is one department twice: keep the first, in order.
+    return ",".join(dict.fromkeys(codes.split(","))) if codes else codes
 
 
 def normalize_contracts(value: str | None) -> str | None:
@@ -444,3 +450,35 @@ def normalize_contracts(value: str | None) -> str | None:
         if code not in codes:
             codes.append(code)
     return ",".join(codes) or None
+
+
+async def parse_query(llm: LLMGateway, *, text: str) -> QueryOut:
+    """A sentence -> search filters. What cannot be made a valid filter (an unknown place, a
+    wrong code) is dropped and said in ``notes``, never guessed; the user confirms the result."""
+    parsed = await generate_retrying_invalid(
+        llm,
+        schema=ParsedQuery,
+        system=SYSTEM_PROMPT_JOB_QUERY,
+        parts=[TextPart(f"<user_text>\n{text}\n</user_text>")],
+        feature=JOB_QUERY_VERSION,
+    )
+    notes = list(parsed.notes)
+    department: str | None = None
+    if parsed.places:
+        try:
+            department = normalize_place(", ".join(parsed.places))
+        except ValidationFailed:
+            notes.append(f"Place not recognised: {', '.join(parsed.places)}")
+    contract: str | None = None
+    if parsed.contract_types:
+        try:
+            contract = normalize_contracts(",".join(parsed.contract_types))
+        except ValidationFailed:
+            notes.append(f"Contract not recognised: {', '.join(parsed.contract_types)}")
+    return QueryOut(
+        query=parsed.keywords,
+        department=department,
+        contract_type=contract,
+        remote=parsed.remote,
+        notes=notes,
+    )

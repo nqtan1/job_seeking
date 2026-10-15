@@ -216,3 +216,117 @@ async def test_notes_contact_and_interview_date_can_be_edited_later(
     assert body["notes"] == "Call went well"
     assert body["contact"] == "Marie Curie, marie@acme.test"
     assert body["interview_at"].startswith("2026-10-20T12:00:00")  # stored as UTC
+
+
+async def test_funnel_counts_by_source_for_the_owner_only(
+    client: httpx.AsyncClient, ada, bob
+):
+    async def track(headers, company, source, status):
+        r = await client.post(
+            BASE,
+            headers=headers,
+            json={"company_name": company, "source": source, "status": status},
+        )
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    await track(ada, "A", "france_travail", "applied")
+    b = await track(ada, "B", "france_travail", "applied")
+    moved = await client.post(
+        f"{BASE}/{b}/status", headers=ada, json={"status": "interview"}
+    )
+    assert moved.status_code == 200
+    await track(ada, "C", "linkedin", "to_apply")  # not sent: not counted
+    await track(bob, "D", "france_travail", "applied")
+
+    rows = (await client.get(f"{BASE}/insights", headers=ada)).json()["rows"]
+
+    assert rows == [
+        {
+            "source": "france_travail",
+            "sent": 2,
+            "replied": 1,
+            "interviews": 1,
+            "offers": 0,
+        }
+    ]
+
+
+async def test_interview_prep_uses_my_profile_and_job_and_not_someone_elses(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    from recruitai.ai.prompts.interview import PROMPT_VERSION
+    from recruitai.modules.applications.schemas import InterviewPrep, InterviewQuestion
+
+    await _add_profile(client, fake_llm, ada)
+    job_id = await _add_job(client, fake_llm, ada)
+    app = (
+        await client.post(
+            BASE, headers=ada, json={"job_id": job_id, "status": "applied"}
+        )
+    ).json()
+    url = f"{BASE}/{app['id']}/interview-prep"
+
+    # Another org's application id is a 404 and costs no model call.
+    assert (await client.post(url, headers=bob)).status_code == 404
+    assert fake_llm.calls == [] or all(
+        c.feature != PROMPT_VERSION for c in fake_llm.calls
+    )
+
+    fake_llm.queue(
+        PROMPT_VERSION,
+        InterviewPrep(
+            questions=[
+                InterviewQuestion(
+                    question="Tell me about a project.",
+                    why_asked="Depth",
+                    answer_outline=["Use the Acme project"],
+                    from_profile="Acme",
+                )
+            ]
+        ),
+    )
+    r = await client.post(url, headers=ada)
+
+    assert r.status_code == 200, r.text
+    assert r.json()["questions"][0]["from_profile"] == "Acme"
+    call = next(c for c in fake_llm.calls if c.feature == PROMPT_VERSION)
+    assert "candidate_profile" in call.parts[0].text
+
+    # An application with no linked job cannot be prepared (clear 422, no call).
+    bare = (await client.post(BASE, headers=ada, json={"company_name": "Solo"})).json()[
+        "id"
+    ]
+    assert (
+        await client.post(f"{BASE}/{bare}/interview-prep", headers=ada)
+    ).status_code == 422
+
+
+async def test_proof_of_search_lists_the_months_real_steps_for_the_owner_only(
+    client: httpx.AsyncClient, ada, bob
+):
+    from datetime import UTC, datetime
+
+    month = datetime.now(UTC).strftime("%Y-%m")
+    a = (
+        await client.post(
+            BASE, headers=ada, json={"company_name": "Acme", "status": "applied"}
+        )
+    ).json()["id"]
+    await client.post(f"{BASE}/{a}/status", headers=ada, json={"status": "interview"})
+    await client.post(
+        BASE, headers=ada, json={"company_name": "Later"}
+    )  # only to_apply
+    await client.post(
+        BASE, headers=bob, json={"company_name": "Bobs", "status": "applied"}
+    )
+
+    rows = (await client.get(f"{BASE}/proof?month={month}", headers=ada)).json()["rows"]
+
+    assert [(r["company_name"], r["step"]) for r in rows] == [
+        ("Acme", "applied"),
+        ("Acme", "interview"),
+    ]
+    assert (
+        await client.get(f"{BASE}/proof?month=2026-13", headers=ada)
+    ).status_code == 422

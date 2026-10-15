@@ -12,11 +12,26 @@ export const useStartExport = () =>
 export const useDeleteAccount = () =>
   useMutation({ mutationFn: async () => void unwrap(await api.DELETE('/api/v1/me')) })
 
+export const useAiCalls = () =>
+  useQuery({
+    queryKey: ['ai-calls'],
+    queryFn: async () => unwrap(await api.GET('/api/v1/me/ai-calls')),
+  })
+
 export function useSetReminders() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (email_reminders: boolean) =>
       void unwrap(await api.PATCH('/api/v1/me/preferences', { body: { email_reminders } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+export function useSetWeeklyGoal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (weekly_goal: number | null) =>
+      void unwrap(await api.PATCH('/api/v1/me/preferences', { body: { weekly_goal } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }

@@ -17,6 +17,7 @@ beforeEach(() => {
       return { data: { user: { email: 'a@b.co' }, session: { stepup_max_age_seconds: 300 } } }
     if (url === '/api/v1/radar/consent')
       return { data: { state: 'none', policy_version: 'v1', history: [] } }
+    if (url === '/api/v1/me/ai-calls') return { data: [] }
     return { data: { status: 'done', download_url: '/dl/export.zip' } }
   })
 })

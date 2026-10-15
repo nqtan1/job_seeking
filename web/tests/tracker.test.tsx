@@ -49,7 +49,7 @@ beforeEach(() => {
   )
 })
 
-const renderPage = () => renderWithApp(<TrackerPage />)
+const renderPage = () => renderWithApp(<TrackerPage />, { at: '/tracker', path: '/tracker' })
 
 test('empty board → add an application (company required) → POST with the chosen status', async () => {
   const user = userEvent.setup()

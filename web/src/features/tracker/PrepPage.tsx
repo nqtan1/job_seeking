@@ -2,10 +2,11 @@ import { Link, useParams } from 'react-router'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
-import { buttonVariants } from '@/components/ui/button'
+import { StepProgress } from '@/components/StepProgress'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useJob, useLatestFit } from '@/features/fit/api'
-import { useApplicationDocuments, useApplications } from './api'
+import { useApplicationDocuments, useApplications, useInterviewPrep } from './api'
 import { practicePrompt } from './attention'
 
 const Bullets = ({ items }: { items: string[] }) => (
@@ -48,6 +49,44 @@ function JobSections({ jobId }: { jobId: string }) {
         </Section>
       )}
     </>
+  )
+}
+
+function Questions({ id }: { id: string }) {
+  const prep = useInterviewPrep(id)
+  return (
+    <Section title="Likely questions">
+      {!prep.data && (
+        <>
+          <p className="text-sm text-muted-foreground">
+            Eight questions this interviewer may ask, with answer points taken only from your own
+            profile.
+          </p>
+          <Button size="sm" disabled={prep.isPending} onClick={() => prep.mutate()}>
+            {prep.isPending ? 'Preparing…' : 'Prepare my questions'}
+          </Button>
+        </>
+      )}
+      {prep.isPending && <StepProgress steps={['Reading your profile and the offer…']} />}
+      {prep.isError && <ErrorMessage error={prep.error} />}
+      <ol className="space-y-4">
+        {prep.data?.questions.map((q) => (
+          <li key={q.question} className="space-y-1">
+            <p className="text-sm font-medium">{q.question}</p>
+            <p className="text-xs text-muted-foreground">{q.why_asked}</p>
+            <Bullets items={q.answer_outline} />
+            {q.from_profile && (
+              <p className="text-xs text-muted-foreground">From your profile: {q.from_profile}</p>
+            )}
+          </li>
+        ))}
+      </ol>
+      {prep.data && (
+        <p className="text-xs text-muted-foreground">
+          AI-generated: adapt to your own words and check every fact.
+        </p>
+      )}
+    </Section>
   )
 }
 
@@ -120,6 +159,7 @@ export function PrepPage() {
         </Section>
       )}
       {app.job_id && <JobSections jobId={app.job_id} />}
+      {app.job_id && <Questions id={app.id} />}
       <Section title="What you sent">
         <Sent id={app.id} />
       </Section>

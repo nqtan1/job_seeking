@@ -16,6 +16,7 @@ from recruitai.core.export import rows_as_dicts
 from recruitai.core.filenames import safe_filename
 from recruitai.core.storage import ObjectNotFound, Storage, object_key
 from recruitai.modules.documents import repository
+from recruitai.modules.documents.docx import docx_to_text, is_docx
 from recruitai.modules.documents.models import Document
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -25,6 +26,8 @@ ALLOWED_KINDS = frozenset(
 
 
 _KIND_LABELS = {"cv": "CV", "jd": "job description"}
+# Word files are accepted for these kinds and stored as their text (ADR 0027).
+_TEXT_FROM_DOCX_KINDS = frozenset({"cv", "jd"})
 
 
 def _looks_like_text(data: bytes) -> bool:
@@ -100,6 +103,9 @@ async def upload(
 ) -> Document:
     if kind not in ALLOWED_KINDS:
         raise ValidationFailed(f"kind must be one of {sorted(ALLOWED_KINDS)}.")
+    if kind in _TEXT_FROM_DOCX_KINDS and is_docx(data):
+        # Only the text is kept (ADR 0027): downstream code never sees a Word file.
+        data = docx_to_text(data).encode()
     document = await _store(
         db, storage, org_id=org_id, uploaded_by=uploaded_by, kind=kind, data=data
     )

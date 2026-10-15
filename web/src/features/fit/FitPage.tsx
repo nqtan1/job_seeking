@@ -58,6 +58,9 @@ function Report({ fit }: { fit: Fit }) {
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-lg font-semibold">{VERDICT[d.recommendation] ?? d.recommendation}</p>
             {d.summary && <p className="text-sm text-muted-foreground">{d.summary}</p>}
+            <p className="text-xs text-muted-foreground">
+              AI-generated analysis: a guide, not a verdict. Check it against the offer.
+            </p>
           </div>
         </CardContent>
       </Card>

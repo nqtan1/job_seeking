@@ -31,6 +31,8 @@ from recruitai.modules.jobs.schemas import (
     JobPosition,
     JobSource,
     ManualJobIn,
+    QueryIn,
+    QueryOut,
     UnifiedJobSearchResponse,
 )
 
@@ -116,6 +118,21 @@ async def add_jobs_from_file(
     if added.already_added:
         response.status_code = 200
     return [_out(j) for j in added.jobs]
+
+
+@router.post(
+    "/query",
+    response_model=QueryOut,
+    dependencies=[Depends(verify_app_check), Depends(limit_ai)],
+    responses=problem_responses(Unauthorized, ValidationFailed, UpstreamUnavailable),
+)
+async def parse_query(
+    body: QueryIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],  # authenticated users only
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> QueryOut:
+    """A sentence -> filters to review and edit; nothing is searched or saved here."""
+    return await service.parse_query(llm, text=body.text)
 
 
 @router.get(

@@ -19,11 +19,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { DeleteJobButton } from './DeleteJobButton'
+import { isStale, postingAgeDays } from './age'
 import {
   MAX_FILES,
   useAddJob,
   useAddJobFiles,
   useJobs,
+  useParseQuery,
   useSearchJobs,
   type SearchParams,
 } from './api'
@@ -56,11 +58,18 @@ function ManualEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
   )
 }
 
-const ACCEPT = '.pdf,.txt,.png,.jpg,.jpeg,application/pdf,text/plain,image/png,image/jpeg'
+const ACCEPT =
+  '.pdf,.docx,.txt,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,image/png,image/jpeg'
 // Keep in step with ACCEPT and the backend allowlist (documents/service.py). Dropped files
 // bypass the dialog's `accept`, so they are checked here; a screenshot may have no extension.
-const ALLOWED_NAME = /\.(pdf|txt|png|jpe?g)$/i
-const ALLOWED_TYPE = new Set(['application/pdf', 'text/plain', 'image/png', 'image/jpeg'])
+const ALLOWED_NAME = /\.(pdf|docx|txt|png|jpe?g)$/i
+const ALLOWED_TYPE = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+])
 const isAllowed = (f: File) => ALLOWED_NAME.test(f.name) || ALLOWED_TYPE.has(f.type)
 const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
 
@@ -92,8 +101,8 @@ function FileEntry() {
       <CardHeader>
         <CardTitle>Upload job description files</CardTitle>
         <CardDescription>
-          PDF, TXT, PNG or JPEG, up to {MAX_FILES} files at once. They are read together: pages of
-          one offer become one job, and every distinct offer becomes its own job.
+          PDF, Word, TXT, PNG or JPEG, up to {MAX_FILES} files at once. They are read together:
+          pages of one offer become one job, and every distinct offer becomes its own job.
         </CardDescription>
       </CardHeader>
       <CardContent
@@ -146,7 +155,7 @@ function FileEntry() {
         )}
         {skipped.length > 0 && (
           <p role="alert" className="text-sm text-destructive">
-            Skipped {skipped.join(', ')}: only PDF, TXT, PNG or JPEG are accepted.
+            Skipped {skipped.join(', ')}: only PDF, Word, TXT, PNG or JPEG are accepted.
           </p>
         )}
         {tooMany && (
@@ -182,13 +191,51 @@ function FileEntry() {
 function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
   const [params, setParams] = useState<SearchParams>()
   const search = useSearchJobs(params)
-  const { register, handleSubmit, control } = useForm<SearchParams>()
+  const { register, handleSubmit, control, setValue } = useForm<SearchParams>()
+  const parse = useParseQuery()
+  const [sentence, setSentence] = useState('')
   return (
     <Card>
       <CardHeader>
         <CardTitle>Search France Travail</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="sentence">Describe what you are looking for</Label>
+          <div className="flex gap-2">
+            <Input
+              id="sentence"
+              value={sentence}
+              maxLength={300}
+              placeholder="Data analyst in Lyon, CDI, remote"
+              onChange={(e) => setSentence(e.target.value)}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={parse.isPending || sentence.trim().length < 3}
+              onClick={() =>
+                parse.mutate(sentence.trim(), {
+                  onSuccess: (f) => {
+                    setValue('query', f.query ?? '')
+                    setValue('department', f.department ?? undefined)
+                    setValue('contract_type', f.contract_type ?? undefined)
+                  },
+                })
+              }
+            >
+              {parse.isPending ? 'Reading…' : 'Fill the filters'}
+            </Button>
+          </div>
+          {parse.isError && <ErrorMessage error={parse.error} />}
+          {parse.data && (
+            <p className="text-xs text-muted-foreground">
+              Check the filters below, then search.
+              {parse.data.remote && ' Remote work is not a filter here: look for it in the offers.'}
+              {parse.data.notes.length > 0 && ` Not filterable: ${parse.data.notes.join('; ')}.`}
+            </p>
+          )}
+        </div>
         <form className="grid gap-3 sm:grid-cols-4" onSubmit={handleSubmit(setParams)}>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="q">Keywords</Label>
@@ -297,6 +344,12 @@ function JobList() {
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge tone="info">{j.source.replace('_', ' ')}</StatusBadge>
                     {fromRadar.has(j.id) && <StatusBadge tone="success">From radar</StatusBadge>}
+                    {isStale(postingAgeDays(j.data.source_meta.posted_on)) && (
+                      <StatusBadge tone="warning">
+                        Posted {postingAgeDays(j.data.source_meta.posted_on)} days ago: may be
+                        filled
+                      </StatusBadge>
+                    )}
                     {fit ? (
                       <StatusBadge
                         tone={VERDICT_TONE[fit.data.recommendation as keyof typeof VERDICT_TONE]}

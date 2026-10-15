@@ -31,6 +31,7 @@ class MeResponse(BaseModel):
     onboarding: OnboardingOut
     is_admin: bool = False
     email_reminders: bool = True
+    weekly_goal: int | None = None
     session: SessionPolicyOut
 
 
@@ -87,7 +88,10 @@ class AdminStats(BaseModel):
 
 
 class PreferencesIn(BaseModel):
-    email_reminders: bool
+    """Send only what changes; ``weekly_goal: null`` switches the goal off."""
+
+    email_reminders: bool | None = None
+    weekly_goal: int | None = Field(None, ge=1, le=50)
 
 
 class AiFeatureOut(BaseModel):
@@ -121,3 +125,12 @@ class AiConsoleOut(BaseModel):
 class AiOverrideIn(BaseModel):
     provider: str = Field(..., max_length=20)
     model: str = Field(..., max_length=100)
+
+
+class AiCallOut(BaseModel):
+    feature: str
+    model: str
+    status: str
+    input_tokens: int
+    output_tokens: int
+    at: datetime
