@@ -272,7 +272,7 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
         {search.data?.results.length === 0 && (
           <p className="text-sm text-muted-foreground">No offers found.</p>
         )}
-        <ul className="space-y-2">
+        <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
           {search.data?.results.map((r) => (
             <li key={r.id} className="flex items-start justify-between gap-4 rounded-lg border p-3">
               <div>
@@ -330,7 +330,7 @@ function JobList() {
       >
         {bestFirst ? 'Newest first' : 'Best fit first'}
       </Button>
-      <ul className="space-y-2">
+      <ul className="max-h-[70vh] space-y-2 overflow-y-auto pr-1" aria-label="Your jobs">
         {rows.map((j) => {
           const fit = pipeline.fit(j.id)
           const letters = pipeline.letters(j.id)

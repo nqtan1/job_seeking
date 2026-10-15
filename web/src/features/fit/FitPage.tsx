@@ -1,6 +1,6 @@
 import { Target } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
@@ -12,6 +12,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { DeleteJobButton } from '@/features/job-search/DeleteJobButton'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { JobDescription } from './JobDescription'
 import { useJob, useLatestFit, useRunFit, type CompanyType, type Fit } from './api'
@@ -95,6 +96,7 @@ export function FitPage() {
   const latest = useLatestFit(jobId)
   const run = useRunFit(jobId)
   const [type, setType] = useState<CompanyType>('corporate')
+  const navigate = useNavigate()
 
   if (job.isPending || latest.isPending)
     return (
@@ -169,6 +171,7 @@ export function FitPage() {
         />
       )}
       <JobDescription job={job.data} />
+      <DeleteJobButton id={jobId} title={job.data.data.title} onDeleted={() => navigate('/jobs')} />
     </Page>
   )
 }
