@@ -81,6 +81,20 @@ class StatusChangeIn(BaseModel):
     note: str | None = Field(None, max_length=1000)
 
 
+class FunnelRow(BaseModel):
+    source: str
+    sent: int
+    replied: int
+    interviews: int
+    offers: int
+
+
+class FunnelOut(BaseModel):
+    """By source, from the user's own tracker only (no benchmarks)."""
+
+    rows: list[FunnelRow]
+
+
 class ApplicationOut(BaseModel):
     id: UUID
     job_id: UUID | None
@@ -118,3 +132,31 @@ class ApplicationDocumentOut(BaseModel):
     filename: str
     download_url: str
     save_url: str
+
+
+class InterviewQuestion(BaseModel):
+    question: str
+    why_asked: str
+    answer_outline: list[str]
+    from_profile: str | None = None
+
+
+class InterviewPrep(BaseModel):
+    """LLM output and API response: likely questions grounded in the user's own profile."""
+
+    questions: list[InterviewQuestion]
+
+
+class ProofRow(BaseModel):
+    at: datetime
+    company_name: str
+    job_title: str | None
+    source: str
+    step: Status
+
+
+class ProofOut(BaseModel):
+    """The user's own job-search record for one month (self-help; sent to no one)."""
+
+    month: str
+    rows: list[ProofRow]

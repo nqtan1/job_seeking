@@ -36,6 +36,7 @@ class MeResult:
     active_org_id: UUID
     has_profile: bool
     email_reminders: bool
+    weekly_goal: int | None
 
 
 async def get_me(db: AsyncSession, ctx: OrgContext) -> MeResult:
@@ -47,6 +48,7 @@ async def get_me(db: AsyncSession, ctx: OrgContext) -> MeResult:
         active_org_id=ctx.org_id,
         has_profile=await candidates.has_profile(db, org_id=ctx.org_id),
         email_reminders=user.email_reminders,
+        weekly_goal=user.weekly_goal,
     )
 
 
@@ -280,13 +282,19 @@ async def set_blocked(
     return target
 
 
-async def set_email_reminders(
-    db: AsyncSession, *, user_id: UUID, enabled: bool
+async def set_preferences(
+    db: AsyncSession, *, user_id: UUID, changes: dict[str, Any]
 ) -> None:
-    await db.execute(
-        update(User).where(User.id == user_id).values(email_reminders=enabled)
-    )
-    await db.commit()
+    """Only the fields the client sent; ``weekly_goal`` None switches the goal off."""
+    values = {
+        k: v
+        for k, v in changes.items()
+        if k in ("email_reminders", "weekly_goal")
+        and not (k == "email_reminders" and v is None)
+    }
+    if values:
+        await db.execute(update(User).where(User.id == user_id).values(**values))
+        await db.commit()
 
 
 def _line(r: applications.Reminder) -> str:
@@ -335,6 +343,20 @@ async def send_application_reminders(
         lines_by_org.setdefault(r.org_id, []).append(_line(r))
     for org_id, lines in (extra_lines or {}).items():
         lines_by_org.setdefault(org_id, []).extend(lines)
+    if now.weekday() == 0:  # Monday: the opt-in weekly goal
+        goals = await db.execute(
+            select(Membership.org_id, User.weekly_goal)
+            .join(User, User.id == Membership.user_id)
+            .where(Membership.role == "owner", User.weekly_goal.is_not(None))
+        )
+        for org_id, goal in goals.all():
+            sent_last_week = await applications.sent_since(
+                db, org_id=org_id, since=now - timedelta(days=7)
+            )
+            lines_by_org.setdefault(org_id, []).append(
+                f"- Weekly goal: {sent_last_week} of {goal} applications last week"
+                f" / objectif : {sent_last_week} sur {goal} candidatures la semaine dernière"
+            )
     if not lines_by_org:
         return 0
     rows = await db.execute(
@@ -409,3 +431,18 @@ async def admin_user_id(db: AsyncSession, firebase_uid: str) -> UUID | None:
     return (
         await db.execute(select(User.id).where(User.firebase_uid == firebase_uid))
     ).scalar_one_or_none()
+
+
+async def my_ai_calls(db: AsyncSession, *, org_id: UUID) -> list[dict[str, Any]]:
+    """What the AI was used for on the user's behalf. Counts and names only, never content."""
+    return [
+        {
+            "feature": c.feature,
+            "model": c.model,
+            "status": c.status,
+            "input_tokens": c.input_tokens,
+            "output_tokens": c.output_tokens,
+            "at": c.created_at,
+        }
+        for c in await usage.recent_for_org(db, org_id=org_id)
+    ]

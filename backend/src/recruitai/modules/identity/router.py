@@ -31,6 +31,7 @@ from recruitai.modules.identity.schemas import (
     AdminStats,
     AdminUserList,
     AdminUserOut,
+    AiCallOut,
     AiConsoleOut,
     AiOverrideIn,
     MeResponse,
@@ -63,6 +64,7 @@ async def read_me(
         onboarding=OnboardingOut(has_profile=result.has_profile),
         is_admin=is_admin(current, settings),
         email_reminders=result.email_reminders,
+        weekly_goal=result.weekly_goal,
         session=SessionPolicyOut(
             idle_minutes=settings.session_idle_minutes,
             idle_minutes_remembered=settings.session_idle_minutes_remembered,
@@ -82,10 +84,28 @@ async def update_preferences(
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
-    await service.set_email_reminders(
-        db, user_id=ctx.user_id, enabled=body.email_reminders
+    await service.set_preferences(
+        db,
+        user_id=ctx.user_id,
+        changes=body.model_dump(exclude_unset=True),
     )
     return Response(status_code=204)
+
+
+@router.get(
+    "/me/ai-calls",
+    response_model=list[AiCallOut],
+    responses=problem_responses(Unauthorized),
+)
+async def my_ai_calls(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[AiCallOut]:
+    """Metadata of the AI calls made for you (feature, model, size): never the content."""
+    return [
+        AiCallOut.model_validate(c)
+        for c in await service.my_ai_calls(db, org_id=ctx.org_id)
+    ]
 
 
 admin_router = APIRouter(

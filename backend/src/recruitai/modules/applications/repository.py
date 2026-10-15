@@ -33,6 +33,35 @@ async def get(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def count_sent_since(
+    session: AsyncSession, *, org_id: UUID, since: datetime
+) -> int:
+    """Applications sent (applied_at, else the status change time) since ``since``."""
+    return (
+        await session.execute(
+            select(func.count())
+            .select_from(Application)
+            .where(
+                Application.org_id == org_id,
+                Application.status != "to_apply",
+                func.coalesce(Application.applied_at, func.date(Application.updated_at))
+                >= since.date(),
+            )
+        )
+    ).scalar_one()
+
+
+async def counts_by_source_status(
+    session: AsyncSession, *, org_id: UUID
+) -> list[tuple[str, str, int]]:
+    rows = await session.execute(
+        select(Application.source, Application.status, func.count())
+        .where(Application.org_id == org_id)
+        .group_by(Application.source, Application.status)
+    )
+    return [(src, st, n) for src, st, n in rows.all()]
+
+
 async def list_for_org(
     session: AsyncSession,
     *,
@@ -152,6 +181,27 @@ async def all_events_for_org(
         .order_by(ApplicationEvent.at, ApplicationEvent.id)
     )
     return list(rows.scalars())
+
+
+async def search_steps_between(
+    session: AsyncSession, *, org_id: UUID, start: datetime, end: datetime
+) -> list[tuple[ApplicationEvent, Application]]:
+    """Events (with their application) in [start, end) that are real search steps: the
+    application was sent or got an answer. Adding to the tracker is not a step."""
+    rows = await session.execute(
+        select(ApplicationEvent, Application)
+        .join(Application, Application.id == ApplicationEvent.application_id)
+        .where(
+            ApplicationEvent.org_id == org_id,
+            ApplicationEvent.at >= start,
+            ApplicationEvent.at < end,
+            ApplicationEvent.to_status.in_(
+                ("applied", "in_review", "interview", "offer", "rejected")
+            ),
+        )
+        .order_by(ApplicationEvent.at, ApplicationEvent.id)
+    )
+    return [(e, a) for e, a in rows.all()]
 
 
 async def attach_document(

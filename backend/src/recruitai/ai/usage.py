@@ -157,6 +157,19 @@ async def export_rows(session: AsyncSession, *, org_id: uuid.UUID) -> list[AiCal
     return list(rows.scalars())
 
 
+async def recent_for_org(
+    session: AsyncSession, *, org_id: uuid.UUID, limit: int = 50
+) -> list[AiCall]:
+    """The org's latest calls for the user's own "what was sent to the AI" view: metadata only."""
+    rows = await session.execute(
+        select(AiCall)
+        .where(AiCall.org_id == org_id)
+        .order_by(AiCall.created_at.desc())
+        .limit(limit)
+    )
+    return list(rows.scalars())
+
+
 async def delete_older_than(session: AsyncSession, *, cutoff: datetime) -> int:
     """Retention sweep: usage records older than ``cutoff`` (13 months, §11.2)."""
     result = await session.execute(delete(AiCall).where(AiCall.created_at < cutoff))

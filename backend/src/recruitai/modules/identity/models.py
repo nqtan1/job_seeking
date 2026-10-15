@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    SmallInteger,
     String,
     UniqueConstraint,
     func,
@@ -54,6 +55,8 @@ class User(Base):
     email_reminders: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=true()
     )
+    # Optional weekly application goal, mentioned in the Monday digest (null = off).
+    weekly_goal: Mapped[int | None] = mapped_column(SmallInteger)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -92,9 +92,9 @@ test('several files are uploaded, then analysed together in one call', async () 
   await user.upload(picker, [a, b, c]) // a is already there: not added twice
   // A drop bypasses the dialog's `accept` filter: unsupported types are skipped in code.
   fireEvent.drop(picker.parentElement!, {
-    dataTransfer: { files: [new File(['d'], 'notes.docx'), new File(['e'], 'e.pdf')] },
+    dataTransfer: { files: [new File(['d'], 'sheet.xlsx'), new File(['e'], 'e.pdf')] },
   })
-  expect(screen.getByText(/Skipped notes\.docx/)).toBeInTheDocument()
+  expect(screen.getByText(/Skipped sheet\.xlsx/)).toBeInTheDocument()
   expect(screen.getByText('e.pdf')).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Remove e.pdf' }))
   await user.click(screen.getByRole('button', { name: 'Remove c.png' }))

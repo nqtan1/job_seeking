@@ -14,7 +14,16 @@ Provider = Literal["gemini", "qwen"]
 
 
 # Every agent config.yaml must route (the prompt id before "@").
-AGENTS = ("cv_extract", "job_extract", "fit", "letter", "letter_assist", "coach")
+AGENTS = (
+    "cv_extract",
+    "job_extract",
+    "job_query",
+    "interview_prep",
+    "fit",
+    "letter",
+    "letter_assist",
+    "coach",
+)
 
 
 class AgentLLM(BaseModel):

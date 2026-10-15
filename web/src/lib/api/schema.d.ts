@@ -43,6 +43,26 @@ export interface paths {
         patch: operations["update_preferences_api_v1_me_preferences_patch"];
         trace?: never;
     };
+    "/api/v1/me/ai-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Ai Calls
+         * @description Metadata of the AI calls made for you (feature, model, size): never the content.
+         */
+        get: operations["my_ai_calls_api_v1_me_ai_calls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -261,6 +281,26 @@ export interface paths {
          * @description Job description files (one or several) are read together; each offer becomes a job.
          */
         post: operations["add_jobs_from_file_api_v1_jobs_from_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse Query
+         * @description A sentence -> filters to review and edit; nothing is searched or saved here.
+         */
+        post: operations["parse_query_api_v1_jobs_query_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -665,6 +705,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Insights */
+        get: operations["insights_api_v1_applications_insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/proof": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proof Of Search
+         * @description Your search steps for a month (YYYY-MM), for your own records.
+         */
+        get: operations["proof_of_search_api_v1_applications_proof_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{application_id}": {
         parameters: {
             query?: never;
@@ -752,6 +829,26 @@ export interface paths {
         post?: never;
         /** Detach Document */
         delete: operations["detach_document_api_v1_applications__application_id__documents__document_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{application_id}/interview-prep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Interview Prep
+         * @description Likely questions with answer outlines from your own profile; nothing is stored.
+         */
+        post: operations["interview_prep_api_v1_applications__application_id__interview_prep_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1215,6 +1312,24 @@ export interface components {
             last_active_at: string | null;
             /** Blocked */
             blocked: boolean;
+        };
+        /** AiCallOut */
+        AiCallOut: {
+            /** Feature */
+            feature: string;
+            /** Model */
+            model: string;
+            /** Status */
+            status: string;
+            /** Input Tokens */
+            input_tokens: number;
+            /** Output Tokens */
+            output_tokens: number;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /** AiChangeOut */
         AiChangeOut: {
@@ -2056,6 +2171,27 @@ export interface components {
             /** Interviews */
             interviews: number;
         };
+        /**
+         * FunnelOut
+         * @description By source, from the user's own tracker only (no benchmarks).
+         */
+        FunnelOut: {
+            /** Rows */
+            rows: components["schemas"]["FunnelRow"][];
+        };
+        /** FunnelRow */
+        FunnelRow: {
+            /** Source */
+            source: string;
+            /** Sent */
+            sent: number;
+            /** Replied */
+            replied: number;
+            /** Interviews */
+            interviews: number;
+            /** Offers */
+            offers: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2109,6 +2245,25 @@ export interface components {
             average_score: number | null;
             /** Most Missing */
             most_missing: components["schemas"]["MissingItem"][];
+        };
+        /**
+         * InterviewPrep
+         * @description LLM output and API response: likely questions grounded in the user's own profile.
+         */
+        InterviewPrep: {
+            /** Questions */
+            questions: components["schemas"]["InterviewQuestion"][];
+        };
+        /** InterviewQuestion */
+        InterviewQuestion: {
+            /** Question */
+            question: string;
+            /** Why Asked */
+            why_asked: string;
+            /** Answer Outline */
+            answer_outline: string[];
+            /** From Profile */
+            from_profile?: string | null;
         };
         /** JobOut */
         JobOut: {
@@ -2416,6 +2571,8 @@ export interface components {
              * @default true
              */
             email_reminders: boolean;
+            /** Weekly Goal */
+            weekly_goal?: number | null;
             session: components["schemas"]["SessionPolicyOut"];
         };
         /** MessageIn */
@@ -2586,10 +2743,15 @@ export interface components {
              */
             website?: string | null;
         };
-        /** PreferencesIn */
+        /**
+         * PreferencesIn
+         * @description Send only what changes; ``weekly_goal: null`` switches the goal off.
+         */
         PreferencesIn: {
             /** Email Reminders */
-            email_reminders: boolean;
+            email_reminders?: boolean | null;
+            /** Weekly Goal */
+            weekly_goal?: number | null;
         };
         /**
          * ProblemDetail
@@ -2667,6 +2829,56 @@ export interface components {
             summary?: string | null;
             /** References */
             references?: components["schemas"]["Reference"][] | null;
+        };
+        /**
+         * ProofOut
+         * @description The user's own job-search record for one month (self-help; sent to no one).
+         */
+        ProofOut: {
+            /** Month */
+            month: string;
+            /** Rows */
+            rows: components["schemas"]["ProofRow"][];
+        };
+        /** ProofRow */
+        ProofRow: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Company Name */
+            company_name: string;
+            /** Job Title */
+            job_title: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Step
+             * @enum {string}
+             */
+            step: "to_apply" | "applied" | "in_review" | "interview" | "offer" | "rejected" | "ghosted";
+        };
+        /** QueryIn */
+        QueryIn: {
+            /** Text */
+            text: string;
+        };
+        /**
+         * QueryOut
+         * @description Filters in the form the search endpoint takes; the user confirms them before use.
+         */
+        QueryOut: {
+            /** Query */
+            query: string | null;
+            /** Department */
+            department: string | null;
+            /** Contract Type */
+            contract_type: string | null;
+            /** Remote */
+            remote: boolean;
+            /** Notes */
+            notes: string[];
         };
         /** RadarResultOut */
         RadarResultOut: {
@@ -2994,6 +3206,11 @@ export interface components {
              * @description Where to apply; set from the provider, never by the model
              */
             apply_url?: string | null;
+            /**
+             * Posted On
+             * @description Posting date YYYY-MM-DD from the provider, never by the model
+             */
+            posted_on?: string | null;
         };
         /**
          * SpellIssue
@@ -3375,6 +3592,47 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_ai_calls_api_v1_me_ai_calls_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiCallOut"][];
+                };
             };
             /** @description Authentication is required or the provided credentials are invalid. */
             401: {
@@ -4255,6 +4513,61 @@ export interface operations {
             };
             /** @description The requested resource was not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    parse_query_api_v1_jobs_query_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5933,6 +6246,90 @@ export interface operations {
             };
         };
     };
+    insights_api_v1_applications_insights_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunnelOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    proof_of_search_api_v1_applications_proof_get: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProofOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_application_api_v1_applications__application_id__get: {
         parameters: {
             query?: never;
@@ -6352,6 +6749,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    interview_prep_api_v1_applications__application_id__interview_prep_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewPrep"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };

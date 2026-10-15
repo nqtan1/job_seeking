@@ -6,13 +6,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.ai.dependencies import get_llm_gateway
+from recruitai.ai.gateway import LLMGateway
+from recruitai.core.app_check import verify_app_check
 from recruitai.core.db import get_db
 from recruitai.core.errors import (
     NotFound,
     Unauthorized,
+    UpstreamUnavailable,
     ValidationFailed,
     problem_responses,
 )
+from recruitai.core.ratelimit import limit_ai
 from recruitai.core.storage import Storage, get_storage_dependency
 from recruitai.core.tenancy import OrgContext, get_org_context
 from recruitai.modules.applications import service
@@ -24,6 +29,9 @@ from recruitai.modules.applications.schemas import (
     ApplicationOut,
     ApplicationUpdate,
     EventOut,
+    FunnelOut,
+    InterviewPrep,
+    ProofOut,
     Status,
     StatusChangeIn,
     next_statuses,
@@ -93,6 +101,32 @@ async def list_applications(
         db, org_id=ctx.org_id, status=status, limit=limit, offset=offset
     )
     return [_out(a) for a in rows]
+
+
+@router.get(
+    "/insights", response_model=FunnelOut, responses=problem_responses(Unauthorized)
+)
+async def insights(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FunnelOut:
+    return FunnelOut.model_validate(
+        {"rows": await service.funnel(db, org_id=ctx.org_id)}
+    )
+
+
+@router.get(
+    "/proof", response_model=ProofOut, responses=problem_responses(Unauthorized)
+)
+async def proof_of_search(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    month: Annotated[str, Query(pattern=r"^20\d{2}-(0[1-9]|1[0-2])$")],
+) -> ProofOut:
+    """Your search steps for a month (YYYY-MM), for your own records."""
+    year, mm = int(month[:4]), int(month[5:])
+    rows = await service.proof_of_search(db, org_id=ctx.org_id, year=year, month=mm)
+    return ProofOut.model_validate({"month": month, "rows": rows})
 
 
 @router.get(
@@ -253,3 +287,23 @@ async def detach_document(
         document_id=document_id,
     )
     return Response(status_code=204)
+
+
+@router.post(
+    "/{application_id}/interview-prep",
+    response_model=InterviewPrep,
+    dependencies=[Depends(verify_app_check), Depends(limit_ai)],
+    responses=problem_responses(
+        Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
+    ),
+)
+async def interview_prep(
+    application_id: UUID,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> InterviewPrep:
+    """Likely questions with answer outlines from your own profile; nothing is stored."""
+    return await service.interview_prep(
+        db, llm, org_id=ctx.org_id, application_id=application_id
+    )

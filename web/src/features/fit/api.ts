@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/schema'
+import { toast } from '@/lib/toast'
 import { unwrap } from '@/lib/api/unwrap'
 
 export type Fit = components['schemas']['FitAnalysisOut']
@@ -31,6 +32,10 @@ export function useRunFit(jobId: string) {
   return useMutation({
     mutationFn: async (company_type: CompanyType) =>
       unwrap(await api.POST('/api/v1/fit-analyses', { body: { job_id: jobId, company_type } })),
-    onSuccess: (fit) => qc.setQueryData(['fit', jobId], fit),
+    onSuccess: (fit) => {
+      qc.setQueryData(['fit', jobId], fit)
+      // Global toast: also shows when the user already left the page while it ran.
+      toast(`Fit analysis ready: ${Math.round(fit.score)}%`)
+    },
   })
 }

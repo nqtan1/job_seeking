@@ -148,6 +148,10 @@ function LetterEditor({ letterId }: { letterId: string }) {
     >
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-2">
         <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Drafted with AI from your profile and the job. Read it, make it yours, and check every
+            fact before you send it.
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
               size="sm"

@@ -53,3 +53,38 @@ async def test_onboarding_has_profile_turns_true_once_a_profile_exists(
 
     after = (await client.get("/api/v1/me", headers=headers)).json()
     assert after["onboarding"] == {"has_profile": True}
+
+
+async def test_my_ai_calls_show_metadata_of_my_org_only(
+    client: httpx.AsyncClient, emulator_token, db_session
+):
+    from uuid import UUID
+
+    from recruitai.ai.usage import AiCall
+
+    async def me(uid: str):
+        h = {"Authorization": f"Bearer {emulator_token(uid, f'{uid}@example.test')}"}
+        return h, UUID(
+            (await client.get("/api/v1/me", headers=h)).json()["active_org_id"]
+        )
+
+    ada, ada_org = await me("uid-ai-ada")
+    _bob, bob_org = await me("uid-ai-bob")
+    for org, feature in ((ada_org, "fit@1"), (bob_org, "letter@1")):
+        db_session.add(
+            AiCall(org_id=org, feature=feature, model="m", prompt_version=feature,
+                   input_tokens=10, output_tokens=5, latency_ms=1, status="ok")
+        )  # fmt: skip
+    await db_session.commit()
+
+    rows = (await client.get("/api/v1/me/ai-calls", headers=ada)).json()
+
+    assert [r["feature"] for r in rows] == ["fit@1"]
+    assert set(rows[0]) == {
+        "feature",
+        "model",
+        "status",
+        "input_tokens",
+        "output_tokens",
+        "at",
+    }

@@ -48,6 +48,9 @@ async def test_one_digest_per_user_for_items_due_today_only(db_session: AsyncSes
         db_session, ada_ctx.org_id, "Quiet Inc", applied_at=date(2026, 10, 3)
     )
     await _application(
+        db_session, ada_ctx.org_id, "Long Silence", applied_at=date(2026, 9, 19)
+    )
+    await _application(
         db_session,
         ada_ctx.org_id,
         "Soon Ltd",
@@ -76,4 +79,27 @@ async def test_one_digest_per_user_for_items_due_today_only(db_session: AsyncSes
     assert sent == 1 and [m.to for m in sender.sent] == [ada.email]
     lines = sender.sent[0].context["lines"]
     assert "Quiet Inc" in lines and "Soon Ltd" in lines and "Too Early" not in lines
-    assert sender.sent[0].context["count"] == 2
+    assert "Long Silence" in lines  # 21 days: the second nudge
+    assert sender.sent[0].context["count"] == 3
+
+
+async def test_weekly_goal_line_only_on_monday_and_only_when_opted_in(
+    db_session: AsyncSession,
+):
+    _ada, ada_ctx = await _user(db_session, "goal")
+    await _application(
+        db_session, ada_ctx.org_id, "Sent Co", applied_at=date(2026, 10, 8)
+    )
+    sender = FakeEmailSender()
+    monday = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
+
+    # No goal set: nothing to say, even on a Monday.
+    assert await service.send_application_reminders(db_session, sender, now=monday) == 0
+
+    await service.set_preferences(
+        db_session, user_id=ada_ctx.user_id, changes={"weekly_goal": 3}
+    )
+    assert await service.send_application_reminders(db_session, sender, now=NOW) == 0
+
+    assert await service.send_application_reminders(db_session, sender, now=monday) == 1
+    assert "1 of 3" in sender.sent[0].context["lines"]
