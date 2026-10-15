@@ -49,7 +49,7 @@ export function useAddJob() {
 
 export const MAX_FILES = 10 // keep in sync with MAX_FILES in backend jobs/schemas.py
 
-/** Add job description files (PDF/image/TXT) as ONE batch: the model reads them together, so
+/** Add job description files (PDF/Word/image/TXT) as ONE batch: the model reads them together, so
  *  pages of one offer merge and the cost is one pass, not one per file. All-or-nothing; the
  *  user retries the batch. ponytail: files uploaded before a failure stay as unused documents
  *  until the retention sweep. */
@@ -69,6 +69,13 @@ export function useAddJobFiles() {
     },
   })
 }
+
+/** A sentence -> filters. Nothing is searched: the user reviews them in the form first. */
+export const useParseQuery = () =>
+  useMutation({
+    mutationFn: async (text: string) =>
+      unwrap(await api.POST('/api/v1/jobs/query', { body: { text } })),
+  })
 
 /** Runs only once the user submitted the search form (`params` set). */
 export const useSearchJobs = (params: SearchParams | undefined) =>

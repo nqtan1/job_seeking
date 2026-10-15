@@ -1,9 +1,10 @@
 import type { Application } from './api'
 
-export type Attention = { app: Application; kind: 'followup' | 'interview'; days: number }
+export type Attention = { app: Application; kind: 'followup' | 'ghost' | 'interview'; days: number }
 
 const DAY = 86_400_000
 const FOLLOW_UP_AFTER_DAYS = 7
+const GHOST_AFTER_DAYS = 21
 const INTERVIEW_SOON_DAYS = 3
 
 /** What needs the user's attention now: sent a week ago with no reply, or an interview soon. */
@@ -17,7 +18,8 @@ export function needsAttention(apps: Application[], now = new Date()): Attention
     if (app.status === 'applied') {
       const sent = new Date(app.applied_at ?? app.updated_at).getTime()
       const days = Math.floor((now.getTime() - sent) / DAY)
-      if (days >= FOLLOW_UP_AFTER_DAYS) out.push({ app, kind: 'followup', days })
+      if (days >= GHOST_AFTER_DAYS) out.push({ app, kind: 'ghost', days })
+      else if (days >= FOLLOW_UP_AFTER_DAYS) out.push({ app, kind: 'followup', days })
     }
   }
   return out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'interview' ? -1 : 1))

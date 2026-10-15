@@ -1,6 +1,6 @@
 import { Target } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
@@ -12,6 +12,7 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { DeleteJobButton } from '@/features/job-search/DeleteJobButton'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { JobDescription } from './JobDescription'
 import { useJob, useLatestFit, useRunFit, type CompanyType, type Fit } from './api'
@@ -58,6 +59,9 @@ function Report({ fit }: { fit: Fit }) {
           <div className="min-w-0 flex-1 space-y-1">
             <p className="text-lg font-semibold">{VERDICT[d.recommendation] ?? d.recommendation}</p>
             {d.summary && <p className="text-sm text-muted-foreground">{d.summary}</p>}
+            <p className="text-xs text-muted-foreground">
+              AI-generated analysis: a guide, not a verdict. Check it against the offer.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -92,6 +96,7 @@ export function FitPage() {
   const latest = useLatestFit(jobId)
   const run = useRunFit(jobId)
   const [type, setType] = useState<CompanyType>('corporate')
+  const navigate = useNavigate()
 
   if (job.isPending || latest.isPending)
     return (
@@ -166,6 +171,21 @@ export function FitPage() {
         />
       )}
       <JobDescription job={job.data} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Delete this job</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Removes the job and its fit report. Your letters and tracked applications stay.
+          </p>
+          <DeleteJobButton
+            id={jobId}
+            title={job.data.data.title}
+            onDeleted={() => navigate('/jobs')}
+          />
+        </CardContent>
+      </Card>
     </Page>
   )
 }

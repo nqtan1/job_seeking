@@ -69,6 +69,10 @@ class SourceMeta(BaseModel):
         default=None,
         description="Where to apply; set from the provider, never by the model",
     )
+    posted_on: str | None = Field(
+        default=None,
+        description="Posting date YYYY-MM-DD from the provider, never by the model",
+    )
 
 
 class CompensationInfo(BaseModel):
@@ -215,3 +219,29 @@ class JobOut(BaseModel):
     data: JobPosition
     schema_version: int
     created_at: datetime
+
+
+class ParsedQuery(BaseModel):
+    """LLM output: what a free sentence says about a job search."""
+
+    keywords: str | None = Field(None, description="Role / skill words, max 6 words")
+    places: list[str] = Field(
+        ..., description="Cities, departments or codes as written"
+    )
+    contract_types: list[str] = Field(..., description="CDI, CDD, MIS, SAI, LIB, FRA")
+    remote: bool = Field(..., description="True only if remote work is requested")
+    notes: list[str] = Field(..., description="Requests the API cannot filter")
+
+
+class QueryIn(BaseModel):
+    text: str = Field(..., min_length=3, max_length=300)
+
+
+class QueryOut(BaseModel):
+    """Filters in the form the search endpoint takes; the user confirms them before use."""
+
+    query: str | None
+    department: str | None
+    contract_type: str | None
+    remote: bool
+    notes: list[str]

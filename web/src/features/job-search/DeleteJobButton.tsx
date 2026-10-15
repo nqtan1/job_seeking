@@ -4,14 +4,22 @@ import { Button } from '@/components/ui/button'
 import { useDeleteJob } from './api'
 
 /** Two steps, with what is lost said before the second click: a job is not one stray click. */
-export function DeleteJobButton({ id, title }: { id: string; title: string }) {
+export function DeleteJobButton({
+  id,
+  title,
+  onDeleted,
+}: {
+  id: string
+  title: string
+  onDeleted?: () => void
+}) {
   const del = useDeleteJob()
   const [confirming, setConfirming] = useState(false)
   if (!confirming)
     return (
       <Button
         size="sm"
-        variant="ghost"
+        variant="outline"
         aria-label={`Delete ${title}`}
         onClick={() => setConfirming(true)}
       >
@@ -29,7 +37,7 @@ export function DeleteJobButton({ id, title }: { id: string; title: string }) {
           size="sm"
           variant="destructive"
           loading={del.isPending}
-          onClick={() => del.mutate(id)}
+          onClick={() => del.mutate(id, { onSuccess: onDeleted })}
         >
           {del.isPending ? 'Deleting…' : 'Confirm delete'}
         </Button>

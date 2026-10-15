@@ -12,6 +12,31 @@ const KEY = ['applications']
 export const useApplications = () =>
   useQuery({ queryKey: KEY, queryFn: async () => unwrap(await api.GET('/api/v1/applications')) })
 
+export const useProof = (month: string) =>
+  useQuery({
+    queryKey: [...KEY, 'proof', month],
+    queryFn: async () =>
+      unwrap(await api.GET('/api/v1/applications/proof', { params: { query: { month } } })),
+  })
+
+/** Likely questions from the user's own profile and job; one AI call per click. */
+export const useInterviewPrep = (id: string) =>
+  useMutation({
+    mutationFn: async () =>
+      unwrap(
+        await api.POST('/api/v1/applications/{application_id}/interview-prep', {
+          params: { path: { application_id: id } },
+        }),
+      ),
+  })
+
+// Key under KEY so every status change refreshes it.
+export const useFunnel = () =>
+  useQuery({
+    queryKey: [...KEY, 'insights'],
+    queryFn: async () => unwrap(await api.GET('/api/v1/applications/insights')),
+  })
+
 export const useEvents = (id: string, enabled: boolean) =>
   useQuery({
     queryKey: ['events', id],

@@ -13,14 +13,13 @@ from recruitai.modules.documents.service import (
     sniff_mime,
     upload,
 )
+from tests.unit.test_docx import make_docx
 
 PDF_BYTES = b"%PDF-1.4\n%..."
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 16
 TXT_BYTES = b"just some plain text"
-DOCX_BYTES = (
-    b"PK\x03\x04" + b"\x00" * 16
-)  # a real .docx is a zip; no sniffer matches it
+ZIP_NOT_DOCX = b"PK\x03\x04" + b"\x00" * 16  # a zip prefix that is not a Word file
 
 
 @pytest.mark.parametrize(
@@ -30,7 +29,7 @@ DOCX_BYTES = (
         (PNG_BYTES, "image/png"),
         (JPEG_BYTES, "image/jpeg"),
         (TXT_BYTES, "text/plain"),
-        (DOCX_BYTES, None),
+        (ZIP_NOT_DOCX, None),
         (b"\x00\x01\x02binary-garbage", None),
     ],
 )
@@ -38,16 +37,23 @@ def test_sniff_mime_uses_content_not_extension(data: bytes, expected: str | None
     assert sniff_mime(data) == expected
 
 
-async def test_upload_rejects_docx(db_session, fake_storage: LocalStorage):
-    with pytest.raises(ValidationFailed):
-        await upload(
-            db_session,
-            fake_storage,
-            org_id=uuid4(),
-            uploaded_by=uuid4(),
-            kind="cv",
-            data=DOCX_BYTES,
-        )
+async def test_a_word_file_is_refused_as_an_attachment_and_a_fake_one_everywhere(
+    db_session, fake_storage: LocalStorage
+):
+    # Both raise before anything is stored (the stored-as-text success is in the HTTP test).
+    for kind, data in (
+        ("attachment", make_docx("Jane Doe")),
+        ("cv", ZIP_NOT_DOCX),
+    ):
+        with pytest.raises(ValidationFailed):
+            await upload(
+                db_session,
+                fake_storage,
+                org_id=uuid4(),
+                uploaded_by=uuid4(),
+                kind=kind,
+                data=data,
+            )
 
 
 async def test_upload_rejects_oversized_file(db_session, fake_storage: LocalStorage):

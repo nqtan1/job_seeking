@@ -12,7 +12,15 @@ import { useTask } from '@/lib/api/tasks'
 import { signOut } from '@/lib/auth'
 import { ConsentSettings } from '@/features/radar/Consent'
 import { ensureRecentAuth } from '@/lib/stepup'
-import { useDeleteAccount, useMe, useRevokeSessions, useSetReminders, useStartExport } from './api'
+import {
+  useAiCalls,
+  useDeleteAccount,
+  useMe,
+  useRevokeSessions,
+  useSetReminders,
+  useSetWeeklyGoal,
+  useStartExport,
+} from './api'
 
 /** Runs `action` after a recent sign-in (asks again only when the last one is too old). */
 function useStepUp() {
@@ -37,6 +45,7 @@ const CONFIRM_WORD = 'DELETE'
 function RemindersCard() {
   const me = useMe()
   const set = useSetReminders()
+  const goal = useSetWeeklyGoal()
   return (
     <Card>
       <CardHeader>
@@ -57,6 +66,51 @@ function RemindersCard() {
           Send me reminders
         </label>
         {set.isError && <ErrorMessage error={set.error} />}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={me.data?.weekly_goal != null}
+            disabled={me.isPending || goal.isPending}
+            onChange={(e) => goal.mutate(e.target.checked ? 3 : null)}
+          />
+          Monday goal: mention 3 quality applications a week (no streaks, no pressure)
+        </label>
+        {goal.isError && <ErrorMessage error={goal.error} />}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AiActivityCard() {
+  const calls = useAiCalls()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>AI activity</CardTitle>
+        <CardDescription>
+          When you use the AI (CV reading, fit, letters, coach), the text it needs is sent to the AI
+          provider for that request only. Below, the latest calls made for you: what was used, never
+          your text.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {calls.isError && <ErrorMessage error={calls.error} />}
+        {calls.data?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No AI calls yet.</p>
+        )}
+        <ul className="space-y-1 text-sm">
+          {calls.data?.slice(0, 10).map((c, i) => (
+            <li key={i} className="flex flex-wrap justify-between gap-2">
+              <span>
+                {c.feature.split('@')[0].replace('_', ' ')}
+                {c.status === 'error' && ' (failed)'}
+              </span>
+              <span className="text-muted-foreground tabular-nums">
+                {new Date(c.at).toLocaleString()} · {c.input_tokens + c.output_tokens} tokens
+              </span>
+            </li>
+          ))}
+        </ul>
       </CardContent>
     </Card>
   )
@@ -204,6 +258,7 @@ export function SettingsPage() {
           </CardHeader>
         </Card>
         <RemindersCard />
+        <AiActivityCard />
         <ConsentSettings />
         <SessionsCard />
         <ExportCard />

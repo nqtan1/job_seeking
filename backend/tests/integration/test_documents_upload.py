@@ -45,20 +45,46 @@ async def test_oversized_upload_is_422(client: httpx.AsyncClient, emulator_token
     assert resp.json()["code"] == "validation_failed"
 
 
-async def test_docx_is_rejected_by_content_not_extension(
+async def test_a_word_cv_is_stored_as_text_and_a_fake_zip_is_rejected(
     client: httpx.AsyncClient, emulator_token
 ):
-    token = emulator_token("uid-doc-3", "doc3@example.test")
-    docx_bytes = b"PK\x03\x04" + b"\x00" * 16  # a real .docx is a zip archive
+    from tests.unit.test_docx import make_docx
 
-    resp = await client.post(
+    headers = {
+        "Authorization": f"Bearer {emulator_token('uid-doc-3', 'doc3@example.test')}"
+    }
+
+    ok = await client.post(
         "/api/v1/documents",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=headers,
         data={"kind": "cv"},
-        files={"file": ("cv.docx", docx_bytes, "application/octet-stream")},
+        files={
+            "file": (
+                "cv.docx",
+                make_docx("Jane Doe\nData analyst"),
+                "application/octet-stream",
+            )
+        },
+    )
+    fake = await client.post(
+        "/api/v1/documents",
+        headers=headers,
+        data={"kind": "cv"},
+        files={
+            "file": (
+                "cv.docx",
+                b"PK\x03\x04" + b"\x00" * 16,
+                "application/octet-stream",
+            )
+        },
     )
 
-    assert resp.status_code == 422
+    assert ok.status_code == 200, ok.text
+    stored = await client.get(
+        f"/api/v1/documents/{ok.json()['document_id']}", headers=headers
+    )
+    assert stored.json()["mime"] == "text/plain"  # the original Word file is not kept
+    assert fake.status_code == 422
 
 
 async def test_cross_tenant_cannot_read_by_id_or_get_a_signed_url(

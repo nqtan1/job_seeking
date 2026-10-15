@@ -10,6 +10,7 @@ import { AdminAiPage } from '@/features/admin/AdminAiPage'
 import { LinkPage } from '@/features/radar/LinkPage'
 import { RadarPage } from '@/features/radar/RadarPage'
 import { PrepPage } from '@/features/tracker/PrepPage'
+import { ProofPage } from '@/features/tracker/ProofPage'
 import { TrackerPage } from '@/features/tracker/TrackerPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { PrivacyPage } from '@/features/privacy/PrivacyPage'
@@ -33,6 +34,7 @@ export const routes: RouteObject[] = [
           { path: '/jobs', element: <JobsPage /> },
           { path: '/radar', element: <RadarPage /> },
           { path: '/tracker', element: <TrackerPage /> },
+          { path: '/tracker/proof', element: <ProofPage /> },
           { path: '/tracker/:applicationId/prep', element: <PrepPage /> },
           { path: '/settings', element: <SettingsPage /> },
           { path: '/admin', element: <AdminUsersPage /> },
