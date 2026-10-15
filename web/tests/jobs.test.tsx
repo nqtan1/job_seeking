@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { JobsPage } from '@/features/job-search/JobsPage'
 import { renderWithApp } from './utils'
 
-const mocks = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn() }))
+const mocks = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn() }))
 vi.mock('@/lib/api/client', () => ({ api: mocks }))
 
 const job = {
@@ -25,7 +25,7 @@ beforeEach(() => {
         }
       : { data: [] },
   )
-  mocks.POST.mockResolvedValue({ data: job })
+  mocks.POST.mockResolvedValue({ data: job, response: { status: 201 } })
 })
 
 const renderPage = () => renderWithApp(<JobsPage />)
@@ -81,7 +81,7 @@ test('several files are uploaded, then analysed together in one call', async () 
   mocks.POST.mockImplementation(async (url: string, opts: { body: { file?: File } }) =>
     url === '/api/v1/documents'
       ? { data: { document_id: `id-${opts.body.file?.name}` } }
-      : { data: [job, { ...job, id: 'j2' }] },
+      : { data: [job, { ...job, id: 'j2' }], response: { status: 201 } },
   )
   renderPage()
   const picker = screen.getByLabelText('Job description files')
@@ -107,4 +107,32 @@ test('several files are uploaded, then analysed together in one call', async () 
   )
   expect(mocks.POST.mock.calls.filter(([u]) => u === '/api/v1/jobs/from-file')).toHaveLength(1)
   expect(await screen.findByText('2 jobs added')).toBeInTheDocument()
+})
+
+test('the same text pasted twice says it is already there; a job is deleted after a confirmation', async () => {
+  const user = userEvent.setup()
+  const listed = { ...job, data: { ...job.data, source_meta: { apply_url: null } } }
+  mocks.GET.mockImplementation(async (url: string) =>
+    url === '/api/v1/jobs' ? { data: [listed] } : { data: [] },
+  )
+  mocks.POST.mockResolvedValue({ data: listed, response: { status: 200 } })
+  mocks.DELETE.mockResolvedValue({ data: undefined })
+  // The job list holds links, so this test needs a router.
+  renderWithApp(<JobsPage />, { at: '/jobs', path: '/jobs' })
+
+  await user.type(await screen.findByLabelText('Job description text'), 'We hire a Python dev')
+  await user.click(screen.getByRole('button', { name: 'Add job' }))
+  expect(
+    await screen.findByText('Already in your jobs: nothing new was analysed.'),
+  ).toBeInTheDocument()
+
+  await user.click(await screen.findByRole('button', { name: 'Delete Python Dev' }))
+  expect(mocks.DELETE).not.toHaveBeenCalled() // one click only asks
+  expect(screen.getByText(/Your letters and tracked applications stay/)).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
+  await waitFor(() =>
+    expect(mocks.DELETE).toHaveBeenCalledWith('/api/v1/jobs/{job_id}', {
+      params: { path: { job_id: 'j1' } },
+    }),
+  )
 })

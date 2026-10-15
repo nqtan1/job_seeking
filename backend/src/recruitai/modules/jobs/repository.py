@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +46,7 @@ async def add(
     source: str,
     external_id: str | None,
     info: JobPosition,
+    source_hash: str | None = None,
 ) -> JobPosting:
     """Insert; saving the same ``(source, external_id)`` again returns the existing row
     (atomic on the unique constraint, so a double click can't create two)."""
@@ -54,6 +55,7 @@ async def add(
         "company": info.company.name,
         "data": info.model_dump(mode="json"),
         "schema_version": SCHEMA_VERSION,
+        "source_hash": source_hash,
     }
     inserted = await _insert(session, org_id, source, external_id, values)
     if inserted is not None:
@@ -67,6 +69,27 @@ async def add(
             )
         )
     ).scalar_one()
+
+
+async def lock_source(session: AsyncSession, *, org_id: UUID, source_hash: str) -> None:
+    """Make identical adds of one org take turns until this transaction ends, so the second
+    one sees the first one's rows (a double click or two tabs cannot both pass the check)."""
+    key = f"{org_id}:{source_hash}"
+    await session.execute(
+        select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0)))
+    )
+
+
+async def find_by_source_hash(
+    session: AsyncSession, *, org_id: UUID, source_hash: str
+) -> list[JobPosting]:
+    """What this exact input already produced, in the order it was extracted."""
+    rows = await session.execute(
+        select(JobPosting)
+        .where(JobPosting.org_id == org_id, JobPosting.source_hash == source_hash)
+        .order_by(JobPosting.created_at, JobPosting.id)
+    )
+    return list(rows.scalars())
 
 
 async def add_new(

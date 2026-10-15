@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.dependencies import get_llm_gateway
@@ -53,29 +53,39 @@ def _out(job: JobPosting) -> JobOut:
     )
 
 
+# 201 = created; 200 = the same input was added before, nothing was analysed (ADR 0025).
+_ALREADY_ADDED = "Already added: the existing job is returned, no analysis was made."
+
+
 @router.post(
     "",
     status_code=201,
     response_model=JobOut,
     # App Check: manual and file jobs cost an LLM call (core/app_check.py).
     dependencies=[Depends(verify_app_check), Depends(limit_ai)],
-    responses=problem_responses(
-        Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
-    ),
+    responses={
+        200: {"model": JobOut, "description": _ALREADY_ADDED},
+        **problem_responses(
+            Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
+        ),
+    },
 )
 async def add_job(
     body: JobIn,
+    response: Response,
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
     llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
     provider: Annotated[JobProvider, Depends(get_job_provider)],
 ) -> JobOut:
     if isinstance(body, ManualJobIn):
-        job = await service.add_manual(db, llm, org_id=ctx.org_id, text=body.text)
-    else:
-        job = await service.save_search_result(
-            db, provider, org_id=ctx.org_id, external_id=body.external_id
-        )
+        added = await service.add_manual(db, llm, org_id=ctx.org_id, text=body.text)
+        if added.already_added:
+            response.status_code = 200
+        return _out(added.jobs[0])
+    job = await service.save_search_result(
+        db, provider, org_id=ctx.org_id, external_id=body.external_id
+    )
     return _out(job)
 
 
@@ -84,22 +94,28 @@ async def add_job(
     status_code=201,
     response_model=list[JobOut],
     dependencies=[Depends(verify_app_check), Depends(limit_ai)],
-    responses=problem_responses(
-        Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
-    ),
+    responses={
+        200: {"model": list[JobOut], "description": _ALREADY_ADDED},
+        **problem_responses(
+            Unauthorized, NotFound, ValidationFailed, UpstreamUnavailable
+        ),
+    },
 )
 async def add_jobs_from_file(
     body: FileJobIn,
+    response: Response,
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
     storage: Annotated[Storage, Depends(get_storage_dependency)],
     llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
 ) -> list[JobOut]:
     """Job description files (one or several) are read together; each offer becomes a job."""
-    jobs = await service.add_from_file(
+    added = await service.add_from_file(
         db, storage, llm, org_id=ctx.org_id, document_ids=body.document_ids
     )
-    return [_out(j) for j in jobs]
+    if added.already_added:
+        response.status_code = 200
+    return [_out(j) for j in added.jobs]
 
 
 @router.get(
@@ -150,3 +166,20 @@ async def read_job(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobOut:
     return _out(await service.get_job(db, org_id=ctx.org_id, job_id=job_id))
+
+
+@router.delete(
+    "/{job_id}",
+    status_code=204,
+    responses=problem_responses(Unauthorized, NotFound),
+)
+async def delete_job(
+    job_id: UUID,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Remove a job and its fit reports. Letters and tracked applications stay (they keep what
+    they need); the radar will not bring the offer back."""
+    await service.get_job(db, org_id=ctx.org_id, job_id=job_id)  # 404 if not the org's
+    await service.delete_job(db, org_id=ctx.org_id, job_id=job_id)
+    return Response(status_code=204)
