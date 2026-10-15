@@ -5,6 +5,7 @@ arrive as arguments."""
 import asyncio
 import hashlib
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -78,15 +79,60 @@ async def _extract(llm: LLMGateway, content: Part, text: str | None) -> JobPosit
     return post_process(job, text) if text is not None else job
 
 
+@dataclass(frozen=True)
+class Added:
+    """Result of adding pasted text or files. ``already_added``: the org had added this exact
+    input before, so ``jobs`` are the existing rows and no model call was made."""
+
+    jobs: list[JobPosting]
+    already_added: bool
+
+
+def _fingerprint(kind: str, *parts: str) -> str:
+    # The kind keeps a pasted text from ever colliding with a set of files.
+    return hashlib.sha256("\n".join((kind, *parts)).encode()).hexdigest()
+
+
+async def _already(
+    db: AsyncSession, *, org_id: UUID, source_hash: str
+) -> list[JobPosting]:
+    """What this input already produced (maybe []): the cheap check, before any model call."""
+    return await repository.find_by_source_hash(
+        db, org_id=org_id, source_hash=source_hash
+    )
+
+
+async def _already_locked(
+    db: AsyncSession, *, org_id: UUID, source_hash: str
+) -> list[JobPosting]:
+    """The same check, made right before saving and under a lock held until the commit, so
+    two identical adds that ran their model calls side by side (a double click, two tabs)
+    cannot both save: the second finds the first's rows and keeps those. The model call itself
+    is NOT covered (the gateway commits before it), only the save."""
+    await repository.lock_source(db, org_id=org_id, source_hash=source_hash)
+    return await _already(db, org_id=org_id, source_hash=source_hash)
+
+
 async def add_manual(
     db: AsyncSession, llm: LLMGateway, *, org_id: UUID, text: str
-) -> JobPosting:
+) -> Added:
+    # Whitespace-insensitive: the same text pasted with other line breaks is the same job.
+    source_hash = _fingerprint("text", " ".join(text.split()))
+    if existing := await _already(db, org_id=org_id, source_hash=source_hash):
+        return Added(existing, already_added=True)
     job = await _extract(llm, TextPart(text), text)
+    if existing := await _already_locked(db, org_id=org_id, source_hash=source_hash):
+        return Added(existing, already_added=True)
     posting = await repository.add(
-        db, org_id=org_id, source="manual", external_id=None, info=job
+        db,
+        org_id=org_id,
+        source="manual",
+        external_id=None,
+        info=job,
+        source_hash=source_hash,
     )
     await db.commit()
-    return posting
+    return Added([posting], already_added=False)
 
 
 # Model calls in flight at once for one file: fast enough for 20 offers, gentle on Vertex quota.
@@ -98,10 +144,13 @@ MAX_TOTAL_BYTES = 12 * 1024 * 1024
 
 async def _load_parts(
     db: AsyncSession, storage: Storage, *, org_id: UUID, document_ids: list[UUID]
-) -> list[Part]:
-    """The model input for a batch of ``jd`` documents. Ownership and kind are checked per
-    document before any model call; a size cap bounds what one request carries inline."""
+) -> tuple[list[Part], str]:
+    """The model input for a batch of ``jd`` documents, and its fingerprint (the same bytes
+    give the same fingerprint, however often or under whatever name they were uploaded).
+    Ownership and kind are checked per document before any model call; a size cap bounds
+    what one request carries inline."""
     parts: list[Part] = []
+    digests: set[str] = set()
     total = 0
     for document_id in dict.fromkeys(document_ids):  # a repeated id is read once
         document, data = await documents.read_document(
@@ -112,10 +161,11 @@ async def _load_parts(
             raise ValidationFailed(
                 f"These files are too large together (max {MAX_TOTAL_BYTES // 2**20} MB)."
             )
+        digests.add(document.sha256)
         parts.append(FilePart(data=data, mime_type=document.mime))
     if len(parts) > 1:
         parts.insert(0, TextPart(_SEVERAL_FILES_NOTICE))
-    return parts
+    return parts, _fingerprint("files", *sorted(digests))
 
 
 async def add_from_file(
@@ -125,8 +175,9 @@ async def add_from_file(
     *,
     org_id: UUID,
     document_ids: list[UUID],
-) -> list[JobPosting]:
+) -> Added:
     """One or several files, read together as ONE input: one inbox job per distinct offer.
+    The same files added again return their existing jobs without a model call.
     Several files may be pages/screenshots of one offer or different offers; the model sees
     them all in the same calls, so a batch costs one index call plus one call per offer, not
     one pipeline per file.
@@ -135,7 +186,11 @@ async def add_from_file(
     parallel, so 20 offers take about as long as the slowest one, not 20 times as long.
     All-or-nothing: if any offer fails, nothing is saved and the user retries the batch.
     ponytail: a failed offer could be skipped and reported instead, if retries get annoying."""
-    files = await _load_parts(db, storage, org_id=org_id, document_ids=document_ids)
+    files, source_hash = await _load_parts(
+        db, storage, org_id=org_id, document_ids=document_ids
+    )
+    if existing := await _already(db, org_id=org_id, source_hash=source_hash):
+        return Added(existing, already_added=True)
     index = await generate_retrying_invalid(
         llm,
         schema=OfferIndex,
@@ -178,16 +233,25 @@ async def add_from_file(
             raise result
         jobs.append(result)
 
+    if existing := await _already_locked(db, org_id=org_id, source_hash=source_hash):
+        return Added(
+            existing, already_added=True
+        )  # an identical add finished meanwhile
     postings = []
     for job in jobs:
         job.source_meta.apply_url = None  # only providers know the real link
         postings.append(
             await repository.add(
-                db, org_id=org_id, source="file", external_id=None, info=job
+                db,
+                org_id=org_id,
+                source="file",
+                external_id=None,
+                info=job,
+                source_hash=source_hash,
             )
         )
     await db.commit()
-    return postings
+    return Added(postings, already_added=False)
 
 
 def to_job_position(r: UnifiedJobSearchResult) -> JobPosition:

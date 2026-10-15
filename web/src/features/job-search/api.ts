@@ -4,6 +4,7 @@ import { uploadDocument } from '@/lib/api/documents'
 import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
 import { toast } from '@/lib/toast'
+import { REFRESH_AFTER_RUN } from '@/features/radar/api'
 
 export type SearchParams = { query?: string; department?: string; contract_type?: string }
 type JobIn = components['schemas']['ManualJobIn'] | components['schemas']['SearchJobIn']
@@ -21,7 +22,15 @@ export function useApplyUrl(jobId: string | null | undefined): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null
 }
 
-const post = async (body: JobIn) => unwrap(await api.POST('/api/v1/jobs', { body }))
+/** The API answers 201 for a new job and 200 when the same input was added before (nothing was
+ *  analysed, the existing job comes back). */
+const ALREADY_ADDED = 200
+const DUPLICATE_MESSAGE = 'Already in your jobs: nothing new was analysed.'
+
+const post = async (body: JobIn) => {
+  const res = await api.POST('/api/v1/jobs', { body })
+  return { job: unwrap(res), already: res.response.status === ALREADY_ADDED }
+}
 
 /** The manual and France Travail entry paths: one job each. */
 export function useAddJob() {
@@ -31,8 +40,8 @@ export function useAddJob() {
       'text' in input
         ? post({ source: 'manual', text: input.text })
         : post({ source: 'france_travail', external_id: input.externalId }),
-    onSuccess: (job) => {
-      toast(`Job added: ${job.data.title}`)
+    onSuccess: ({ job, already }) => {
+      toast(already ? DUPLICATE_MESSAGE : `Job added: ${job.data.title}`)
       return qc.invalidateQueries({ queryKey: KEY })
     },
   })
@@ -49,12 +58,13 @@ export function useAddJobFiles() {
   return useMutation({
     mutationFn: async (files: File[]) => {
       const document_ids = await Promise.all(files.map((f) => uploadDocument('jd', f)))
-      return unwrap(
-        await api.POST('/api/v1/jobs/from-file', { body: { source: 'file', document_ids } }),
-      )
+      const res = await api.POST('/api/v1/jobs/from-file', {
+        body: { source: 'file', document_ids },
+      })
+      return { jobs: unwrap(res), already: res.response.status === ALREADY_ADDED }
     },
-    onSuccess: (jobs) => {
-      toast(`${jobs.length} job${jobs.length > 1 ? 's' : ''} added`)
+    onSuccess: ({ jobs, already }) => {
+      toast(already ? DUPLICATE_MESSAGE : `${jobs.length} job${jobs.length > 1 ? 's' : ''} added`)
       return qc.invalidateQueries({ queryKey: KEY })
     },
   })
@@ -72,3 +82,19 @@ export const useSearchJobs = (params: SearchParams | undefined) =>
       return unwrap(await api.GET('/api/v1/jobs/search', { params: { query } }))
     },
   })
+
+/** Remove a job. What hangs off it changes too: its fit report goes, letters and tracked
+ *  applications lose the link, and a radar match for it leaves the list. */
+export function useDeleteJob() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) =>
+      void unwrap(await api.DELETE('/api/v1/jobs/{job_id}', { params: { path: { job_id: id } } })),
+    onSuccess: () =>
+      Promise.all(
+        [...REFRESH_AFTER_RUN, ['fit-all'], ['letters'], ['applications']].map((queryKey) =>
+          qc.invalidateQueries({ queryKey }),
+        ),
+      ),
+  })
+}

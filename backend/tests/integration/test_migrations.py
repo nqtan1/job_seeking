@@ -406,9 +406,12 @@ def test_jobs_tables_constraints_and_downgrade(scratch_migration_db):
         insp = inspect(engine)
         cols = {c["name"] for c in insp.get_columns("job_postings")}
         assert cols == {
-            "id", "org_id", "source", "external_id", "title", "company", "data",
-            "schema_version", "created_at",
+            "id", "org_id", "source", "external_id", "source_hash", "title", "company",
+            "data", "schema_version", "created_at",
         }  # fmt: skip
+        assert "ix_job_postings_org_id_source_hash" in {
+            i["name"] for i in insp.get_indexes("job_postings")
+        }  # the repeat check is an index lookup, not a scan
         assert {c["name"] for c in insp.get_columns("job_search_cache")} == {
             "key", "provider", "payload", "expires_at",
         }  # fmt: skip

@@ -3,7 +3,12 @@
 ``job_postings`` is the user's job inbox: ``data`` holds ``JobPosition`` as JSONB (bump
 ``schema_version`` when its shape changes, no migration needed). ``external_id`` is the
 provider's id for ``france_travail`` rows; manual and file rows have none, and Postgres treats
-NULLs as distinct in the unique constraint, so the same text can be saved twice on purpose.
+NULLs as distinct in the unique constraint.
+
+``source_hash`` fingerprints the INPUT of a manual or file add (ADR 0025): one pasted text, or
+one set of uploaded files. A file may hold several offers, so several rows share a hash, which
+is why the index is not unique. Adding an input the org already has returns those rows and
+skips the model call.
 
 ``job_search_cache`` holds public provider responses keyed by the query, shared across orgs
 and deliberately without ``org_id``: nothing personal is stored in it, and a per-org cache
@@ -39,6 +44,7 @@ class JobPosting(Base):
         ),
         UniqueConstraint("org_id", "source", "external_id"),
         Index("ix_job_postings_org_id_created_at", "org_id", "created_at"),
+        Index("ix_job_postings_org_id_source_hash", "org_id", "source_hash"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
@@ -47,6 +53,7 @@ class JobPosting(Base):
     )
     source: Mapped[str] = mapped_column(String, nullable=False)
     external_id: Mapped[str | None] = mapped_column(String)
+    source_hash: Mapped[str | None] = mapped_column(String(64))
     title: Mapped[str] = mapped_column(String, nullable=False)
     company: Mapped[str | None] = mapped_column(String)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

@@ -123,6 +123,54 @@ async def test_search_is_validated_and_cached(
     assert (await client.get(url)).status_code == 401
 
 
+async def test_repeats_return_the_existing_job_and_a_job_can_be_deleted(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    body = {"source": "manual", "text": "Dev Python à Lyon"}
+    fake_llm.queue(PROMPT_VERSION, blank_job())
+    first = await client.post("/api/v1/jobs", headers=ada, json=body)
+    repeat = await client.post("/api/v1/jobs", headers=ada, json=body)
+    assert (first.status_code, repeat.status_code) == (201, 200)
+    assert repeat.json()["id"] == first.json()["id"]
+
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["A"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job())
+    doc = await _upload_jd(client, ada)
+    same_bytes = await _upload_jd(client, ada)  # a second document, identical content
+    created = await client.post(
+        "/api/v1/jobs/from-file",
+        headers=ada,
+        json={"source": "file", "document_ids": [doc]},
+    )
+    repeated = await client.post(
+        "/api/v1/jobs/from-file",
+        headers=ada,
+        json={"source": "file", "document_ids": [same_bytes]},
+    )
+    assert (created.status_code, repeated.status_code) == (201, 200)
+    assert repeated.json() == created.json()
+    assert (
+        len(fake_llm.calls) == 3
+    )  # text + index + one offer; the repeats cost nothing
+
+    job_id = first.json()["id"]
+    assert (
+        await client.delete(f"/api/v1/jobs/{job_id}", headers=bob)
+    ).status_code == 404
+    assert (await client.get(f"/api/v1/jobs/{job_id}", headers=ada)).status_code == 200
+    assert (
+        await client.delete(f"/api/v1/jobs/{job_id}", headers=ada)
+    ).status_code == 204
+    assert (await client.get(f"/api/v1/jobs/{job_id}", headers=ada)).status_code == 404
+    assert (
+        await client.delete(f"/api/v1/jobs/{job_id}", headers=ada)
+    ).status_code == 404
+
+    fake_llm.queue(PROMPT_VERSION, blank_job())  # deleted: pasting it again starts over
+    again = await client.post("/api/v1/jobs", headers=ada, json=body)
+    assert again.status_code == 201 and again.json()["id"] != job_id
+
+
 async def test_org_b_cannot_read_list_or_reference_org_as_jobs(
     client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
 ):

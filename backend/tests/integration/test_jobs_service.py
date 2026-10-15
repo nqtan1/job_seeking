@@ -38,9 +38,11 @@ async def test_manual_job_is_extracted_post_processed_and_org_scoped(
     a, b = await _org(db_session, "a"), await _org(db_session, "b")
     fake_llm.queue(PROMPT_VERSION, blank_job())
 
-    posting = await service.add_manual(
+    added = await service.add_manual(
         db_session, fake_llm, org_id=a.id, text="CDI chez Acme à Paris"
     )
+    assert not added.already_added
+    posting = added.jobs[0]
     assert (posting.source, posting.external_id, posting.title) == (
         "manual",
         None,
@@ -89,9 +91,11 @@ async def test_file_job_checks_kind_and_ownership_before_any_llm_call(
         ONE_PROMPT_VERSION,
         blank_job(title="Data Eng", source_meta={"apply_url": "https://made.up"}),
     )
-    postings = await service.add_from_file(
-        db_session, fake_storage, fake_llm, org_id=a.id, document_ids=[jd.id]
-    )
+    postings = (
+        await service.add_from_file(
+            db_session, fake_storage, fake_llm, org_id=a.id, document_ids=[jd.id]
+        )
+    ).jobs
     assert [c.feature for c in fake_llm.calls] == [
         INDEX_PROMPT_VERSION,
         ONE_PROMPT_VERSION,
@@ -125,9 +129,11 @@ async def test_several_files_are_read_together_in_one_pass(
     ids = [d.id for d in docs]
     fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["Dev Python"]))
     fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="Dev Python"))
-    postings = await service.add_from_file(
-        db_session, fake_storage, fake_llm, org_id=org.id, document_ids=ids
-    )
+    postings = (
+        await service.add_from_file(
+            db_session, fake_storage, fake_llm, org_id=org.id, document_ids=ids
+        )
+    ).jobs
     assert len(postings) == 1
     assert len(fake_llm.calls) == 2  # index + one offer, not one pipeline per file
     for call in fake_llm.calls:
@@ -139,6 +145,120 @@ async def test_several_files_are_read_together_in_one_pass(
             db_session, fake_storage, fake_llm, org_id=org.id, document_ids=ids
         )
     assert len(fake_llm.calls) == 2  # refused before any model call
+
+
+async def test_the_same_input_is_never_analysed_twice(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway, fake_storage: LocalStorage
+):
+    org, other = await _org(db_session, "a"), await _org(db_session, "b")
+
+    # Pasted text: whitespace and line breaks do not make it a new job.
+    fake_llm.queue(PROMPT_VERSION, blank_job())
+    first = await service.add_manual(
+        db_session, fake_llm, org_id=org.id, text="Dev  Python\nà Lyon"
+    )
+    again = await service.add_manual(
+        db_session, fake_llm, org_id=org.id, text="  Dev Python à Lyon "
+    )
+    assert (first.already_added, again.already_added) == (False, True)
+    assert [j.id for j in again.jobs] == [j.id for j in first.jobs]
+    assert len(fake_llm.calls) == 1
+
+    # Another org that pastes the same text gets its own job: nothing is shared.
+    fake_llm.queue(PROMPT_VERSION, blank_job())
+    assert not (
+        await service.add_manual(
+            db_session, fake_llm, org_id=other.id, text="Dev Python à Lyon"
+        )
+    ).already_added
+
+    # The same bytes uploaded twice are two documents but one input, whatever the order.
+    pdf = PDF + b" brochure"
+    docs = [
+        await documents.upload(
+            db_session, fake_storage, org_id=org.id, uploaded_by=None, kind="jd", data=d
+        )
+        for d in (pdf, pdf, PDF)
+    ]
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["A", "B"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="A"))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="B"))
+    calls = len(fake_llm.calls)
+    one = await service.add_from_file(
+        db_session, fake_storage, fake_llm, org_id=org.id, document_ids=[docs[0].id]
+    )
+    paid = len(fake_llm.calls)
+    assert (paid - calls, one.already_added, len(one.jobs)) == (3, False, 2)
+
+    repeat = await service.add_from_file(
+        db_session, fake_storage, fake_llm, org_id=org.id, document_ids=[docs[1].id]
+    )
+    assert repeat.already_added
+    assert [j.id for j in repeat.jobs] == [j.id for j in one.jobs]
+    assert len(fake_llm.calls) == paid  # no model call for a repeat
+
+    # A different set of files is a different input.
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["C"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="C"))
+    both = await service.add_from_file(
+        db_session,
+        fake_storage,
+        fake_llm,
+        org_id=org.id,
+        document_ids=[docs[2].id, docs[0].id],
+    )
+    assert not both.already_added
+    same_set = await service.add_from_file(
+        db_session,
+        fake_storage,
+        fake_llm,
+        org_id=org.id,
+        document_ids=[docs[0].id, docs[2].id],
+    )
+    assert same_set.already_added  # order does not matter
+
+    # Deleting the jobs makes the input new again: the user asked to start over.
+    for job in one.jobs:
+        await service.delete_job(db_session, org_id=org.id, job_id=job.id)
+    await db_session.commit()
+    fake_llm.queue(INDEX_PROMPT_VERSION, OfferIndex(offers=["A"]))
+    fake_llm.queue(ONE_PROMPT_VERSION, blank_job(title="A"))
+    redo = await service.add_from_file(
+        db_session, fake_storage, fake_llm, org_id=org.id, document_ids=[docs[0].id]
+    )
+    assert not redo.already_added
+
+
+async def test_two_identical_adds_in_flight_save_one_job(
+    db_session: AsyncSession,
+    fake_llm: FakeLLMGateway,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Both pass the early check before either saved (simulated by blinding that one check),
+    so both pay for extraction; the locked re-check before the save keeps one row, not two."""
+    org = await _org(db_session, "a")
+    real, blind_next = service._already, [True]
+
+    async def early_check_misses(*args, **kwargs):
+        if blind_next[0]:
+            blind_next[0] = False
+            return []
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(service, "_already", early_check_misses)
+    for _ in range(2):
+        fake_llm.queue(PROMPT_VERSION, blank_job())
+
+    first = await service.add_manual(db_session, fake_llm, org_id=org.id, text="Dev")
+    blind_next[0] = True
+    second = await service.add_manual(db_session, fake_llm, org_id=org.id, text="Dev")
+
+    assert (
+        len(fake_llm.calls) == 2
+    )  # both extracted, as two real requests in flight would
+    assert (first.already_added, second.already_added) == (False, True)
+    assert [j.id for j in second.jobs] == [j.id for j in first.jobs]
+    assert len(await service.list_jobs(db_session, org_id=org.id)) == 1
 
 
 async def test_a_file_with_too_many_offers_is_refused_and_saves_nothing(
