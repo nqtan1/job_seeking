@@ -14,7 +14,9 @@ agents:
   job_query: {provider: gemini, model: gemini-3.5-flash-lite}
   interview_prep: {provider: gemini, model: gemini-3.8-flash}
   fit: {provider: gemini, model: gemini-3.8-flash}
-  # gemini-3.5-flash hangs >50 s on Vertex eu in ~2 of 3 letter calls (measured 2026-10-07); lite takes ~2.5 s
-  letter: {provider: gemini, model: gemini-3.1-pro-preview}
+  # Vertex location is "eu": gemini-3.1-pro-preview and gemini-2.5-* are 404 there (checked 2026-10-15,
+  # they exist only in "global"); gemini-3.5-flash hung >50 s on letters (2026-10-07), 3.7-flash timed
+  # out at 120 s, 3.5-flash-lite wrote 103 of 250 words. 3.8-flash: grounded, ~20 s.
+  letter: {provider: gemini, model: gemini-3.8-flash}
   letter_assist: {provider: gemini, model: gemini-3.5-flash-lite}
   coach: {provider: gemini, model: gemini-3.8-flash}

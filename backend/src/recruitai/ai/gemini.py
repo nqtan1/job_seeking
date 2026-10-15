@@ -43,6 +43,7 @@ from recruitai.ai.gateway import (
     Turn,
     UserTurn,
     provider_errors,
+    without_nul,
 )
 from recruitai.ai.usage import CallStats, tracked_call
 from recruitai.config import Settings
@@ -208,7 +209,7 @@ class GeminiGateway:
                     "The AI provider returned an unparseable response.",
                     code="ai_response_invalid",
                 )
-            return parsed
+            return without_nul(parsed)
 
     async def stream(
         self,

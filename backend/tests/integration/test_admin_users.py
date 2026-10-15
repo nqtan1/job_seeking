@@ -169,19 +169,19 @@ async def test_ai_console_shows_usage_per_feature_and_model_overrides_are_audite
     assert bad.status_code == 422
     assert (
         await client.put(
-            url, headers=user, json={"provider": "gemini", "model": "gemini-2.5-pro"}
+            url, headers=user, json={"provider": "gemini", "model": "gemini-3.7-flash"}
         )
     ).status_code == 403
     ok = await client.put(
-        url, headers=boss, json={"provider": "gemini", "model": "gemini-2.5-pro"}
+        url, headers=boss, json={"provider": "gemini", "model": "gemini-3.7-flash"}
     )
     assert ok.status_code == 204
     effective = await overrides.effective_settings(base, db_session)
     assert effective.agents["fit"] == AgentLLM(
-        provider="gemini", model="gemini-2.5-pro"
+        provider="gemini", model="gemini-3.7-flash"
     )
     assert (
-        base.agents["fit"].model != "gemini-2.5-pro"
+        base.agents["fit"].model != "gemini-3.7-flash"
     )  # config.yaml itself is untouched
 
     assert (await client.delete(url, headers=boss)).status_code == 204
@@ -190,7 +190,7 @@ async def test_ai_console_shows_usage_per_feature_and_model_overrides_are_audite
     changes = (await client.get("/api/v1/admin/ai", headers=boss)).json()["changes"]
     assert [(c["feature"], c["new_value"]) for c in changes[:2]] == [
         ("fit", None),
-        ("fit", "gemini/gemini-2.5-pro"),
+        ("fit", "gemini/gemini-3.7-flash"),
     ]
     assert (await db_session.execute(select(overrides.AiSetting))).scalars().all() == []
     overrides.invalidate()

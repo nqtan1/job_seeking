@@ -200,6 +200,24 @@ def provider_errors(*sdk_errors: type[BaseException]) -> Iterator[None]:
         ) from exc
 
 
+def _strip_nul(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_strip_nul(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _strip_nul(v) for k, v in value.items()}
+    return value
+
+
+def without_nul[M: BaseModel](model: M) -> M:
+    """Postgres JSONB cannot store ``\\u0000`` (a 500 at save time, seen once on a letter).
+    A model may emit one, so drop NUL characters from a structured reply before anyone saves it."""
+    if "\\u0000" not in model.model_dump_json():
+        return model
+    return type(model).model_validate(_strip_nul(model.model_dump()))
+
+
 async def generate_retrying_invalid[M: BaseModel](
     llm: LLMGateway,
     *,

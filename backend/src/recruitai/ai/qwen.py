@@ -33,6 +33,7 @@ from recruitai.ai.gateway import (
     Turn,
     UserTurn,
     provider_errors,
+    without_nul,
 )
 from recruitai.ai.usage import CallStats, tracked_call
 from recruitai.config import Settings
@@ -216,8 +217,10 @@ class QwenGateway:
                 call.input_tokens = completion.usage.prompt_tokens
                 call.output_tokens = completion.usage.completion_tokens
             try:
-                return schema.model_validate_json(
-                    completion.choices[0].message.content or ""
+                return without_nul(
+                    schema.model_validate_json(
+                        completion.choices[0].message.content or ""
+                    )
                 )
             except (
                 ValidationError,

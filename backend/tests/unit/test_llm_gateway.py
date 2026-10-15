@@ -61,3 +61,19 @@ async def test_queue_is_fifo_per_feature():
     second = await summarize_via_gateway(gateway, "x")
 
     assert (first.text, second.text) == ("first", "second")
+
+
+def test_without_nul_removes_nul_characters_that_postgres_jsonb_cannot_store():
+    from pydantic import BaseModel
+
+    from recruitai.ai.gateway import without_nul
+
+    class Out(BaseModel):
+        text: str
+        items: list[str]
+
+    clean = Out(text="fine", items=["ok"])
+    assert without_nul(clean) is clean  # nothing to remove: the same object, no rebuild
+
+    dirty = Out(text="Bon\x00jour", items=["a\x00", "b"])
+    assert without_nul(dirty) == Out(text="Bonjour", items=["a", "b"])

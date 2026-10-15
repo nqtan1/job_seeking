@@ -26,8 +26,17 @@ TTL_S = 30.0
 RETRY_AFTER_S = (
     5.0  # after a failed read, try again this soon (the defaults apply meanwhile)
 )
-# Models an admin may pick. Qwen (dev / self-hosted) accepts only the configured model name.
-GEMINI_MODELS = ("gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-pro")
+# Models an admin may pick: only ones that answer in the Vertex "eu" location the app runs in
+# (checked 2026-10-15). A model that exists only in "global" (gemini-3.1-pro-preview,
+# gemini-2.5-*) is a 404 there, so it must not be offered. Qwen (dev / self-hosted) accepts only
+# the configured model name.
+GEMINI_MODELS = (
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash",
+)
 
 
 class AiSetting(Base):
