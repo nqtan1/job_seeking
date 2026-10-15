@@ -171,7 +171,21 @@ export function FitPage() {
         />
       )}
       <JobDescription job={job.data} />
-      <DeleteJobButton id={jobId} title={job.data.data.title} onDeleted={() => navigate('/jobs')} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Delete this job</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Removes the job and its fit report. Your letters and tracked applications stay.
+          </p>
+          <DeleteJobButton
+            id={jobId}
+            title={job.data.data.title}
+            onDeleted={() => navigate('/jobs')}
+          />
+        </CardContent>
+      </Card>
     </Page>
   )
 }

@@ -19,7 +19,7 @@ export function DeleteJobButton({
     return (
       <Button
         size="sm"
-        variant="ghost"
+        variant="outline"
         aria-label={`Delete ${title}`}
         onClick={() => setConfirming(true)}
       >

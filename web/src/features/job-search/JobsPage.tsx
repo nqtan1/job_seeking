@@ -330,7 +330,10 @@ function JobList() {
       >
         {bestFirst ? 'Newest first' : 'Best fit first'}
       </Button>
-      <ul className="max-h-[70vh] space-y-2 overflow-y-auto pr-1" aria-label="Your jobs">
+      <ul
+        className="max-h-[min(28rem,55vh)] xl:max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto rounded-xl border bg-muted/30 p-2"
+        aria-label="Your jobs"
+      >
         {rows.map((j) => {
           const fit = pipeline.fit(j.id)
           const letters = pipeline.letters(j.id)
@@ -417,15 +420,15 @@ export function JobsPage() {
     <Page title="Jobs" description="Add offers, then check how well you fit." wide>
       {add.isError && <ErrorMessage error={add.error} />}
       {add.isPending && <StepProgress steps={STEPS} />}
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-2">
         <section className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground">Your jobs</h2>
           <JobList />
         </section>
         <div className="space-y-6">
-          <ManualEntry add={add} />
-          <FileEntry />
           <Search add={add} />
+          <FileEntry />
+          <ManualEntry add={add} />
         </div>
       </div>
     </Page>
