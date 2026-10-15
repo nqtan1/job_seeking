@@ -7,12 +7,13 @@ from fastapi import FastAPI
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts.jobs import (
     INDEX_PROMPT_VERSION,
+    JOB_QUERY_VERSION,
     ONE_PROMPT_VERSION,
     PROMPT_VERSION,
 )
 from recruitai.core.app_check import verify_app_check
 from recruitai.core.errors import UpstreamUnavailable
-from recruitai.modules.jobs.schemas import OfferIndex
+from recruitai.modules.jobs.schemas import OfferIndex, ParsedQuery
 from tests.fixtures.jobs import FakeJobProvider
 from tests.unit.test_jobs_parser import blank_job
 
@@ -215,3 +216,32 @@ async def test_provider_failure_is_a_503_problem(
     resp = await client.get("/api/v1/jobs/search", headers=ada, params={"query": "x"})
     assert resp.status_code == 503
     assert resp.json()["code"] == "job_provider_unavailable"
+
+
+async def test_a_sentence_becomes_filters_and_unusable_parts_are_said_not_guessed(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada
+):
+    fake_llm.queue(
+        JOB_QUERY_VERSION,
+        ParsedQuery(
+            keywords="data analyst",
+            places=["Lyon", "69"],
+            contract_types=["cdi", "not a code!"],
+            remote=True,
+            notes=["salary above 45k"],
+        ),
+    )
+
+    r = await client.post(
+        "/api/v1/jobs/query",
+        headers=ada,
+        json={"text": "remote data analyst jobs in Lyon, CDI, more than 45k"},
+    )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert (body["query"], body["remote"]) == ("data analyst", True)
+    assert body["department"] == "69"  # canonical code, deduplicated
+    assert body["contract_type"] is None  # one bad code drops the field...
+    assert any("Contract not recognised" in n for n in body["notes"])  # ...and says so
+    assert "salary above 45k" in body["notes"]

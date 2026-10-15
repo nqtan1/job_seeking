@@ -49,7 +49,7 @@ export function ProfilePage() {
       <CardHeader>
         <CardTitle>{profile.data ? 'Replace your CV' : 'Start with your CV'}</CardTitle>
         <CardDescription>
-          Upload a PDF, DOCX or image. We extract your profile; you review and edit it.
+          Upload a PDF, Word file or image. We extract your profile; you review and edit it.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -57,7 +57,7 @@ export function ProfilePage() {
         <Input
           id="cv"
           type="file"
-          accept=".pdf,.txt,.png,.jpg,.jpeg"
+          accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
           ref={file}
           disabled={extract.isPending}
         />

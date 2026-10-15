@@ -16,6 +16,7 @@ import {
   useAttachDocument,
   useAvailableDocuments,
   useChangeStatus,
+  useFunnel,
   useCreateApplication,
   useDeleteApplication,
   useDetachDocument,
@@ -355,8 +356,31 @@ function ApplicationCard({ app }: { app: Application }) {
   )
 }
 
+/** What works: replies and interviews by source, from the user's own tracker. */
+function Funnel() {
+  const rows = useFunnel().data?.rows ?? []
+  if (rows.length === 0) return null
+  return (
+    <section aria-label="What works" className="space-y-2 rounded-xl border p-4">
+      <h2 className="text-sm font-semibold">What works, by source</h2>
+      <ul className="space-y-1 text-sm">
+        {rows.map((r) => (
+          <li key={r.source} className="flex flex-wrap justify-between gap-2">
+            <span className="capitalize">{r.source.replace('_', ' ')}</span>
+            <span className="text-muted-foreground">
+              {r.sent} sent · {r.replied} replied · {r.interviews} interview
+              {r.interviews === 1 ? '' : 's'}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 /** "Needs attention": a follow-up to send, or an interview coming up. */
 function Attention({ apps }: { apps: Application[] }) {
+  const change = useChangeStatus()
   const items = needsAttention(apps)
   if (items.length === 0) return null
   return (
@@ -387,6 +411,16 @@ function Attention({ apps }: { apps: Application[] }) {
               >
                 Draft a follow-up
               </Link>
+            )}
+            {kind === 'ghost' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={change.isPending}
+                onClick={() => change.mutate({ id: app.id, status: 'ghosted' })}
+              >
+                Mark as ghosted
+              </Button>
             )}
           </li>
         ))}
@@ -477,9 +511,19 @@ export function TrackerPage() {
       change.mutate({ id, status })
   }
   return (
-    <Page title="Tracker" description="Follow every application from first idea to offer." wide>
+    <Page
+      title="Tracker"
+      description="Follow every application from first idea to offer."
+      wide
+      actions={
+        <Link to="/tracker/proof" className={buttonVariants({ size: 'sm', variant: 'outline' })}>
+          Search record
+        </Link>
+      }
+    >
       <AddForm />
       {apps.data && <Attention apps={apps.data} />}
+      <Funnel />
       {apps.isPending && <ListSkeleton rows={2} />}
       {apps.isError && <ErrorMessage error={apps.error} />}
       {change.isError && <ErrorMessage error={change.error} />}
