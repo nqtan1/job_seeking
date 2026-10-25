@@ -7,8 +7,11 @@ closes. This keeps "business write + task enqueue" boundaries visible in the ser
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy import MetaData, func, select
-from sqlalchemy.engine import make_url
+import google.auth
+import google.auth.credentials
+from google.auth.transport.requests import Request
+from sqlalchemy import MetaData, event, func, select
+from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -33,10 +36,25 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-def create_engine(
-    settings: Settings, *, application_name: str = "recruitai-api"
-) -> AsyncEngine:
-    """Build the engine on the psycopg (v3) async driver (ADR 0017)."""
+_IAM_LOGIN_SCOPE = "https://www.googleapis.com/auth/sqlservice.login"
+_credentials: google.auth.credentials.Credentials | None = None
+
+
+def iam_password() -> str:
+    """Access token of the runtime service account, used as the Postgres password (ADR 0028).
+    Valid ~1 h and checked only at connect time, so the pool needs nothing but a fresh value
+    per new connection. Blocking HTTP (rare: one refresh per hour per process)."""
+    global _credentials
+    if _credentials is None:
+        _credentials, _ = google.auth.default(scopes=[_IAM_LOGIN_SCOPE])
+    if not _credentials.valid:
+        _credentials.refresh(Request())  # type: ignore[no-untyped-call]
+    return str(_credentials.token)
+
+
+def database_url(settings: Settings) -> URL:
+    """The validated ``postgresql+psycopg`` URL; with IAM auth the user is ``db_iam_user`` and
+    any password in the secret is dropped (the token is injected per connection)."""
     url = make_url(settings.database_url)
     if url.drivername == "postgresql":
         url = url.set(drivername="postgresql+psycopg")
@@ -44,11 +62,32 @@ def create_engine(
         raise ValueError(
             "DATABASE_URL must use the psycopg driver (postgresql+psycopg://)"
         )
+    if settings.db_iam_auth:
+        # URL.set(password=None) means "unchanged"; _replace really clears it.
+        url = url.set(username=settings.db_iam_user or url.username)._replace(
+            password=None
+        )
+    return url
+
+
+def use_iam_password(engine: Engine) -> None:
+    """Make every new connection of this (sync) engine log in with a fresh IAM token."""
+
+    @event.listens_for(engine, "do_connect")
+    def _inject(_dialect: object, _rec: object, _cargs: object, cparams: dict) -> None:  # type: ignore[type-arg]
+        cparams["password"] = iam_password()
+
+
+def create_engine(
+    settings: Settings, *, application_name: str = "recruitai-api"
+) -> AsyncEngine:
+    """Build the engine on the psycopg (v3) async driver (ADR 0017)."""
+    url = database_url(settings)
     options = (
         f"-c statement_timeout={settings.db_statement_timeout_ms} "
         f"-c idle_in_transaction_session_timeout={settings.db_idle_in_transaction_timeout_ms}"
     )
-    return create_async_engine(
+    engine = create_async_engine(
         url,
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
@@ -57,6 +96,9 @@ def create_engine(
         pool_pre_ping=True,
         connect_args={"options": options, "application_name": application_name},
     )
+    if settings.db_iam_auth:
+        use_iam_password(engine.sync_engine)
+    return engine
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

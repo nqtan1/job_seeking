@@ -27,6 +27,9 @@ class CompanyInfo(BaseModel):
         default=None, description="Employer, recruiting agency, or ESN"
     )
     logo_url: str | None = None
+    address: str | None = Field(
+        default=None, description="Full postal address of the company, if stated"
+    )
 
 
 class Badges(BaseModel):
@@ -219,6 +222,15 @@ class JobOut(BaseModel):
     data: JobPosition
     schema_version: int
     created_at: datetime
+
+
+class JobPatch(BaseModel):
+    """Manual fixes for what the model could not extract: only the fields sent change, and an
+    empty or blank string clears the value."""
+
+    company_name: str | None = Field(None, max_length=200)
+    company_address: str | None = Field(None, max_length=300)
+    location: str | None = Field(None, max_length=300)
 
 
 class ParsedQuery(BaseModel):

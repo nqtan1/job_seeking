@@ -64,6 +64,23 @@ export function useEditBlock(id: string) {
   })
 }
 
+export type RecipientPatch = components['schemas']['RecipientPatch']
+
+/** Who the letter is addressed to; the response is the whole letter. */
+export function useEditRecipient(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: RecipientPatch) =>
+      unwrap(
+        await api.PATCH('/api/v1/letters/{letter_id}/recipient', {
+          params: { path: { letter_id: id } },
+          body,
+        }),
+      ),
+    onSuccess: (l) => qc.setQueryData(['letter', id], l),
+  })
+}
+
 /** Start a render; the returned task id is polled with `useTask`. */
 export const useRender = (id: string) =>
   useMutation({

@@ -26,6 +26,16 @@ async def get(
     ).scalar_one_or_none()
 
 
+async def update_data(
+    session: AsyncSession, job: JobPosting, *, data: dict[str, Any], company: str | None
+) -> JobPosting:
+    """``data`` (JSONB) and the denormalised ``company`` column change together."""
+    job.data = data  # a new dict, so SQLAlchemy sees the JSONB change
+    job.company = company
+    await session.flush()
+    return job
+
+
 async def list_for_org(
     session: AsyncSession, *, org_id: UUID, limit: int, offset: int
 ) -> list[JobPosting]:

@@ -187,6 +187,14 @@ class BlockEditIn(BaseModel):
     )
 
 
+class RecipientPatch(BaseModel):
+    """Only the fields sent change; an empty or blank string clears the value."""
+
+    company: str | None = Field(None, max_length=200)
+    contact_name: str | None = Field(None, max_length=200)
+    address: str | None = Field(None, max_length=300)
+
+
 class BlockRegenerateIn(BaseModel):
     index: int | None = Field(
         None, ge=0, description="Paragraph number, for the body only"

@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { DeleteJobButton } from './DeleteJobButton'
+import { JobDetailsFix } from './JobDetailsFix'
+import { companyOf } from './label'
 import { isStale, postingAgeDays } from './age'
 import {
   MAX_FILES,
@@ -343,7 +345,7 @@ function JobList() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 space-y-1">
                   <p className="truncate font-medium">{j.data.title}</p>
-                  <p className="truncate text-sm text-muted-foreground">{j.data.company.name}</p>
+                  <p className="truncate text-sm text-muted-foreground">{companyOf(j)}</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge tone="info">{j.source.replace('_', ' ')}</StatusBadge>
                     {fromRadar.has(j.id) && <StatusBadge tone="success">From radar</StatusBadge>}
@@ -373,6 +375,7 @@ function JobList() {
                       </StatusBadge>
                     )}
                   </div>
+                  <JobDetailsFix job={j} />
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground">
                   {new Date(j.created_at).toLocaleDateString()}

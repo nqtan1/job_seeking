@@ -1,4 +1,5 @@
 import { FileText } from 'lucide-react'
+import { jobLabel } from '@/features/job-search/label'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
@@ -96,7 +97,7 @@ function NewLetter() {
                 </NativeSelectOption>
                 {jobs.data?.map((j) => (
                   <NativeSelectOption key={j.id} value={j.id}>
-                    {j.data.title} — {j.data.company.name}
+                    {jobLabel(j)}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>

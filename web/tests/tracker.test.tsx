@@ -57,6 +57,7 @@ test('empty board → add an application (company required) → POST with the ch
   renderPage()
   expect(await screen.findByText(/No applications yet/)).toBeInTheDocument()
 
+  await user.click(screen.getAllByRole('button', { name: 'Track an application' })[0])
   await user.click(screen.getByRole('button', { name: 'Add application' }))
   expect(mocks.POST).not.toHaveBeenCalled()
   await user.type(screen.getByLabelText('Company'), 'Acme')
@@ -69,22 +70,24 @@ test('empty board → add an application (company required) → POST with the ch
   )
 })
 
-test('card sits in its column, only offers allowed moves, shows the timeline, deletes after confirmation', async () => {
+test('card sits in its column, offers only allowed moves, opens the drawer: timeline, delete after confirmation', async () => {
   const user = userEvent.setup()
   apps = [app]
   mocks.POST.mockResolvedValue({ data: { ...app, status: 'interview' } })
   mocks.DELETE.mockResolvedValue({})
   renderPage()
   const column = await screen.findByRole('region', { name: 'Applied' })
-  expect(within(column).getByText('Dev — Acme')).toBeInTheDocument()
+  expect(within(column).getByText('Acme')).toBeInTheDocument()
+  expect(within(column).getByText('Dev')).toBeInTheDocument()
 
-  const move = screen.getByLabelText('Move Dev — Acme')
+  // 'interview' is the one-tap forward step; the rest sits in the menu.
+  const move = screen.getByLabelText('Move Acme — Dev')
   expect(
     within(move)
       .getAllByRole('option')
       .map((o) => o.textContent),
-  ).toEqual(['Move to…', 'Interview', 'Rejected'])
-  await user.selectOptions(move, 'interview')
+  ).toEqual(['Other…', 'Rejected'])
+  await user.click(screen.getByRole('button', { name: 'Move to Interview' }))
   await waitFor(() =>
     expect(mocks.POST).toHaveBeenCalledWith('/api/v1/applications/{application_id}/status', {
       params: { path: { application_id: 'a1' } },
@@ -92,30 +95,56 @@ test('card sits in its column, only offers allowed moves, shows the timeline, de
     }),
   )
 
+  await user.click(screen.getByRole('button', { name: 'Open Acme — Dev' }))
   await user.click(screen.getByRole('button', { name: 'Timeline' }))
   expect(await screen.findByText(/sent CV/)).toBeInTheDocument()
 
-  await user.click(screen.getByRole('button', { name: 'Delete Dev — Acme' }))
+  await user.click(screen.getByRole('button', { name: 'Delete Acme — Dev' }))
   expect(mocks.DELETE).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
   await waitFor(() => expect(mocks.DELETE).toHaveBeenCalled())
 })
 
-test('Details: contact, interview date and notes are saved with one PATCH', async () => {
+test('drawer edit: contact, interview date and notes are saved with one PATCH', async () => {
   const user = userEvent.setup()
   apps = [{ ...app, contact: null, interview_at: null }]
   mocks.PATCH.mockResolvedValue({ data: app })
   renderPage()
 
-  await user.click(await screen.findByRole('button', { name: 'Details' }))
+  await user.click(await screen.findByRole('button', { name: 'Open Acme — Dev' }))
   await user.type(screen.getByLabelText('Contact'), 'Marie, marie@acme.test')
-  await user.type(document.getElementById('notes-a1') as HTMLElement, 'Bring portfolio')
+  await user.type(screen.getByLabelText('Notes'), 'Bring portfolio')
   await user.click(screen.getByRole('button', { name: 'Save' }))
 
   await waitFor(() =>
     expect(mocks.PATCH).toHaveBeenCalledWith('/api/v1/applications/{application_id}', {
       params: { path: { application_id: 'a1' } },
-      body: { notes: 'Bring portfolio', contact: 'Marie, marie@acme.test', interview_at: null },
+      body: {
+        company_name: 'Acme',
+        job_title: 'Dev',
+        source: 'linkedin',
+        notes: 'Bring portfolio',
+        location: null,
+        contact: 'Marie, marie@acme.test',
+        interview_at: null,
+      },
+    }),
+  )
+})
+
+test('location is part of the form, sent on create and shown on the card', async () => {
+  const user = userEvent.setup()
+  apps = [{ ...app, location: 'Lyon' }]
+  mocks.POST.mockResolvedValue({ data: app })
+  renderPage()
+  expect(await screen.findByText(/Lyon/)).toBeInTheDocument()
+  await user.click(screen.getAllByRole('button', { name: 'Track an application' })[0])
+  await user.type(screen.getByLabelText('Company'), 'Beta')
+  await user.type(screen.getByLabelText('Location'), 'Paris')
+  await user.click(screen.getByRole('button', { name: 'Add application' }))
+  await waitFor(() =>
+    expect(mocks.POST).toHaveBeenCalledWith('/api/v1/applications', {
+      body: expect.objectContaining({ company_name: 'Beta', location: 'Paris' }),
     }),
   )
 })

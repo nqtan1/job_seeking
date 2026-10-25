@@ -44,6 +44,7 @@ class ApplicationIn(BaseModel):
     )
     company_name: str | None = Field(None, min_length=1, max_length=200)
     job_title: str | None = Field(None, max_length=200)
+    location: str | None = Field(None, max_length=300)
     source: Source = "other"
     status: Literal["to_apply", "applied"] = "to_apply"
     applied_at: date | None = None
@@ -62,6 +63,7 @@ class ApplicationUpdate(BaseModel):
 
     company_name: str | None = Field(None, min_length=1, max_length=200)
     job_title: str | None = Field(None, max_length=200)
+    location: str | None = Field(None, max_length=300)
     source: Source | None = None
     applied_at: date | None = None
     notes: str | None = Field(None, max_length=5000)
@@ -100,6 +102,7 @@ class ApplicationOut(BaseModel):
     job_id: UUID | None
     company_name: str
     job_title: str | None
+    location: str | None
     source: Source
     status: Status
     next_statuses: list[Status]

@@ -37,6 +37,7 @@ from recruitai.modules.letters.schemas import (
     MotivationQuestionsIn,
     MotivationQuestionsOut,
     PdfLinkOut,
+    RecipientPatch,
     RenderAccepted,
     SpellcheckIn,
     SpellcheckOut,
@@ -192,6 +193,23 @@ async def edit_block(
         block=block,
         text=body.text,
         index=body.index,
+    )
+    return _out(letter)
+
+
+@router.patch(
+    "/{letter_id}/recipient",
+    response_model=LetterOut,
+    responses=problem_responses(Unauthorized, NotFound, ValidationFailed),
+)
+async def edit_recipient(
+    letter_id: UUID,
+    body: RecipientPatch,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> LetterOut:
+    letter = await service.edit_recipient(
+        db, org_id=ctx.org_id, letter_id=letter_id, patch=body
     )
     return _out(letter)
 

@@ -9,6 +9,9 @@ import { REFRESH_AFTER_RUN } from '@/features/radar/api'
 export type SearchParams = { query?: string; department?: string; contract_type?: string }
 type JobIn = components['schemas']['ManualJobIn'] | components['schemas']['SearchJobIn']
 
+export type Job = components['schemas']['JobOut']
+export type JobPatch = components['schemas']['JobPatch']
+
 const KEY = ['jobs']
 
 export const useJobs = () =>
@@ -103,5 +106,16 @@ export function useDeleteJob() {
           qc.invalidateQueries({ queryKey }),
         ),
       ),
+  })
+}
+
+/** Fill in what the model could not extract; a blank string clears a field. Refetch on success
+ *  (the server's answer is the truth, nothing is applied optimistically). */
+export function usePatchJob(id: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: JobPatch) =>
+      unwrap(await api.PATCH('/api/v1/jobs/{job_id}', { params: { path: { job_id: id } }, body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   })
 }

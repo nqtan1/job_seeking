@@ -48,6 +48,7 @@ class Application(Base):
     )
     company_name: Mapped[str] = mapped_column(String, nullable=False)
     job_title: Mapped[str | None] = mapped_column(String)
+    location: Mapped[str | None] = mapped_column(String)
     source: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(
         String, nullable=False, server_default="to_apply"

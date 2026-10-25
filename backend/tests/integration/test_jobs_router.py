@@ -245,3 +245,38 @@ async def test_a_sentence_becomes_filters_and_unusable_parts_are_said_not_guesse
     assert body["contract_type"] is None  # one bad code drops the field...
     assert any("Contract not recognised" in n for n in body["notes"])  # ...and says so
     assert "salary above 45k" in body["notes"]
+
+
+async def test_manual_company_address_and_location_flow_into_letter_and_application(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    fake_llm.queue(PROMPT_VERSION, blank_job())
+    job_id = (
+        await client.post(
+            "/api/v1/jobs", headers=ada, json={"source": "manual", "text": "Dev Python"}
+        )
+    ).json()["id"]
+    url = f"/api/v1/jobs/{job_id}"
+    assert (
+        await client.patch(url, headers=bob, json={"company_name": "x"})
+    ).status_code == 404
+
+    body = {
+        "company_name": " Acme ",
+        "company_address": "1 rue X, Paris",
+        "location": "Paris",
+    }
+    got = (await client.patch(url, headers=ada, json=body)).json()
+    assert got["data"]["company"]["name"] == "Acme"
+    assert got["data"]["company"]["address"] == "1 rue X, Paris"
+    assert got["data"]["badges"]["location"] == "Paris"
+    app = (
+        await client.post("/api/v1/applications", headers=ada, json={"job_id": job_id})
+    ).json()
+    assert (app["company_name"], app["location"]) == ("Acme", "Paris")
+
+    cleared = (await client.patch(url, headers=ada, json={"location": "  "})).json()
+    assert cleared["data"]["badges"]["location"] is None
+    assert cleared["data"]["company"]["name"] == "Acme"  # unsent fields stay
+    too_long = await client.patch(url, headers=ada, json={"company_name": "x" * 201})
+    assert too_long.status_code == 422

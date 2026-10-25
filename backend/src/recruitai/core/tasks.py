@@ -13,6 +13,7 @@ the Procrastinate version, independently of our migrations, and is applied with 
 ``alembic upgrade head`` applies ours.
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -20,6 +21,7 @@ from functools import lru_cache
 from typing import Any
 
 import procrastinate
+import psycopg
 from procrastinate import PsycopgConnector
 from procrastinate.tasks import Task
 from sqlalchemy import (
@@ -36,7 +38,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from recruitai.config import Settings, get_settings
-from recruitai.core.db import Base
+from recruitai.core.db import Base, database_url, iam_password
 from recruitai.core.ids import new_id
 
 logger = logging.getLogger(__name__)
@@ -64,15 +66,25 @@ class TaskRun(Base):
     )
 
 
-def _psycopg_conninfo(database_url: str) -> str:
-    """Procrastinate's connector wants a plain psycopg DSN, not the SQLAlchemy URL form
-    core/db.py requires (``postgresql+psycopg://``)."""
-    return database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+class _IamConnection(psycopg.AsyncConnection):
+    """Pool connection class: logs in with a fresh Cloud SQL IAM token (ADR 0028)."""
+
+    @classmethod
+    async def connect(cls, conninfo: str = "", **kwargs: Any) -> Any:
+        kwargs["password"] = await asyncio.to_thread(iam_password)
+        return await super().connect(conninfo, **kwargs)
 
 
 def build_app(settings: Settings) -> procrastinate.App:
+    """Procrastinate's connector wants a plain psycopg DSN, not the SQLAlchemy URL form."""
+    conninfo = database_url(settings).set(drivername="postgresql")
+    extra: dict[str, Any] = (
+        {"connection_class": _IamConnection} if settings.db_iam_auth else {}
+    )
     return procrastinate.App(
-        connector=PsycopgConnector(conninfo=_psycopg_conninfo(settings.database_url))
+        connector=PsycopgConnector(
+            conninfo=conninfo.render_as_string(hide_password=False), **extra
+        )
     )
 
 

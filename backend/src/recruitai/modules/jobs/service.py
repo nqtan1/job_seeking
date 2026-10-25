@@ -43,6 +43,7 @@ from recruitai.modules.jobs.schemas import (
     AboutCompany,
     Badges,
     CompanyInfo,
+    JobPatch,
     JobPosition,
     Modalities,
     OfferIndex,
@@ -371,6 +372,39 @@ async def get_job(db: AsyncSession, *, org_id: UUID, job_id: UUID) -> JobPosting
     if posting is None:
         raise NotFound("Job not found.")
     return posting
+
+
+def place_of(job: dict[str, Any]) -> str | None:
+    """Where the role is, for the tracker: the short location, else the address."""
+    badges, company = job.get("badges") or {}, job.get("company") or {}
+    return (
+        badges.get("location") or badges.get("location_full") or company.get("address")
+    ) or None
+
+
+async def patch_job(
+    db: AsyncSession, *, org_id: UUID, job_id: UUID, patch: JobPatch
+) -> JobPosting:
+    job = await get_job(db, org_id=org_id, job_id=job_id)
+    data = JobPosition.model_validate(job.data)
+    sent = patch.model_dump(exclude_unset=True)
+
+    def clean(key: str) -> str | None:
+        return (sent[key] or "").strip() or None
+
+    if "company_name" in sent:
+        data.company.name = (
+            clean("company_name") or ""
+        )  # name is required in the schema
+    if "company_address" in sent:
+        data.company.address = clean("company_address")
+    if "location" in sent:
+        data.badges.location = data.badges.location_full = clean("location")
+    job = await repository.update_data(
+        db, job, data=data.model_dump(mode="json"), company=data.company.name or None
+    )
+    await db.commit()
+    return job
 
 
 async def list_jobs(

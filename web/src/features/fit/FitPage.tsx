@@ -115,7 +115,7 @@ export function FitPage() {
   return (
     <Page
       title={job.data.data.title}
-      description={job.data.data.company.name}
+      description={job.data.data.company.name?.trim() || 'Company not set'}
       back={{ to: '/jobs', label: 'Jobs' }}
       actions={
         <div className="flex flex-wrap items-center gap-2">

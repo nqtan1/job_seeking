@@ -12,6 +12,7 @@ const content = (opening: string) => ({
   opening,
   body: ['P one'],
   closing: 'Bye',
+  recipient: {},
 })
 const letter = (opening = 'I am very excited about this job') => ({
   id: 'l1',

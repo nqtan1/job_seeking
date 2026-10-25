@@ -340,3 +340,24 @@ async def test_delete_removes_the_letter_and_only_for_its_owner(
     assert (await client.delete(url, headers=ada)).status_code == 204
     assert (await client.get(url, headers=ada)).status_code == 404
     assert (await client.delete(url, headers=ada)).status_code == 404
+
+
+async def test_recipient_can_be_edited_by_hand_as_a_version_and_only_by_its_owner(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    letter_id, _ = await _letter(client, fake_llm, ada)
+    url = f"/api/v1/letters/{letter_id}/recipient"
+    assert (
+        await client.patch(url, headers=bob, json={"company": "x"})
+    ).status_code == 404
+
+    body = {"company": "Acme", "address": "1 rue X, Paris", "contact_name": " "}
+    got = (await client.patch(url, headers=ada, json=body)).json()
+    assert got["content"]["recipient"] == {
+        "company": "Acme", "address": "1 rue X, Paris", "contact_name": None,
+    }  # fmt: skip
+    assert got["content"]["subject"] == DRAFT.subject  # model text untouched
+    versions = (
+        await client.get(f"/api/v1/letters/{letter_id}/versions", headers=ada)
+    ).json()
+    assert len(versions) == 2

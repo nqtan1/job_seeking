@@ -42,13 +42,14 @@ def _today() -> date:
 async def create_application(
     db: AsyncSession, *, org_id: UUID, data: ApplicationIn
 ) -> Application:
-    company, title = data.company_name, data.job_title
+    company, title, location = data.company_name, data.job_title, data.location
     if data.job_id is not None:
         job = (await jobs.get_job(db, org_id=org_id, job_id=data.job_id)).data
         company = (
             company or ((job.get("company") or {}).get("name") or "").strip() or None
         )
         title = title or (job.get("title") or "").strip() or None
+        location = location or jobs.place_of(job)
     if not company:  # a linked job without a company name and none given
         raise ValidationFailed("company_name is required.")
     applied_at = data.applied_at
@@ -60,6 +61,7 @@ async def create_application(
         job_id=data.job_id,
         company_name=company,
         job_title=title,
+        location=location,
         source=data.source,
         status=data.status,
         applied_at=applied_at,

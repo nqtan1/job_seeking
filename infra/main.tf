@@ -91,6 +91,12 @@ resource "google_sql_database_instance" "main" {
     deletion_protection_enabled = true
     user_labels                 = local.labels
 
+    # ADR 0028: workloads log in with their service account's token, not a password.
+    database_flags {
+      name  = "cloudsql.iam_authentication"
+      value = "on"
+    }
+
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.main.id

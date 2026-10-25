@@ -28,6 +28,7 @@ from recruitai.modules.jobs.schemas import (
     FileJobIn,
     JobIn,
     JobOut,
+    JobPatch,
     JobPosition,
     JobSource,
     ManualJobIn,
@@ -183,6 +184,23 @@ async def read_job(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobOut:
     return _out(await service.get_job(db, org_id=ctx.org_id, job_id=job_id))
+
+
+@router.patch(
+    "/{job_id}",
+    response_model=JobOut,
+    responses=problem_responses(Unauthorized, NotFound, ValidationFailed),
+)
+async def patch_job(
+    job_id: UUID,
+    body: JobPatch,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> JobOut:
+    """Enter by hand what the model could not extract (company, address, location)."""
+    return _out(
+        await service.patch_job(db, org_id=ctx.org_id, job_id=job_id, patch=body)
+    )
 
 
 @router.delete(

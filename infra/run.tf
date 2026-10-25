@@ -24,6 +24,46 @@ locals {
     ADMIN_EMAILS                 = "recruitai-admin-emails"
   }
   runners = toset(["api", "worker"])
+
+  # Cloud SQL IAM user of a service account = its email without ".gserviceaccount.com".
+  db_user = { for k in ["api", "worker", "migrate"] :
+    k => trimsuffix(k == "migrate" ? google_service_account.migrate.email : google_service_account.run[k].email, ".gserviceaccount.com")
+  }
+}
+
+# Owns the schema (DDL); only the migrate job runs as it. The API and worker are data-only.
+resource "google_service_account" "migrate" {
+  account_id   = "recruitai-migrate"
+  display_name = "RecruitAI migrate"
+  depends_on   = [google_project_service.api]
+}
+
+resource "google_sql_user" "iam" {
+  for_each = local.db_user
+  name     = each.value
+  instance = google_sql_database_instance.main.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
+}
+
+resource "google_project_iam_member" "sql_login" {
+  for_each = toset(["api", "worker", "migrate"])
+  project  = var.project_id
+  role     = "roles/cloudsql.instanceUser"
+  member   = "serviceAccount:${each.key == "migrate" ? google_service_account.migrate.email : google_service_account.run[each.key].email}"
+}
+
+# The migrate job only needs the connection URL, not the other secrets.
+resource "google_secret_manager_secret_iam_member" "migrate_read" {
+  secret_id = google_secret_manager_secret.app["recruitai-database-url"].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = google_service_account.migrate.member
+}
+
+# The deploy SA acts as the migrate identity when it updates the job.
+resource "google_service_account_iam_member" "deploy_acts_as_migrate" {
+  service_account_id = google_service_account.migrate.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = google_service_account.deploy.member
 }
 
 resource "google_compute_subnetwork" "run" {
@@ -129,6 +169,14 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+      env {
+        name  = "DB_IAM_AUTH"
+        value = "true"
+      }
+      env {
+        name  = "DB_IAM_USER"
+        value = local.db_user["api"]
+      }
     }
   }
   lifecycle {
@@ -190,6 +238,14 @@ resource "google_cloud_run_v2_worker_pool" "worker" {
           }
         }
       }
+      env {
+        name  = "DB_IAM_AUTH"
+        value = "true"
+      }
+      env {
+        name  = "DB_IAM_USER"
+        value = local.db_user["worker"]
+      }
     }
   }
   lifecycle {
@@ -208,7 +264,7 @@ resource "google_cloud_run_v2_job" "migrate" {
 
   template {
     template {
-      service_account = google_service_account.run["api"].email
+      service_account = google_service_account.migrate.email
       max_retries     = 0
       vpc_access {
         egress = "PRIVATE_RANGES_ONLY"
@@ -221,7 +277,7 @@ resource "google_cloud_run_v2_job" "migrate" {
         image = "${local.image}/api:latest"
         # Procrastinate's own schema is not in Alembic (core/tasks.py docstring). `|| true`: re-applying an
         # existing schema errors, which is fine; real DB failures already stopped `alembic` before it.
-        command = ["sh", "-c", "alembic upgrade head && (procrastinate --app=recruitai.worker.app schema --apply || true)"]
+        command = ["sh", "-c", "alembic upgrade head && (procrastinate --app=recruitai.worker.app schema --apply || true) && python -m recruitai.core.db_grants"]
         dynamic "env" {
           for_each = local.plain_env
           content {
@@ -229,17 +285,26 @@ resource "google_cloud_run_v2_job" "migrate" {
             value = env.value
           }
         }
-        dynamic "env" {
-          for_each = local.secret_env
-          content {
-            name = env.key
-            value_source {
-              secret_key_ref {
-                secret  = env.value
-                version = "latest"
-              }
+        env {
+          name = "DATABASE_URL"
+          value_source {
+            secret_key_ref {
+              secret  = local.secret_env["DATABASE_URL"]
+              version = "latest"
             }
           }
+        }
+        env {
+          name  = "DB_IAM_AUTH"
+          value = "true"
+        }
+        env {
+          name  = "DB_IAM_USER"
+          value = local.db_user["migrate"]
+        }
+        env {
+          name  = "DB_APP_ROLES"
+          value = "${local.db_user["api"]},${local.db_user["worker"]}"
         }
       }
     }
@@ -247,5 +312,5 @@ resource "google_cloud_run_v2_job" "migrate" {
   lifecycle {
     ignore_changes = [template[0].template[0].containers[0].image, client, client_version]
   }
-  depends_on = [google_secret_manager_secret_iam_member.read]
+  depends_on = [google_secret_manager_secret_iam_member.read, google_secret_manager_secret_iam_member.migrate_read]
 }

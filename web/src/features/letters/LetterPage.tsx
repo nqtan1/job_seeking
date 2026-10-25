@@ -15,6 +15,7 @@ import { DeleteLetterButton } from './DeleteLetterButton'
 import { useEditBlock, useLetter, usePdfPreview, useRender, useSpellcheck } from './api'
 import { BlockEditor } from './BlockEditor'
 import { editorBlocks, ideasFor } from './blocks'
+import { RecipientPanel } from './RecipientPanel'
 import { ExportButtons, QualityPanel, VersionsPanel } from './panels'
 import { activeIssues, applyAll, applyIssue, isStale, type Checked } from './spellcheck'
 
@@ -196,6 +197,10 @@ function LetterEditor({ letterId }: { letterId: string }) {
             </span>
           </div>
           {spell.isError && errorKeys.length > 1 && <ErrorMessage error={spell.error} />}
+          <RecipientPanel
+            key={JSON.stringify(letter.data.content.recipient)}
+            letter={letter.data}
+          />
           {blocks.map((b) => (
             <BlockEditor
               key={b.key}

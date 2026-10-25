@@ -36,6 +36,7 @@ import { Activity, Sources } from './Activity'
 import { stepsFromMeta, type Context, type Step } from './activity'
 import { DeleteChatButton } from './DeleteChatButton'
 import { Markdown } from './Markdown'
+import { companyOf } from '@/features/job-search/label'
 
 const MAX = 4000
 
@@ -200,7 +201,7 @@ function JobFocus({
             .filter((j) => j.id !== jobId)
             .map((j) => (
               <option key={j.id} value={j.id}>
-                {j.data.title} · {j.data.company.name}
+                {j.data.title} · {companyOf(j)}
               </option>
             ))}
         </select>

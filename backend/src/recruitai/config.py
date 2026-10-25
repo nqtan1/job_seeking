@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     database_url: str
+    # Cloud SQL IAM database authentication (ADR 0028): the runtime service account's short-lived
+    # token replaces the password. ``db_iam_user`` overrides the URL's user (one URL secret is
+    # shared by the API, the worker and the migrate job; each connects as its own identity).
+    db_iam_auth: bool = False
+    db_iam_user: str | None = None
     db_pool_size: int = 5
     db_max_overflow: int = 5
     db_pool_timeout_s: int = 30

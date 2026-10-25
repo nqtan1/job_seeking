@@ -550,7 +550,7 @@ def test_applications_tables_constraints_and_downgrade(scratch_migration_db):
         cols = {c["name"]: c for c in insp.get_columns("applications")}
         assert set(cols) == {
             "id", "org_id", "job_id", "company_name", "job_title", "source", "status",
-            "applied_at", "notes", "interview_at", "contact", "created_at", "updated_at",
+            "applied_at", "notes", "interview_at", "contact", "location", "created_at", "updated_at",
         }  # fmt: skip
         assert cols["job_id"]["nullable"]  # a manual application has no linked job
         ondelete = {

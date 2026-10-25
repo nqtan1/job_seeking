@@ -16,6 +16,7 @@ const base = {
     opening: 'Hi',
     body: ['P one', 'P two'],
     closing: 'Bye',
+    recipient: {},
   },
 }
 
@@ -201,10 +202,28 @@ test('spelling: ignoring the last correction says it was ignored, not that none 
 test('spelling: the whole-letter button waits for something to check', async () => {
   letter = {
     ...base,
-    content: { subject: '', salutation: '', opening: '', body: [''], closing: '' },
+    content: { subject: '', salutation: '', opening: '', body: [''], closing: '', recipient: {} },
   }
   renderPage()
   expect(
     await screen.findByRole('button', { name: 'Check spelling of the whole letter' }),
   ).toBeDisabled()
+})
+
+test('an empty recipient shows the hint; saving PATCHes it and the letter is updated from the response', async () => {
+  const user = userEvent.setup()
+  mocks.PATCH.mockResolvedValue({
+    data: { ...letter, content: { ...letter.content, recipient: { company: 'Acme' } } },
+  })
+  renderPage()
+  expect(await screen.findByText(/Not found in the posting/)).toBeInTheDocument()
+  await user.type(screen.getByLabelText('Company'), 'Acme')
+  await user.click(screen.getByRole('button', { name: 'Save recipient' }))
+  await waitFor(() =>
+    expect(mocks.PATCH).toHaveBeenCalledWith('/api/v1/letters/{letter_id}/recipient', {
+      params: { path: { letter_id: 'l1' } },
+      body: { company: 'Acme', contact_name: '', address: '' },
+    }),
+  )
+  await waitFor(() => expect(screen.queryByText(/Not found in the posting/)).toBeNull())
 })

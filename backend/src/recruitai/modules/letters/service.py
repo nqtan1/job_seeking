@@ -54,6 +54,7 @@ from recruitai.modules.letters.schemas import (
     MotivationQuestion,
     MotivationQuestions,
     Recipient,
+    RecipientPatch,
     SpellFindings,
     SpellIssue,
     SpellItem,
@@ -102,7 +103,10 @@ def _build_content(
             address=person.get("address"),
             date=today,
         ),
-        recipient=Recipient(company=(job.get("company") or {}).get("name")),
+        recipient=Recipient(
+            company=(job.get("company") or {}).get("name") or None,
+            address=(job.get("company") or {}).get("address") or None,
+        ),
         signature=person.get("name") or "",
         **draft.model_dump(),
     )
@@ -427,6 +431,21 @@ async def edit_block(
     letter = await _locked(db, org_id=org_id, letter_id=letter_id)
     updated = _with_block(letter.content, block, text, index)
     letter = await repository.save_content(db, letter, updated)
+    await db.commit()
+    return letter
+
+
+async def edit_recipient(
+    db: AsyncSession, *, org_id: UUID, letter_id: UUID, patch: RecipientPatch
+) -> Letter:
+    """The user's own edit of the recipient block (never model text): a new version."""
+    letter = await _locked(db, org_id=org_id, letter_id=letter_id)
+    recipient = dict(letter.content.get("recipient") or {})
+    for key, value in patch.model_dump(exclude_unset=True).items():
+        recipient[key] = (value or "").strip() or None
+    letter = await repository.save_content(
+        db, letter, {**letter.content, "recipient": recipient}
+    )
     await db.commit()
     return letter
 

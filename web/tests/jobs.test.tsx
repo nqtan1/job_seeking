@@ -3,14 +3,19 @@ import userEvent from '@testing-library/user-event'
 import { JobsPage } from '@/features/job-search/JobsPage'
 import { renderWithApp } from './utils'
 
-const mocks = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  GET: vi.fn(),
+  POST: vi.fn(),
+  PATCH: vi.fn(),
+  DELETE: vi.fn(),
+}))
 vi.mock('@/lib/api/client', () => ({ api: mocks }))
 
 const job = {
   id: 'j1',
   source: 'manual',
   created_at: '2026-10-04T10:00:00Z',
-  data: { title: 'Python Dev', company: { name: 'Acme' } },
+  data: { title: 'Python Dev', company: { name: 'Acme' }, badges: {} },
 }
 
 beforeEach(() => {
@@ -133,6 +138,32 @@ test('the same text pasted twice says it is already there; a job is deleted afte
   await waitFor(() =>
     expect(mocks.DELETE).toHaveBeenCalledWith('/api/v1/jobs/{job_id}', {
       params: { path: { job_id: 'j1' } },
+    }),
+  )
+})
+
+test('a job missing its company shows a placeholder and a form that PATCHes only what was filled', async () => {
+  const user = userEvent.setup()
+  const listed = {
+    ...job,
+    data: { ...job.data, company: { name: '' }, source_meta: { apply_url: null } },
+  }
+  mocks.GET.mockImplementation(async (url: string) =>
+    url === '/api/v1/jobs' ? { data: [listed] } : { data: [] },
+  )
+  mocks.PATCH.mockResolvedValue({ data: listed })
+  renderWithApp(<JobsPage />, { at: '/jobs', path: '/jobs' })
+
+  expect(await screen.findByText('Company not set')).toBeInTheDocument()
+  expect(screen.getByText(/Missing: company \/ address/)).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Add' }))
+  await user.type(screen.getByLabelText('Company'), 'Acme')
+  await user.type(screen.getByLabelText('Location'), 'Lyon')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(mocks.PATCH).toHaveBeenCalledWith('/api/v1/jobs/{job_id}', {
+      params: { path: { job_id: 'j1' } },
+      body: { company_name: 'Acme', company_address: '', location: 'Lyon' },
     }),
   )
 })

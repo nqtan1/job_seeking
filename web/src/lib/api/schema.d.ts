@@ -343,7 +343,11 @@ export interface paths {
         delete: operations["delete_job_api_v1_jobs__job_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Patch Job
+         * @description Enter by hand what the model could not extract (company, address, location).
+         */
+        patch: operations["patch_job_api_v1_jobs__job_id__patch"];
         trace?: never;
     };
     "/api/v1/fit-analyses": {
@@ -436,6 +440,23 @@ export interface paths {
         head?: never;
         /** Edit Block */
         patch: operations["edit_block_api_v1_letters__letter_id__blocks__block__patch"];
+        trace?: never;
+    };
+    "/api/v1/letters/{letter_id}/recipient": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edit Recipient */
+        patch: operations["edit_recipient_api_v1_letters__letter_id__recipient_patch"];
         trace?: never;
     };
     "/api/v1/letters/{letter_id}/blocks/{block}/regenerate": {
@@ -1466,6 +1487,8 @@ export interface components {
             company_name?: string | null;
             /** Job Title */
             job_title?: string | null;
+            /** Location */
+            location?: string | null;
             /**
              * Source
              * @default other
@@ -1496,6 +1519,8 @@ export interface components {
             company_name: string;
             /** Job Title */
             job_title: string | null;
+            /** Location */
+            location: string | null;
             /**
              * Source
              * @enum {string}
@@ -1537,6 +1562,8 @@ export interface components {
             company_name?: string | null;
             /** Job Title */
             job_title?: string | null;
+            /** Location */
+            location?: string | null;
             /** Source */
             source?: ("linkedin" | "indeed" | "france_travail" | "referral" | "company_site" | "other") | null;
             /** Applied At */
@@ -1684,6 +1711,11 @@ export interface components {
             type?: ("employer" | "cabinet_recrutement" | "esn") | null;
             /** Logo Url */
             logo_url?: string | null;
+            /**
+             * Address
+             * @description Full postal address of the company, if stated
+             */
+            address?: string | null;
         };
         /**
          * CompensationInfo
@@ -2287,6 +2319,19 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * JobPatch
+         * @description Manual fixes for what the model could not extract: only the fields sent change, and an
+         *     empty or blank string clears the value.
+         */
+        JobPatch: {
+            /** Company Name */
+            company_name?: string | null;
+            /** Company Address */
+            company_address?: string | null;
+            /** Location */
+            location?: string | null;
         };
         /**
          * JobPosition
@@ -3100,6 +3145,18 @@ export interface components {
          * @description Taken from the job posting.
          */
         Recipient: {
+            /** Company */
+            company?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
+            /** Address */
+            address?: string | null;
+        };
+        /**
+         * RecipientPatch
+         * @description Only the fields sent change; an empty or blank string clears the value.
+         */
+        RecipientPatch: {
             /** Company */
             company?: string | null;
             /** Contact Name */
@@ -4753,6 +4810,62 @@ export interface operations {
             };
         };
     };
+    patch_job_api_v1_jobs__job_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     list_fit_analyses_api_v1_fit_analyses_get: {
         parameters: {
             query?: {
@@ -5153,6 +5266,62 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BlockEditIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    edit_recipient_api_v1_letters__letter_id__recipient_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                letter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipientPatch"];
             };
         };
         responses: {

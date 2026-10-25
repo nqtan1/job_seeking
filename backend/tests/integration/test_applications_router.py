@@ -330,3 +330,21 @@ async def test_proof_of_search_lists_the_months_real_steps_for_the_owner_only(
     assert (
         await client.get(f"{BASE}/proof?month=2026-13", headers=ada)
     ).status_code == 422
+
+
+async def test_location_is_set_by_hand_and_cleared_via_patch(
+    client: httpx.AsyncClient, ada
+):
+    app = (
+        await client.post(
+            BASE, headers=ada, json={"company_name": "Acme", "location": "Lyon"}
+        )
+    ).json()
+    assert app["location"] == "Lyon"
+    url = f"{BASE}/{app['id']}"
+    assert (await client.patch(url, headers=ada, json={"location": "Nantes"})).json()[
+        "location"
+    ] == "Nantes"
+    assert (await client.patch(url, headers=ada, json={"location": None})).json()[
+        "location"
+    ] is None

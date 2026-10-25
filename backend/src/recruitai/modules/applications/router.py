@@ -48,6 +48,7 @@ def _out(a: Application) -> ApplicationOut:
             "job_id": a.job_id,
             "company_name": a.company_name,
             "job_title": a.job_title,
+            "location": a.location,
             "source": a.source,
             "status": a.status,
             "next_statuses": next_statuses(a.status),
