@@ -66,3 +66,9 @@ variable "deploy_run" {
   default     = false
   description = "Create the Cloud Run resources. Needs images pushed and all secrets holding a version, so enable it in a second apply."
 }
+
+variable "api_min_instances" {
+  type        = number
+  default     = 0
+  description = "Warm API instances. 0 = a request after ~15 idle minutes waits for a cold start (~14 s). Set 1 in prod (about 8 EUR/month with request-based CPU)."
+}

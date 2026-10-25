@@ -4,34 +4,44 @@ with ``FakeLLMGateway``."""
 
 from collections.abc import AsyncGenerator, Callable
 from functools import lru_cache
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import Depends
-from google import genai
-from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.ai import gemini, qwen
 from recruitai.ai.gateway import BackendCapabilities, LLMGateway
 from recruitai.ai.overrides import effective_settings
 from recruitai.config import Provider, Settings, get_settings
 from recruitai.core.db import get_db
 from recruitai.core.tenancy import OrgContext, get_org_context
 
+if TYPE_CHECKING:
+    from google import genai
+    from openai import AsyncOpenAI
+
+# The provider SDKs (google-genai, openai) cost ~0.7 s of imports: they are loaded on the first
+# model call, not at process start, so a cold API instance is ready sooner.
+
 
 @lru_cache
-def _gemini_client() -> genai.Client:
+def _gemini_client() -> "genai.Client":
+    from recruitai.ai import gemini
+
     return gemini.build_client(get_settings())
 
 
 @lru_cache
-def _qwen_client() -> AsyncOpenAI:
+def _qwen_client() -> "AsyncOpenAI":
+    from recruitai.ai import qwen
+
     return qwen.build_client(get_settings())
 
 
 @lru_cache
-def _qwen_vl_client() -> AsyncOpenAI | None:
+def _qwen_vl_client() -> "AsyncOpenAI | None":
+    from recruitai.ai import qwen
+
     return qwen.build_vl_client(get_settings())
 
 
@@ -92,6 +102,8 @@ def build_llm_gateway(
     so worker tasks (the job radar) get the same guarantees as a request."""
 
     def build(provider: Provider) -> LLMGateway:
+        from recruitai.ai import gemini, qwen
+
         if provider == "qwen":
             return qwen.QwenGateway(
                 client=_qwen_client(),

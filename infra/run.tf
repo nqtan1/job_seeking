@@ -127,7 +127,7 @@ resource "google_cloud_run_v2_service" "api" {
     service_account = google_service_account.run["api"].email
     timeout         = "120s"
     scaling {
-      min_instance_count = 0
+      min_instance_count = var.api_min_instances
       max_instance_count = 3
     }
     vpc_access {
@@ -143,9 +143,16 @@ resource "google_cloud_run_v2_service" "api" {
         container_port = 8000
       }
       resources {
-        limits = { cpu = "1", memory = "512Mi" }
+        limits            = { cpu = "1", memory = "512Mi" }
+        cpu_idle          = true # CPU only while a request is in flight (SSE counts); makes a warm instance cheap
+        startup_cpu_boost = true # extra CPU only while the container starts: faster Python imports on a cold start
       }
+      # Default probing is every 10 s, so a cold start was rounded up to the next 10 s tick
+      # (measured: 21 s). Probe every second; keep ~60 s of patience.
       startup_probe {
+        period_seconds    = 1
+        timeout_seconds   = 1
+        failure_threshold = 60
         http_get {
           path = "/health"
         }

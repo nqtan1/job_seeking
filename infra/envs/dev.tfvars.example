@@ -12,3 +12,4 @@ llm_location      = "eu" # Vertex location: Gemini 3.x is not served from europe
 github_repo       = "nqtan1/job_seeking"
 alert_email       = "you@example.com"
 deploy_run        = false # set true after secrets have values and images are pushed
+api_min_instances = 0 # 1 = no cold start (prod: 1)

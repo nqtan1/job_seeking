@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { routes } from '@/app/routes'
@@ -24,15 +24,15 @@ vi.mock('@/features/fit/FitPage', () => ({ FitPage: () => <h1>Fit</h1> }))
 const open = (path: string) =>
   render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />)
 
-test('protected routes: loading while unresolved, redirect when signed out', () => {
+test('protected routes: loading while unresolved, redirect when signed out', async () => {
   state.user = undefined
   const { unmount } = open('/jobs')
-  expect(screen.getByText('Loading…')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('Loading…')).toBeInTheDocument())
   unmount()
 
   state.user = null
   open('/jobs')
-  expect(screen.getByText('Sign in page')).toBeInTheDocument()
+  expect(await screen.findByText('Sign in page')).toBeInTheDocument()
 })
 
 test('signed in: index is the coach, nav links switch routes, /signin bounces home', async () => {
@@ -64,7 +64,7 @@ test('after sign-in the user returns to the page they asked for', async () => {
   state.user = null
   const router = createMemoryRouter(routes, { initialEntries: ['/tracker'] })
   render(<RouterProvider router={router} />)
-  expect(screen.getByText('Sign in page')).toBeInTheDocument()
+  expect(await screen.findByText('Sign in page')).toBeInTheDocument()
   state.user = { email: 'a@b.co' }
   await router.navigate('/signin', { state: { from: { pathname: '/tracker' } } })
   expect(await screen.findByRole('heading', { name: 'Tracker' })).toBeInTheDocument()

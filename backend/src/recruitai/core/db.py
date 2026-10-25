@@ -5,11 +5,11 @@ kept calls ``await session.commit()``; anything else is rolled back when the ses
 closes. This keeps "business write + task enqueue" boundaries visible in the service.
 """
 
+import logging
 from collections.abc import AsyncIterator
 
 import google.auth
 import google.auth.credentials
-from google.auth.transport.requests import Request
 from sqlalchemy import MetaData, event, func, select
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.ext.asyncio import (
@@ -45,6 +45,8 @@ def iam_password() -> str:
     Valid ~1 h and checked only at connect time, so the pool needs nothing but a fresh value
     per new connection. Blocking HTTP (rare: one refresh per hour per process)."""
     global _credentials
+    from google.auth.transport.requests import Request  # lazy: only IAM logins need it
+
     if _credentials is None:
         _credentials, _ = google.auth.default(scopes=[_IAM_LOGIN_SCOPE])
     if not _credentials.valid:
@@ -122,6 +124,18 @@ async def close_db() -> None:
         await _engine.dispose()
     _engine = None
     _session_factory = None
+
+
+async def warm_up() -> None:
+    """Open (and return to the pool) one connection so the first real request does not pay for
+    it. Never raises: a failure here just means the request connects itself."""
+    if _session_factory is None:
+        return
+    try:
+        async with _session_factory() as session:
+            await session.execute(select(1))
+    except Exception:  # noqa: BLE001 - best effort, the request path reports real errors
+        logging.getLogger(__name__).warning("db_warm_up_failed")
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

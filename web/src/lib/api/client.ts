@@ -10,7 +10,8 @@ export const api = createClient<paths>({ baseUrl: window.location.origin })
 // user's only org; add it here when an org switcher exists.
 api.use({
   async onRequest({ request }) {
-    const headers = { ...(await getAuthHeaders()), ...(await getAppCheckHeaders()) }
+    const [auth, appCheck] = await Promise.all([getAuthHeaders(), getAppCheckHeaders()])
+    const headers = { ...auth, ...appCheck }
     for (const [k, v] of Object.entries(headers)) request.headers.set(k, v)
     return request
   },

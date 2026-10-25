@@ -5,6 +5,7 @@ import { Toaster } from '@/components/Toaster'
 import { SessionGuard } from '@/features/auth/SessionGuard'
 import { useRadarTitle } from '@/features/radar/useRadarTitle'
 import { cn } from 'cn'
+import { ColdStartNotice } from './ColdStartNotice'
 import { Sidebar } from './Sidebar'
 
 const KEY = 'sidebar-collapsed'
@@ -66,6 +67,7 @@ export function AppLayout() {
           </button>
           <span className="font-semibold">RecruitAI</span>
         </div>
+        <ColdStartNotice />
         <main className="min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>

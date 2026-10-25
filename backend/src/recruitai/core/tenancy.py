@@ -13,6 +13,7 @@ row, the org row and the membership row are all inserted in one transaction with
 
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -120,16 +121,89 @@ async def _membership_role(
     ).scalar_one_or_none()
 
 
+async def _member_org(
+    session: AsyncSession, user_id: UUID, x_org_id: str
+) -> tuple[UUID, str]:
+    try:
+        org_id = UUID(x_org_id)
+    except ValueError:
+        # Same response as "not a member": a malformed id must not look different from
+        # one that's merely someone else's (ARCHITECTURE §4.4: never reveal existence).
+        raise NotFound("Organization not found.") from None
+    role = await _membership_role(session, org_id, user_id)
+    if role is None:
+        raise NotFound("Organization not found.")
+    return org_id, role
+
+
+_UserRow = Row[UUID, str, datetime | None, datetime | None, UUID]
+
+
+async def _lookup(session: AsyncSession, firebase_uid: str) -> _UserRow | None:
+    """The hot path's single read: the user, whether it is blocked, and its personal org."""
+    personal = (
+        select(Organization.id)
+        .join(Membership, Membership.org_id == Organization.id)
+        .where(Membership.user_id == User.id, Organization.kind == "personal")
+        .limit(1)
+        .scalar_subquery()
+    )
+    return (
+        await session.execute(
+            select(
+                User.id,
+                User.email,
+                User.blocked_at,
+                User.last_active_at,
+                personal.label("personal_org_id"),
+            ).where(User.firebase_uid == firebase_uid)
+        )
+    ).one_or_none()
+
+
+def _needs_write(
+    row: _UserRow,
+    current: CurrentUser,
+) -> bool:
+    """Only when the e-mail changed or the hourly ``last_active_at`` is due: otherwise the
+    request does not write at all (a write per request was the cost of every API call)."""
+    return (
+        row.email != current.email
+        or row.last_active_at is None
+        or row.last_active_at
+        < datetime.now(UTC) - timedelta(seconds=LAST_ACTIVE_MIN_INTERVAL_S)
+    )
+
+
 async def get_org_context(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     x_org_id: Annotated[str | None, Header(alias="X-Org-Id")] = None,
 ) -> OrgContext:
+    role: str
+    row = await _lookup(db, current_user.firebase_uid)
+    if row is not None:
+        # Hot path (every request after the first login): one SELECT, no write.
+        if row.blocked_at is not None:
+            raise Forbidden("This account has been blocked.")
+        user_id = row.id
+        if _needs_write(row, current_user):
+            await db.execute(
+                update(User).where(User.id == user_id).values(email=current_user.email)
+            )
+            await _touch_last_active(db, user_id)
+        if x_org_id is None:
+            org_id = row.personal_org_id or await _personal_org_id(db, user_id)
+            role = "owner"
+        else:
+            org_id, role = await _member_org(db, user_id, x_org_id)
+        await db.commit()
+        return OrgContext(org_id=org_id, user_id=user_id, role=role)
+
     user_id, inserted = await _provision_user(db, current_user)
     if not inserted and await _is_blocked(db, user_id):
         raise Forbidden("This account has been blocked.")
 
-    role: str | None
     if inserted:
         # The one request (among any concurrent first-timers) that created the user row:
         # it alone creates the personal org, in the same transaction.
@@ -139,15 +213,7 @@ async def get_org_context(
         org_id = await _personal_org_id(db, user_id)
         role = "owner"
     else:
-        try:
-            org_id = UUID(x_org_id)
-        except ValueError:
-            # Same response as "not a member": a malformed id must not look different from
-            # one that's merely someone else's (ARCHITECTURE §4.4: never reveal existence).
-            raise NotFound("Organization not found.") from None
-        role = await _membership_role(db, org_id, user_id)
-        if role is None:
-            raise NotFound("Organization not found.")
+        org_id, role = await _member_org(db, user_id, x_org_id)
 
     await _touch_last_active(db, user_id)
     await db.commit()

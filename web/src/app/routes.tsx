@@ -1,47 +1,102 @@
 import { type RouteObject } from 'react-router'
-import { ChatPage } from '@/features/coach/ChatPage'
-import { ProfilePage } from '@/features/candidate/ProfilePage'
-import { JobsPage } from '@/features/job-search/JobsPage'
-import { FitPage } from '@/features/fit/FitPage'
-import { LetterPage } from '@/features/letters/LetterPage'
-import { LettersPage } from '@/features/letters/LettersPage'
-import { AdminUsersPage } from '@/features/admin/AdminUsersPage'
-import { AdminAiPage } from '@/features/admin/AdminAiPage'
-import { LinkPage } from '@/features/radar/LinkPage'
-import { RadarPage } from '@/features/radar/RadarPage'
-import { PrepPage } from '@/features/tracker/PrepPage'
-import { ProofPage } from '@/features/tracker/ProofPage'
-import { TrackerPage } from '@/features/tracker/TrackerPage'
-import { SettingsPage } from '@/features/settings/SettingsPage'
-import { PrivacyPage } from '@/features/privacy/PrivacyPage'
 import { AppLayout } from './AppLayout'
 import { RequireAuth } from './RequireAuth'
 import { SignInRoute } from './SignInRoute'
 
+// Pages load on demand: only the sign-in, layout and auth guard are in the first bundle.
 export const routes: RouteObject[] = [
   { path: '/signin', element: <SignInRoute /> },
-  { path: '/privacy', element: <PrivacyPage /> },
-  { path: '/radar/link', element: <LinkPage /> },
+  {
+    path: '/privacy',
+    lazy: () =>
+      import('@/features/privacy/PrivacyPage').then((m) => ({ Component: m.PrivacyPage })),
+  },
+  {
+    path: '/radar/link',
+    lazy: () => import('@/features/radar/LinkPage').then((m) => ({ Component: m.LinkPage })),
+  },
   {
     element: <RequireAuth />,
+    HydrateFallback: () => <p className="p-8 text-muted-foreground">Loading…</p>, // while the first page chunk loads
     children: [
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <ChatPage /> },
-          { path: '/chat/:conversationId', element: <ChatPage /> },
-          { path: '/profile', element: <ProfilePage /> },
-          { path: '/jobs', element: <JobsPage /> },
-          { path: '/radar', element: <RadarPage /> },
-          { path: '/tracker', element: <TrackerPage /> },
-          { path: '/tracker/proof', element: <ProofPage /> },
-          { path: '/tracker/:applicationId/prep', element: <PrepPage /> },
-          { path: '/settings', element: <SettingsPage /> },
-          { path: '/admin', element: <AdminUsersPage /> },
-          { path: '/admin/ai', element: <AdminAiPage /> },
-          { path: '/letters', element: <LettersPage /> },
-          { path: '/letters/:letterId', element: <LetterPage /> },
-          { path: '/jobs/:jobId/fit', element: <FitPage /> },
+          {
+            index: true,
+            lazy: () =>
+              import('@/features/coach/ChatPage').then((m) => ({ Component: m.ChatPage })),
+          },
+          {
+            path: '/chat/:conversationId',
+            lazy: () =>
+              import('@/features/coach/ChatPage').then((m) => ({ Component: m.ChatPage })),
+          },
+          {
+            path: '/profile',
+            lazy: () =>
+              import('@/features/candidate/ProfilePage').then((m) => ({
+                Component: m.ProfilePage,
+              })),
+          },
+          {
+            path: '/jobs',
+            lazy: () =>
+              import('@/features/job-search/JobsPage').then((m) => ({ Component: m.JobsPage })),
+          },
+          {
+            path: '/radar',
+            lazy: () =>
+              import('@/features/radar/RadarPage').then((m) => ({ Component: m.RadarPage })),
+          },
+          {
+            path: '/tracker',
+            lazy: () =>
+              import('@/features/tracker/TrackerPage').then((m) => ({ Component: m.TrackerPage })),
+          },
+          {
+            path: '/tracker/proof',
+            lazy: () =>
+              import('@/features/tracker/ProofPage').then((m) => ({ Component: m.ProofPage })),
+          },
+          {
+            path: '/tracker/:applicationId/prep',
+            lazy: () =>
+              import('@/features/tracker/PrepPage').then((m) => ({ Component: m.PrepPage })),
+          },
+          {
+            path: '/settings',
+            lazy: () =>
+              import('@/features/settings/SettingsPage').then((m) => ({
+                Component: m.SettingsPage,
+              })),
+          },
+          {
+            path: '/admin',
+            lazy: () =>
+              import('@/features/admin/AdminUsersPage').then((m) => ({
+                Component: m.AdminUsersPage,
+              })),
+          },
+          {
+            path: '/admin/ai',
+            lazy: () =>
+              import('@/features/admin/AdminAiPage').then((m) => ({ Component: m.AdminAiPage })),
+          },
+          {
+            path: '/letters',
+            lazy: () =>
+              import('@/features/letters/LettersPage').then((m) => ({ Component: m.LettersPage })),
+          },
+          {
+            path: '/letters/:letterId',
+            lazy: () =>
+              import('@/features/letters/LetterPage').then((m) => ({ Component: m.LetterPage })),
+          },
+          {
+            path: '/jobs/:jobId/fit',
+            lazy: () => import('@/features/fit/FitPage').then((m) => ({ Component: m.FitPage })),
+          },
         ],
       },
     ],

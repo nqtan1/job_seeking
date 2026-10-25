@@ -21,6 +21,9 @@ export function initAppCheck() {
     provider: new ReCaptchaEnterpriseProvider(siteKey),
     isTokenAutoRefreshEnabled: true,
   })
+  // Mint the first token now (reCAPTCHA script + network), not on the first API call: it would
+  // otherwise sit in front of `/me` right after sign-in. The SDK caches and refreshes it.
+  void getToken(appCheck).catch(() => {})
 }
 
 export async function getAppCheckHeaders(): Promise<Record<string, string>> {

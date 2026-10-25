@@ -181,3 +181,27 @@ async def test_concurrent_first_requests_create_exactly_one_org(db_engine: Async
             assert (user_count, org_count) == (1, 1)
     finally:  # this test commits for real: remove it, other tests count rows globally
         await purge_tenant(db_engine, org_id=ctx_a.org_id, user_id=ctx_a.user_id)
+
+
+async def test_returning_user_hot_path_is_one_read_and_no_write(
+    db_session: AsyncSession,
+):
+    """Every authenticated request runs this: it must be one SELECT (no write, no commit) once
+    the user exists and was seen within the hour. Each extra round trip is paid by every call."""
+    from sqlalchemy import event
+
+    current = _user(uuid4().hex[:8])
+    first = await get_org_context(current, db_session, x_org_id=None)
+    statements: list[str] = []
+    engine = (await db_session.connection()).engine.sync_engine
+    event.listen(
+        engine, "before_cursor_execute", lambda *a: statements.append(a[2][:40])
+    )
+
+    again = await get_org_context(current, db_session, x_org_id=None)
+
+    assert again == first
+    assert [q for q in statements if q.startswith("SELECT")] and not [
+        q for q in statements if q.startswith(("INSERT", "UPDATE"))
+    ]
+    assert len([q for q in statements if q.startswith("SELECT")]) == 1

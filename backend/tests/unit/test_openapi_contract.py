@@ -7,6 +7,7 @@ from recruitai.main import create_app
 PUBLIC = {
     "/health",
     "/ready",
+    "/api/ping",
     "/api/public/radar-link",
 }  # the link token is the credential
 

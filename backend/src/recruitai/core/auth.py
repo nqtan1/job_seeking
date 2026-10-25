@@ -5,6 +5,9 @@ Deliberately does **not** touch the database. Provisioning the ``users`` row is
 first-login provisioning be one atomic transaction instead of a check-then-write race.
 """
 
+import base64
+import contextlib
+import json
 import logging
 import os
 import time
@@ -162,3 +165,39 @@ async def set_account_disabled(
             firebase_auth.revoke_refresh_tokens(firebase_uid, app=app)
 
     await run_in_threadpool(_apply)
+
+
+def _b64(data: dict[str, object]) -> str:
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode()
+
+
+async def warm_certs(settings: Settings) -> None:
+    """Fetch Google's token-signing certificates now. The first ``verify_id_token`` of a process
+    pays for that download (~0.5 s) in front of the first user's request; this makes it pay at
+    startup, in parallel with the DB warm-up. The throwaway token is well-formed but unsigned, so
+    it is always rejected after the certificates are cached. Best effort."""
+    if (
+        settings.firebase_auth_emulator_host
+    ):  # the emulator has no certificates to fetch
+        return
+    pid = settings.firebase_project_id
+    now = int(time.time())
+    token = ".".join(
+        (
+            _b64({"alg": "RS256", "kid": "warm-up", "typ": "JWT"}),
+            _b64(
+                {
+                    "aud": pid,
+                    "iss": f"https://securetoken.google.com/{pid}",
+                    "sub": "warm-up",
+                    "iat": now,
+                    "exp": now + 60,
+                }
+            ),
+            "AAAA",
+        )
+    )
+    with contextlib.suppress(Exception):  # rejection is the expected outcome
+        await run_in_threadpool(
+            firebase_auth.verify_id_token, token, app=get_firebase_app(settings)
+        )
