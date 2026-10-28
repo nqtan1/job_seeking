@@ -3,26 +3,39 @@ feature — don't repeat that). No FastAPI imports (import-linter enforced via t
 list, same as every other service).
 """
 
+import asyncio
 import hashlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.core.errors import NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.filenames import safe_filename
 from recruitai.core.storage import ObjectNotFound, Storage, object_key
-from recruitai.modules.documents import repository
+from recruitai.modules.documents import repository, signature
 from recruitai.modules.documents.docx import docx_to_text, is_docx
 from recruitai.modules.documents.models import Document
+from recruitai.modules.documents.schemas import SignatureLimits, SignatureOut
+from recruitai.modules.documents.signature_spec import (
+    MAX_HEIGHT_MM,
+    MAX_WIDTH_MM,
+    MIN_DPI,
+    MIN_WIDTH_MM,
+    recommended_width_mm,
+)
+from recruitai.modules.documents.signature_spec import (
+    MAX_UPLOAD_BYTES as MAX_SIGNATURE_BYTES,
+)
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_KINDS = frozenset(
     {"cv", "jd", "attachment"}
-)  # letter_pdf is system-generated only
+)  # letter_pdf, export and signature are system-generated only
 
 
 _KIND_LABELS = {"cv": "CV", "jd": "job description"}
@@ -247,3 +260,127 @@ async def sweep_older_than(
         await db.delete(document)
     await db.commit()
     return len(documents_to_delete)
+
+
+# --- the user's signature image (ADR 0030): one per org, kind "signature" ---------------
+
+
+async def _signature_out(
+    storage: Storage, document: Document, png: bytes
+) -> SignatureOut:
+    analysis = signature.analyse(png)
+    return SignatureOut(
+        document_id=document.id,
+        url=await storage.signed_url(document.storage_key),
+        width_px=analysis.width_px,
+        height_px=analysis.height_px,
+        aspect=analysis.aspect,
+        issues=signature.upload_issues(analysis),
+        recommended_width_mm=recommended_width_mm(analysis.aspect),
+        limits=SignatureLimits(
+            min_width_mm=MIN_WIDTH_MM,
+            max_width_mm=MAX_WIDTH_MM,
+            max_height_mm=MAX_HEIGHT_MM,
+            min_dpi=MIN_DPI,
+        ),
+    )
+
+
+async def _replace_signature(
+    db: AsyncSession,
+    storage: Storage,
+    *,
+    org_id: UUID,
+    user_id: UUID | None,
+    png: bytes,
+) -> SignatureOut:
+    # One writer per org at a time (released at commit): two concurrent replacements would
+    # otherwise each delete the other's new row and leave the org with none.
+    await db.execute(
+        select(func.pg_advisory_xact_lock(func.hashtextextended(str(org_id), 0)))
+    )
+    document = await _store(
+        db,
+        storage,
+        org_id=org_id,
+        uploaded_by=user_id,
+        kind="signature",
+        data=png,
+        mime="image/png",
+    )
+    # Commit the new row before removing the old object: a failure leaves a harmless orphan
+    # object, never a signature row pointing at nothing.
+    old_keys = await repository.delete_of_kind(
+        db, org_id=org_id, kind="signature", keep=document.id
+    )
+    await db.commit()
+    for key in old_keys:
+        await storage.delete(key)
+    return await _signature_out(storage, document, png)
+
+
+async def get_signature(
+    db: AsyncSession, storage: Storage, *, org_id: UUID
+) -> SignatureOut | None:
+    found = await signature_for_render_row(db, storage, org_id=org_id)
+    if found is None:
+        return None
+    document, png = found
+    return await _signature_out(storage, document, png)
+
+
+async def signature_for_render_row(
+    db: AsyncSession, storage: Storage, *, org_id: UUID
+) -> tuple[Document, bytes] | None:
+    document = await repository.get_of_kind(db, org_id=org_id, kind="signature")
+    if document is None:
+        return None
+    try:
+        return document, await storage.get(document.storage_key)
+    except ObjectNotFound:
+        return None
+
+
+async def set_signature(
+    db: AsyncSession,
+    storage: Storage,
+    *,
+    org_id: UUID,
+    user_id: UUID | None,
+    data: bytes,
+) -> SignatureOut:
+    if len(data) > MAX_SIGNATURE_BYTES:
+        raise ValidationFailed("File exceeds the size limit.")
+    png = await asyncio.to_thread(signature.normalise, data)
+    return await _replace_signature(
+        db, storage, org_id=org_id, user_id=user_id, png=png
+    )
+
+
+async def rotate_signature(
+    db: AsyncSession, storage: Storage, *, org_id: UUID, degrees: int
+) -> SignatureOut:
+    found = await signature_for_render_row(db, storage, org_id=org_id)
+    if found is None:
+        raise NotFound("No signature.")
+    document, png = found
+    rotated = await asyncio.to_thread(signature.rotate, png, degrees)
+    return await _replace_signature(
+        db, storage, org_id=org_id, user_id=document.uploaded_by, png=rotated
+    )
+
+
+async def delete_signature(db: AsyncSession, storage: Storage, *, org_id: UUID) -> None:
+    await delete_generated(db, storage, org_id=org_id, kind="signature")
+    await db.commit()
+
+
+async def signature_for_render(
+    db: AsyncSession, storage: Storage, *, org_id: UUID
+) -> tuple[bytes, float] | None:
+    """(PNG bytes, width / height) for the letter renderer; ``None`` when there is none."""
+    found = await signature_for_render_row(db, storage, org_id=org_id)
+    if found is None:
+        return None
+    png = found[1]
+    return png, signature.analyse(png).aspect

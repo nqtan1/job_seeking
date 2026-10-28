@@ -54,10 +54,6 @@ def get_firebase_app(
         )
 
 
-def sign_in_age(user: CurrentUser, now: float | None = None) -> float:
-    return (now if now is not None else time.time()) - user.auth_time
-
-
 async def _verify(
     app: firebase_admin.App,
     settings: Settings,
@@ -89,7 +85,7 @@ async def _verify(
         auth_time=int(claims.get("auth_time") or 0),
     )
     leeway = settings.auth_time_leeway_seconds
-    age = sign_in_age(user)
+    age = time.time() - user.auth_time
     if age < -leeway or age > settings.session_absolute_days * 86400 + leeway:
         logger.info("reauth_required", extra={"reason": "absolute"})
         raise ReauthRequired(recent=False)

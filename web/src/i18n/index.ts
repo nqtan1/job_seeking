@@ -8,6 +8,7 @@ import { letters } from './messages/letters'
 import { pipeline } from './messages/pipeline'
 import { radar } from './messages/radar'
 import { settings } from './messages/settings'
+import { signature } from './messages/signature'
 import { tracker } from './messages/tracker'
 
 export const LANGS = ['en', 'fr', 'vi'] as const
@@ -16,18 +17,26 @@ export const LANG_NAMES: Record<Lang, string> = { en: 'English', fr: 'Français'
 const LOCALES: Record<Lang, string> = { en: 'en-GB', fr: 'fr-FR', vi: 'vi-VN' }
 
 /** One module per feature; a language file must define every key of its English file. */
-const modules = [common, jobs, letters, tracker, candidate, pipeline, coach, radar, settings, admin]
+const modules = [
+  common,
+  jobs,
+  letters,
+  tracker,
+  candidate,
+  pipeline,
+  coach,
+  radar,
+  settings,
+  admin,
+  signature,
+]
 const en = Object.assign({}, ...modules.map((m) => m.en)) as UnionToObject
-type UnionToObject = typeof common.en &
-  typeof jobs.en &
-  typeof letters.en &
-  typeof tracker.en &
-  typeof candidate.en &
-  typeof pipeline.en &
-  typeof coach.en &
-  typeof radar.en &
-  typeof settings.en &
-  typeof admin.en
+type UnionToObject = UnionToIntersection<(typeof modules)[number]['en']>
+type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (
+  x: infer I,
+) => void
+  ? I
+  : never
 const catalog: Record<Lang, Record<string, string>> = {
   en,
   fr: Object.assign({}, ...modules.map((m) => m.fr)),

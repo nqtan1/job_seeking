@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ConfirmButton } from '@/components/ConfirmButton'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
@@ -113,7 +114,6 @@ export function AdminUsersPage() {
   const [page, setPage] = useState(0)
   const users = useAdminUsers(q, page)
   const setBlocked = useSetBlocked()
-  const [confirming, setConfirming] = useState<string>()
   const me = useAuthUser()?.email?.toLowerCase()
   const total = users.data?.total ?? 0
   return (
@@ -132,8 +132,8 @@ export function AdminUsersPage() {
         className="max-w-sm"
       />
       {users.isPending && <ListSkeleton rows={4} />}
-      {users.isError && <ErrorMessage error={users.error} />}
-      {setBlocked.isError && <ErrorMessage error={setBlocked.error} />}
+      <ErrorMessage error={users.error} />
+      <ErrorMessage error={setBlocked.error} />
       {users.data && (
         <>
           <div className="overflow-x-auto rounded-xl border">
@@ -174,30 +174,17 @@ export function AdminUsersPage() {
                           >
                             {t('admin.unblock')}
                           </Button>
-                        ) : confirming === u.id ? (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={setBlocked.isPending}
-                            aria-label={t('admin.confirm_block_aria', { email: u.email })}
-                            onClick={() =>
-                              setBlocked.mutate(
-                                { id: u.id, blocked: true },
-                                { onSettled: () => setConfirming(undefined) },
-                              )
-                            }
-                          >
-                            {t('admin.confirm_block')}
-                          </Button>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
+                          <ConfirmButton
+                            label={t('admin.block')}
                             aria-label={t('admin.block_aria', { email: u.email })}
-                            onClick={() => setConfirming(u.id)}
-                          >
-                            {t('admin.block')}
-                          </Button>
+                            confirmLabel={t('admin.confirm_block')}
+                            confirmAriaLabel={t('admin.confirm_block_aria', { email: u.email })}
+                            pending={setBlocked.isPending}
+                            onConfirm={(reset) =>
+                              setBlocked.mutate({ id: u.id, blocked: true }, { onSettled: reset })
+                            }
+                          />
                         ))}
                     </td>
                   </tr>

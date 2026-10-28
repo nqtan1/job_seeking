@@ -27,9 +27,10 @@ from recruitai.core.errors import ValidationFailed
 from recruitai.core.storage import Storage
 from recruitai.core.tasks import mark_done, mark_failed
 from recruitai.modules.documents import service as documents
+from recruitai.modules.documents.signature_spec import fit_mm
 from recruitai.modules.letters import repository
 from recruitai.modules.letters.schemas import LetterContent
-from recruitai.modules.letters.templates import render_tex
+from recruitai.modules.letters.templates import SIGNATURE_FILENAME, render_tex
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,17 @@ COMPILE_MEMORY_BYTES = 2 * 1024**3
 _FORBIDDEN = re.compile(
     r"\\(?:write|immediate|openin|openout|newwrite|newread|read|readline|input|include|"
     r"InputIfFileExists|IfFileExists|verbatiminput|lstinputlisting|catcode|special|"
-    r"csname|directlua)(?![A-Za-z])"
+    r"csname|directlua|includegraphics|pdfximage|pdfliteral|pdfrefximage)(?![A-Za-z])"
     r"|\^\^",  # `^^5c` spells a backslash: a way to hide any of the above
+)
+
+
+# The single line the templates generate to include the signature picture (`signature_line`).
+# User text cannot form it (templated text is escaped) and a raw override never has it
+# stripped, so it is only ever allowed in templated output.
+_OUR_SIGNATURE_LINE = re.compile(
+    r"\\includegraphics\[width=\d{1,3}\.\d{1}mm,height=\d{1,3}\.\d{1}mm,keepaspectratio\]"
+    r"\{signature\.png\}"
 )
 
 
@@ -56,17 +66,29 @@ class RenderError(Exception):
         self.retryable = retryable
 
 
-def check_tex_allowed(tex: str) -> None:
+def check_tex_allowed(tex: str, *, templated: bool = False) -> None:
+    """``templated``: the tex came from our templates, so our own signature line is fine."""
+    if templated:
+        tex = _OUR_SIGNATURE_LINE.sub("", tex)
     if _FORBIDDEN.search(tex):
         raise RenderError("render_forbidden_input", retryable=False)
 
 
 async def compile_tex(
-    tex: str, *, timeout_s: float = COMPILE_TIMEOUT_S, binary: str = "tectonic"
+    tex: str,
+    *,
+    timeout_s: float = COMPILE_TIMEOUT_S,
+    binary: str = "tectonic",
+    assets: dict[str, bytes] | None = None,
 ) -> bytes:
+    """``assets``: files the tex may include, written next to it (only ours: the signature)."""
     with tempfile.TemporaryDirectory() as workdir:
         source = Path(workdir) / "letter.tex"
         source.write_text(tex, encoding="utf-8")
+        for name, data in (assets or {}).items():
+            if name != SIGNATURE_FILENAME:
+                raise RenderError("render_failed", retryable=False)
+            (Path(workdir) / name).write_bytes(data)
         # The memory cap is set by a tiny `sh` wrapper (`ulimit -v`, in KiB) that then execs the
         # compiler: no `preexec_fn`, which is unsafe in a process that also runs threads.
         proc = await asyncio.create_subprocess_exec(
@@ -98,7 +120,7 @@ async def render_letter(
     *,
     org_id: UUID,
     letter_id: UUID,
-    compile_pdf: Callable[[str], Awaitable[bytes]] = compile_tex,
+    compile_pdf: Callable[..., Awaitable[bytes]] = compile_tex,
 ) -> UUID:
     """Render one letter and point it at its new PDF document. Returns the document id.
     The caller commits (or marks the failure)."""
@@ -107,16 +129,34 @@ async def render_letter(
     )
     if letter is None:
         raise RenderError("letter_not_found", retryable=False)
-    tex = letter.latex_override or render_tex(
-        LetterContent.model_validate(letter.content),
-        template=letter.template,  # type: ignore[arg-type]  # DB CHECK limits the values
-        language=letter.language,  # type: ignore[arg-type]
-    )
-    check_tex_allowed(tex)
+    assets: dict[str, bytes] = {}
+    if letter.latex_override:
+        tex = letter.latex_override
+    else:
+        content = LetterContent.model_validate(letter.content)
+        printed = None
+        if content.signature_image:
+            # If the signature was deleted since it was switched on, render WITHOUT it rather
+            # than fail the whole letter.
+            stored = await documents.signature_for_render(
+                session, storage, org_id=org_id
+            )
+            if stored is not None:
+                data, aspect = stored
+                printed = fit_mm(aspect, content.signature_image.width_mm)
+                assets[SIGNATURE_FILENAME] = data
+        tex = render_tex(
+            content,
+            template=letter.template,  # type: ignore[arg-type]  # DB CHECK limits the values
+            language=letter.language,  # type: ignore[arg-type]
+            signature=printed,
+        )
+    check_tex_allowed(tex, templated=not letter.latex_override)
     content_at_start, override_at_start = letter.content, letter.latex_override
     # Release the row lock while the (slow) compiler runs; re-take it to record the result.
     await session.commit()
-    pdf = await compile_pdf(tex)
+    # Fakes without assets keep the one-argument call.
+    pdf = await (compile_pdf(tex, assets=assets) if assets else compile_pdf(tex))
     try:
         document = await documents.store_generated(
             session, storage, org_id=org_id, kind="letter_pdf", data=pdf

@@ -2,20 +2,49 @@
 
 Run inside the worker image with no network: ``docker run --network none <image> python
 /app/docker/render_check.py``. It uses the production code path (``render_tex`` +
-``compile_tex``), so it proves the templates only need the pre-warmed package bundle, that
+``compile_tex``), every letter WITH a signature picture, so it proves the templates only need the pre-warmed package bundle, that
 hostile text cannot break out of a letter, and that ``--untrusted`` is accepted by the
 installed Tectonic. Exits non-zero on any failure.
 """
 
 import asyncio
+import struct
 import sys
+import zlib
 
-from recruitai.modules.letters.schemas import Header, LetterContent, Recipient
+from recruitai.modules.documents.signature_spec import fit_mm
+from recruitai.modules.letters.schemas import (
+    Header,
+    LetterContent,
+    Recipient,
+    SignatureImage,
+)
 from recruitai.modules.letters.tasks import compile_tex
 from recruitai.modules.letters.templates import render_tex
 
 TEMPLATES = ["classic", "modern", "compact", "lettre_fr"]
 HOSTILE = r"\end{document}\write18{touch /tmp/pwned} 100% & $5 #1 _x_ {y} ~z ^w \\"
+
+
+def png(width: int = 300, height: int = 100) -> bytes:
+    """A valid transparent RGBA PNG with a diagonal stroke (stdlib only, no file needed)."""
+    rows = b""
+    for y in range(height):
+        row = bytearray(width * 4)
+        x = width * y // height
+        row[x * 4 : x * 4 + 4] = bytes((20, 20, 110, 255))
+        rows += b"\x00" + bytes(row)
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
 
 
 def content(text: str) -> LetterContent:
@@ -31,6 +60,7 @@ def content(text: str) -> LetterContent:
         body=["Chez Brightwave, j'ai livré 25 correctifs.", text],
         closing="Veuillez agréer mes salutations distinguées.",
         signature="Ada Lovelace",
+        signature_image=SignatureImage(width_mm=45),
     )  # fmt: skip
 
 
@@ -39,9 +69,16 @@ async def main() -> int:
     for template in TEMPLATES:
         for language in ("fr", "en", "vi"):
             for label, text in (("plain", "Ada Lovelace"), ("hostile", HOSTILE)):
-                tex = render_tex(content(text), template=template, language=language)  # type: ignore[arg-type]
+                tex = render_tex(
+                    content(text),
+                    template=template,
+                    language=language,  # type: ignore[arg-type]
+                    signature=fit_mm(3.0, 45),
+                )
                 try:
-                    pdf = await compile_tex(tex, timeout_s=120)
+                    pdf = await compile_tex(
+                        tex, timeout_s=120, assets={"signature.png": png()}
+                    )
                     ok = pdf.startswith(b"%PDF-")
                 except Exception as exc:  # noqa: BLE001
                     ok = False

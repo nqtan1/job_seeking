@@ -1,5 +1,6 @@
 \documentclass[11pt]{article}
 \usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{graphicx}
 \usepackage{fontspec}
 \setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]
 \setsansfont{lmsans10-regular.otf}[BoldFont=lmsans10-bold.otf,ItalicFont=lmsans10-oblique.otf,BoldItalicFont=lmsans10-boldoblique.otf]
@@ -37,6 +38,9 @@
 \VAR{closing}
 
 \bigskip
-\hfill \VAR{signature}
+\BLOCK{if signature_image}
+\hspace*{\fill}\VAR{signature_image}\\
+\BLOCK{endif}
+\hspace*{\fill}\VAR{signature}
 
 \end{document}

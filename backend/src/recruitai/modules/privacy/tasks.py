@@ -58,17 +58,13 @@ async def export_user_data(
 # only and retried at the next cron tick.
 
 
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
 @blueprint.periodic(cron="5 * * * *")
 @blueprint.task(name="sweep_job_search_cache")
 async def sweep_job_search_cache(timestamp: int) -> None:
     from recruitai.worker import session_factory
 
     async with session_factory() as session:
-        await service.sweep_job_search_cache(session, now=_now())
+        await service.sweep_job_search_cache(session, now=datetime.now(UTC))
 
 
 @blueprint.periodic(cron="20 * * * *")
@@ -77,7 +73,7 @@ async def sweep_exports(timestamp: int) -> None:
     from recruitai.worker import session_factory, storage
 
     async with session_factory() as session:
-        await service.sweep_exports(session, storage, now=_now())
+        await service.sweep_exports(session, storage, now=datetime.now(UTC))
 
 
 @blueprint.periodic(cron="30 3 * * *")
@@ -86,7 +82,7 @@ async def sweep_ai_calls(timestamp: int) -> None:
     from recruitai.worker import session_factory
 
     async with session_factory() as session:
-        await service.sweep_ai_calls(session, now=_now())
+        await service.sweep_ai_calls(session, now=datetime.now(UTC))
 
 
 @blueprint.periodic(cron="40 3 * * *")
@@ -95,7 +91,7 @@ async def sweep_radar_runs(timestamp: int) -> None:
     from recruitai.worker import session_factory
 
     async with session_factory() as session:
-        await service.sweep_radar_runs(session, now=_now())
+        await service.sweep_radar_runs(session, now=datetime.now(UTC))
 
 
 @blueprint.periodic(cron="0 4 * * *")
@@ -129,6 +125,6 @@ async def sweep_inactive_accounts(timestamp: int) -> None:
             session,
             storage,
             get_email_sender(settings),
-            now=_now(),
+            now=datetime.now(UTC),
             delete_identity_for=delete_identity_for,
         )

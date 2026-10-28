@@ -56,12 +56,6 @@ def sign_local_key(key: str, exp: int, secret: str) -> str:
     return hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
 
 
-def verify_local_signature(key: str, exp: int, sig: str, secret: str) -> bool:
-    if exp < int(time.time()):
-        return False
-    return hmac.compare_digest(sign_local_key(key, exp, secret), sig)
-
-
 class LocalStorage:
     """Dev/test only. Files live under ``root``. ``signed_url()`` returns a relative URL
     (same-origin as the API, per the dev Vite proxy) pointing at the dev-only download route,
@@ -111,7 +105,9 @@ class LocalStorage:
         shutil.rmtree(base, ignore_errors=True)
 
     def verify_signature(self, key: str, exp: int, sig: str) -> bool:
-        return verify_local_signature(key, exp, sig, self.signing_secret)
+        return exp >= int(time.time()) and hmac.compare_digest(
+            sign_local_key(key, exp, self.signing_secret), sig
+        )
 
 
 class GCSStorage:

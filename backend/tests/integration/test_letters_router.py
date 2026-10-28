@@ -361,3 +361,42 @@ async def test_recipient_can_be_edited_by_hand_as_a_version_and_only_by_its_owne
         await client.get(f"/api/v1/letters/{letter_id}/versions", headers=ada)
     ).json()
     assert len(versions) == 2
+
+
+async def test_signature_image_setting_is_a_version_needs_a_stored_signature_and_is_tenant_scoped(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob, monkeypatch
+):
+    letter_id, _ = await _letter(client, fake_llm, ada)
+    url = f"/api/v1/letters/{letter_id}/signature"
+    stored: list[tuple[bytes, float] | None] = [None]
+
+    async def signature_for_render(db, storage, *, org_id):
+        return stored[0]
+
+    monkeypatch.setattr(
+        "recruitai.modules.documents.service.signature_for_render",
+        signature_for_render,
+        raising=False,
+    )
+    assert (
+        await client.patch(url, headers=ada, json={"width_mm": 40})
+    ).status_code == 422
+    stored[0] = (b"png", 3.0)
+    assert (
+        await client.patch(url, headers=bob, json={"width_mm": 40})
+    ).status_code == 404
+    assert (
+        await client.patch(url, headers=ada, json={"width_mm": 5})
+    ).status_code == 422
+
+    got = (await client.patch(url, headers=ada, json={"width_mm": 40})).json()
+    assert got["content"]["signature_image"] == {"width_mm": 40}
+    assert got["render_status"] == "none"
+    got = (await client.patch(url, headers=ada, json={"width_mm": 55})).json()
+    assert got["content"]["signature_image"] == {"width_mm": 55}
+    got = (await client.patch(url, headers=ada, json={"width_mm": None})).json()
+    assert got["content"]["signature_image"] is None
+    versions = (
+        await client.get(f"/api/v1/letters/{letter_id}/versions", headers=ada)
+    ).json()
+    assert len(versions) == 4  # draft + three settings

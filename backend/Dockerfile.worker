@@ -29,7 +29,7 @@ COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app src /app/src
 ENV PYTHONPATH=/app/src
 COPY --chown=app:app config.prod.yaml /app/config.yaml
-COPY --chown=app:app docker/sample.tex docker/render_check.py /app/docker/
+COPY --chown=app:app docker/sample.tex docker/sample-signature.png docker/render_check.py /app/docker/
 ENV PATH="/app/.venv/bin:${PATH}"
 RUN python -m compileall -q /app/src
 ENV TECTONIC_CACHE_DIR=/home/app/.cache/Tectonic
@@ -38,8 +38,12 @@ ENV TECTONIC_CACHE_DIR=/home/app/.cache/Tectonic
 # time, so the runtime container never needs to fetch packages — proven by CI running this
 # same image with --network none against the same file.
 USER app
+# The sample includes signature.png, so it is compiled in a directory where the picture sits
+# under the exact name the templates use.
 RUN mkdir -p /tmp/tectonic-warmup \
-    && tectonic --outdir /tmp/tectonic-warmup /app/docker/sample.tex \
+    && cp /app/docker/sample.tex /tmp/tectonic-warmup/sample.tex \
+    && cp /app/docker/sample-signature.png /tmp/tectonic-warmup/signature.png \
+    && tectonic -X compile --untrusted --outdir /tmp/tectonic-warmup /tmp/tectonic-warmup/sample.tex \
     && rm -rf /tmp/tectonic-warmup
 
 CMD ["procrastinate", "--app=recruitai.worker.app", "worker"]

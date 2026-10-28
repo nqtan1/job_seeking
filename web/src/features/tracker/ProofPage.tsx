@@ -1,3 +1,4 @@
+import { downloadBlob } from '@/lib/download'
 import { useState } from 'react'
 import { useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -41,13 +42,7 @@ export function ProofPage() {
         step(r.step),
       ]),
     ])
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const a = Object.assign(document.createElement('a'), {
-      href: url,
-      download: `search-${month}.csv`,
-    })
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(`search-${month}.csv`, 'text/csv;charset=utf-8', csv)
   }
 
   return (

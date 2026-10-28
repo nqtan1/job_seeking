@@ -80,7 +80,9 @@ test('no profile (404) shows onboarding; API error shows message + request id', 
 })
 
 test('an existing profile is shown as blocks; Edit opens the form, saving returns to the view', async () => {
-  mocks.GET.mockResolvedValue({ data: profile, response: { status: 200 } })
+  mocks.GET.mockImplementation(async (url: string) =>
+    url === '/api/v1/signature' ? { data: null } : { data: profile, response: { status: 200 } },
+  )
   mocks.PATCH.mockResolvedValue({ data: profile })
   const user = userEvent.setup()
   renderWithApp(<ProfilePage />)

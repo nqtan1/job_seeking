@@ -27,6 +27,7 @@ const renderPage = () =>
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.GET.mockImplementation(async (url: string) => {
+    if (url === '/api/v1/signature') return { data: null }
     if (url === '/api/v1/letters/{letter_id}') return { data: letter() }
     if (url === '/api/v1/letters/{letter_id}/versions')
       return {
@@ -98,9 +99,11 @@ test('export downloads the text of the chosen format', async () => {
   URL.createObjectURL = vi.fn(() => 'blob:x')
   URL.revokeObjectURL = vi.fn()
   mocks.GET.mockImplementation(async (url: string) =>
-    url.endsWith('/export')
-      ? { data: { format: 'email', subject: 'Hello', body: 'Body text' } }
-      : { data: url.endsWith('{letter_id}') ? letter() : [] },
+    url === '/api/v1/signature'
+      ? { data: null }
+      : url.endsWith('/export')
+        ? { data: { format: 'email', subject: 'Hello', body: 'Body text' } }
+        : { data: url.endsWith('{letter_id}') ? letter() : [] },
   )
   renderPage()
   await user.click(await screen.findByRole('button', { name: 'Download as email' }))

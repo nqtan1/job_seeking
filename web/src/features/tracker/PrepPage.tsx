@@ -1,3 +1,4 @@
+import { askCoachUrl } from '@/features/coach/link'
 import { Link, useParams } from 'react-router'
 import { useI18n, useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -149,7 +150,7 @@ export function PrepPage() {
       back={back}
       actions={
         <Link
-          to={`/?${app.job_id ? `job=${app.job_id}&` : ''}ask=${encodeURIComponent(practicePrompt(app, t))}`}
+          to={askCoachUrl(app.job_id, practicePrompt(app, t))}
           className={buttonVariants({ size: 'sm' })}
         >
           {t('tracker.prep.practise')}

@@ -311,10 +311,9 @@ function HowItWorks({ open }: { open: boolean }) {
     <details open={open} className="rounded-xl border bg-card p-4 text-sm">
       <summary className="cursor-pointer font-medium">{t('radar.how.title')}</summary>
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
-        <li>{t('radar.how.1')}</li>
-        <li>{t('radar.how.2')}</li>
-        <li>{t('radar.how.3')}</li>
-        <li>{t('radar.how.4')}</li>
+        {([1, 2, 3, 4] as const).map((n) => (
+          <li key={n}>{t(`radar.how.${n}`)}</li>
+        ))}
       </ol>
     </details>
   )

@@ -28,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   letter = { ...base }
   mocks.GET.mockImplementation(async (url: string) => {
+    if (url === '/api/v1/signature') return { data: null }
     if (url === '/api/v1/letters/{letter_id}') return { data: letter }
     if (url === '/api/v1/tasks/{task_id}') return { data: { status: 'done' } }
     if (url.endsWith('/versions')) return { data: [] }
@@ -64,6 +65,7 @@ test('render: queued task is polled until done, then the PDF preview appears', a
   mocks.POST.mockResolvedValue({ data: { task_id: 't1', status_url: '/x' } })
   let polls = 0
   mocks.GET.mockImplementation(async (url: string) => {
+    if (url === '/api/v1/signature') return { data: null }
     if (url === '/api/v1/letters/{letter_id}') return { data: letter }
     if (url === '/api/v1/tasks/{task_id}') {
       polls++
