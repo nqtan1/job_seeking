@@ -1,4 +1,4 @@
-"""Golden-set eval: live letter generation (P2-23). Same opt-in as the other evals:
+"""Golden-set eval: live letter generation. Same opt-in as the other evals:
 ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q -k letter``. Synthetic data only.
 
 Asserts what must always hold, never exact wording: French, no template placeholders or

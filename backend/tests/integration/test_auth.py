@@ -1,13 +1,7 @@
-"""core/auth.py (P1-06): token verification only, no database access.
+"""core/auth.py: token verification only, no database access.
 
-Note on "expired": the Auth emulator does not enforce token expiry at all (firebase_admin's
-_token_gen.py takes the ``if emulated: verified_claims = payload`` branch, skipping the
-``google.oauth2.id_token.verify_token`` call where exp is normally checked) — confirmed by
-reading the installed library, not assumed. A genuinely expired token cannot be produced
-end-to-end through the emulator, so that one case is verified by making
-``firebase_auth.verify_id_token`` raise ``ExpiredIdTokenError`` directly: it proves our code
-converts that exception into a 401, which is what actually matters in production, where the
-real check does run.
+The Auth emulator skips expiry checks, so the expired case makes ``verify_id_token`` raise
+``ExpiredIdTokenError`` directly and asserts the 401.
 """
 
 from unittest.mock import patch

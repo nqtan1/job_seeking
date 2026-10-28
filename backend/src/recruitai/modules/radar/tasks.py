@@ -1,8 +1,5 @@
-"""``radar:run_search``: one run of one saved search, in the worker (ADR 0021).
-
-``service.run_search`` closes its own ``radar_runs`` row whatever happens, so the task is not
-retried: a second attempt would only spend more model calls. A failure that never reaches the
-service (the search was deleted meanwhile) becomes a safe ``error_code`` on ``task_runs``."""
+"""``radar:run_search``: one run of one saved search (ADR 0021). Not retried: ``service.run_search``
+closes its own ``radar_runs`` row, and a second attempt would only spend more model calls."""
 
 import logging
 from typing import Any

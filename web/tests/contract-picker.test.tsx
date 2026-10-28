@@ -42,7 +42,7 @@ test('tick several contracts, clear to all, and type other codes', async () => {
   await user.type(screen.getByLabelText('Other contract codes'), 'cce, rep')
   expect(spy).toHaveBeenLastCalledWith('CDI,CDD,CCE,REP')
 
-  await user.click(screen.getByRole('button', { name: 'CDI' })) // untick one
+  await user.click(screen.getByRole('button', { name: 'CDI' }))
   expect(spy).toHaveBeenLastCalledWith('CDD,CCE,REP')
 
   await user.click(screen.getByRole('button', { name: 'All contracts' }))

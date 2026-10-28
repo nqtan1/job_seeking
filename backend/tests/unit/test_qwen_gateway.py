@@ -1,4 +1,4 @@
-"""ai/qwen.py (P1-12b): mocked openai client against a fake local server — never a real call."""
+"""ai/qwen.py: mocked openai client against a fake local server — never a real call."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock

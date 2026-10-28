@@ -1,8 +1,6 @@
 """Firebase ID token verification only (ARCHITECTURE.md §4.4, ADR 0007).
 
-Deliberately does **not** touch the database. Provisioning the ``users`` row is
-``core/tenancy.py``'s job alone (P1-07) — splitting "verify" from "provision" is what lets
-first-login provisioning be one atomic transaction instead of a check-then-write race.
+No DB access: provisioning is ``core/tenancy.py``'s job, so first login is one atomic transaction.
 """
 
 import base64

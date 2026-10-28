@@ -1,8 +1,6 @@
 """Signed, single-purpose, expiring "stop radars" links for e-mails (ADR 0024).
-
-``token = b64url(payload) . b64url(HMAC-SHA256(secret, payload))``. The payload names one org/user
-and an expiry; the only thing it can ever do is withdraw that org's radar consent. It carries no
-session and grants nothing else. Verification is constant-time and fails closed."""
+``token = b64url(payload) . b64url(HMAC-SHA256(secret, payload))``; it can only withdraw that org's
+radar consent. Verification is constant-time and fails closed."""
 
 import base64
 import hashlib

@@ -32,7 +32,7 @@ def render(
     return json.loads(line)
 
 
-# ------------------------------------------------------------------ shape and context
+# shape and context
 
 
 def test_record_shape_and_correlation_fields():
@@ -79,7 +79,7 @@ async def test_contexts_are_isolated_between_tasks_and_visible_across_threads():
         assert get_context()["org_id"] == "org-from-thread"
 
 
-# ------------------------------------------------------------------ extras and scrubbing
+# extras and scrubbing
 
 
 def test_extras_scalars_kept_objects_dropped_sensitive_keys_redacted_and_no_spoofing():
@@ -126,7 +126,7 @@ def test_scrub_removes_emails_jwts_and_bearer_tokens_but_leaves_normal_text():
     assert "@" not in render("user %s failed", "jane@example.com")["message"]
 
 
-# ------------------------------------------------------------------ exceptions
+# exceptions
 
 
 def _raise(msg: str):
@@ -177,7 +177,7 @@ def test_exception_message_is_never_logged_but_type_chain_sqlstate_and_frames_ar
         assert len(render("x", exc=e)["exc_frames"]) == 30  # capped
 
 
-# ------------------------------------------------------------------ robustness
+# robustness
 
 
 def test_formatting_never_raises_and_cannot_be_used_to_forge_lines():
@@ -194,7 +194,7 @@ def test_formatting_never_raises_and_cannot_be_used_to_forge_lines():
     assert render("CV de Éloïse — 日本語")["message"] == "CV de Éloïse — 日本語"
 
 
-# ------------------------------------------------------------------ configure_logging
+# configure_logging
 
 
 @pytest.fixture

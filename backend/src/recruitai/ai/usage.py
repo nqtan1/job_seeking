@@ -71,7 +71,7 @@ class AiCall(Base):
 
 
 async def count_calls_today(session: AsyncSession, *, user_id: uuid.UUID) -> int:
-    """Used for the daily per-user quota (P1-12). "Today" is UTC midnight, matching
+    """Used for the daily per-user quota. "Today" is UTC midnight, matching
     ``created_at``'s timezone."""
     today = datetime.now(UTC).date()
     today_start = datetime.combine(today, datetime.min.time(), tzinfo=UTC)

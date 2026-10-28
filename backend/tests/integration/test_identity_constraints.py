@@ -1,4 +1,4 @@
-"""P1-02: the identity constraints actually reject bad data (one test per rule)."""
+"""The identity constraints actually reject bad data (one test per rule)."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -48,7 +48,7 @@ async def test_user_rules_unique_firebase_uid_required_fields_and_upsert_shape(
     await _rejects(db_session, User(email="a@example.test"))  # no firebase_uid
     await _rejects(db_session, User(firebase_uid="x"))  # no email
 
-    # P1-07 provisions with INSERT ... ON CONFLICT (firebase_uid): it must be possible.
+    # Provisioning uses INSERT ... ON CONFLICT (firebase_uid): it must be possible.
     upsert = text(
         "INSERT INTO users (id, firebase_uid, email) VALUES (:id, 'same', 'a@example.test') "
         "ON CONFLICT (firebase_uid) DO UPDATE SET email = EXCLUDED.email RETURNING id"

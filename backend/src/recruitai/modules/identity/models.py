@@ -1,8 +1,5 @@
-"""Identity tables (ARCHITECTURE.md §4.3, ADR 0008): organizations, users, memberships.
-
-``role`` and ``kind`` are constrained varchars, not native Postgres enums: adding a value is
-an ordinary migration instead of ``ALTER TYPE`` (expand/contract friendly).
-"""
+"""Identity tables (ARCHITECTURE.md §4.3, ADR 0008). ``role``/``kind`` are constrained varchars,
+not native enums, so adding a value is an ordinary migration."""
 
 import uuid
 from datetime import datetime
@@ -44,7 +41,7 @@ class User(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
-    # UNIQUE: P1-07 provisions users with an atomic INSERT ... ON CONFLICT (firebase_uid).
+    # UNIQUE: provisioning is an atomic INSERT ... ON CONFLICT (firebase_uid).
     firebase_uid: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     email: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[str | None] = mapped_column(String)

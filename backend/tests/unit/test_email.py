@@ -1,4 +1,4 @@
-"""core/email.py + core/email_brevo.py (P2-30a): never a real network call or send."""
+"""core/email.py + core/email_brevo.py: never a real network call or send."""
 
 import httpx
 import pytest

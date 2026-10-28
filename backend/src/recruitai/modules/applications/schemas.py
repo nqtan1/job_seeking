@@ -1,11 +1,4 @@
-"""Application tracker DTOs. Moved from the legacy ``domain/applications/schema.py`` with the
-status set kept as is (``to_apply, applied, in_review, interview, offer, rejected, ghosted``).
-
-Not ported: the legacy ``cv_file`` / ``cover_letter_file`` / ``special_documents`` fields (they
-held client-supplied file paths, a path-traversal hole: files go through ``documents`` ids) and
-the document-prep timestamps. Added: ``job_title`` (an application without a linked job still
-needs a role), ``next_statuses`` (so a UI never offers an illegal move) and the event timeline.
-"""
+"""Application tracker DTOs. Files go through ``documents`` ids, never client-supplied paths."""
 
 from datetime import date, datetime
 from typing import Literal

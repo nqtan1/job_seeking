@@ -1,4 +1,4 @@
-"""P1-04: every failure is problem+json, and nothing internal ever reaches the client."""
+"""Every failure is problem+json, and nothing internal ever reaches the client."""
 
 import logging
 

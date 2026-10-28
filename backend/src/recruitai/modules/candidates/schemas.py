@@ -1,10 +1,5 @@
-"""``CVInformation`` is both the LLM output schema and the stored ``candidate_profiles.data``.
-
-Moved from the legacy ``domain/cv/schema.py`` (phase 1 only; the recruiter-analysis models
-are not ported, ``hr`` is out of v1). Minimization (ARCHITECTURE.md §11.3): there is
-deliberately no photo, date of birth, gender, nationality or marital-status field, so the
-model cannot return them and the profile cannot store them.
-"""
+"""``CVInformation``: the LLM output schema and the stored ``candidate_profiles.data``.
+No photo, birth date, gender, nationality or marital status by design (ARCHITECTURE.md §11.3)."""
 
 from datetime import datetime
 from uuid import UUID
@@ -14,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 SCHEMA_VERSION = 1
 
 
-# Emails are plain ``str`` (legacy: ``EmailStr``): vLLM guided decoding rejects the JSON-schema
+# Emails are plain ``str`` (not ``EmailStr``): vLLM guided decoding rejects the JSON-schema
 # ``format: email`` ("not supported by Outlines"), and a malformed address on a CV should not
 # fail the whole extraction.
 class PersonalInfo(BaseModel):
@@ -22,7 +17,7 @@ class PersonalInfo(BaseModel):
 
     name: str = Field(..., description="Full name")
     email: str | None = Field(None, description="Email address")
-    # Optional (legacy: required): a required field forces the model to invent a number
+    # Optional: a required field forces the model to invent a number
     # when the CV has none, which the prompt forbids.
     phone: str | None = Field(None, description="Phone number")
     address: str | None = Field(None, description="Physical address")

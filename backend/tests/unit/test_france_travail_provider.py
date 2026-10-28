@@ -1,4 +1,4 @@
-"""France Travail provider (P2-08a): mocked HTTP only, never the real API."""
+"""France Travail provider: mocked HTTP only, never the real API."""
 
 import httpx
 import pytest

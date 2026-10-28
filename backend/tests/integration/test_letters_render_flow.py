@@ -1,4 +1,4 @@
-"""Walkthrough §5 end to end (P2-21): letter → POST /render (202) → worker → poll → signed URL.
+"""Walkthrough §5 end to end: letter → POST /render (202) → worker → poll → signed URL.
 
 The worker runs on its own connection, so this test uses real commits (not the rolled-back
 ``db_session``) and deletes what it created. Only the compiler is faked; the real Tectonic

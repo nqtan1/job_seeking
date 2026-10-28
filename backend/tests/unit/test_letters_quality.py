@@ -1,4 +1,4 @@
-"""Grounding check and quality panel (P2-22): fixture profiles and letters, no model."""
+"""Grounding check and quality panel: fixture profiles and letters, no model."""
 
 from recruitai.modules.letters.quality import (
     check,

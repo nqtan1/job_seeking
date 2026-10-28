@@ -1,4 +1,4 @@
-"""ai/gemini.py (P1-12): mocked google-genai client — never a real network call."""
+"""ai/gemini.py: mocked google-genai client — never a real network call."""
 
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4

@@ -1,4 +1,4 @@
-"""Simultaneous status changes on one application (P2-28, real connections)."""
+"""Simultaneous status changes on one application."""
 
 import asyncio
 from itertools import pairwise

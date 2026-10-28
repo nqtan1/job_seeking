@@ -1,4 +1,4 @@
-"""The retention sweeps and the daily reminder digest are registered as periodic tasks on the worker app (P2-31)."""
+"""The retention sweeps and the daily reminder digest are registered as periodic tasks on the worker app."""
 
 from recruitai.worker import app
 

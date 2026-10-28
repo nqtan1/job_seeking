@@ -1,4 +1,4 @@
-"""Export/delete edge cases end to end (P2-32): a failed export never leaves a link to an
+"""Export/delete edge cases end to end: a failed export never leaves a link to an
 incomplete ZIP, and deleting and exporting in either order never leaves or resurrects data."""
 
 from types import SimpleNamespace

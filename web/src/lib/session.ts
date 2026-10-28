@@ -30,8 +30,6 @@ const writeShared = (t: number) => {
   }
 }
 
-// ---- ending the session (idle, absolute lifetime, another tab)
-
 export type EndReason = 'idle' | 'reauth' | 'other-tab'
 let endHandler: ((reason: EndReason) => void) | undefined
 /** The guard registers how to end the session (clear caches, sign out, go to /signin). */

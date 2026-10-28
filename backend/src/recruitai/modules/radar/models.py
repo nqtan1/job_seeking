@@ -1,7 +1,5 @@
-"""Job radar tables (ADR 0021): saved searches, what each run did, and every job the radar has
-looked at. ``radar_results`` doubles as the "seen" ledger, so a job is never scored twice; its
-``job_id`` is NULL once a below-threshold job has been taken back out of the user's inbox. Every
-row carries ``org_id`` so each query (and the privacy deletion) filters by tenant directly."""
+"""Job radar tables (ADR 0021). ``radar_results`` doubles as the "seen" ledger (a job is never
+scored twice); ``job_id`` is NULL once a job is taken back out of the inbox. All rows carry ``org_id``."""
 
 import uuid
 from datetime import datetime

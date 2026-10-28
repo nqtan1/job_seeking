@@ -1,10 +1,9 @@
-"""The job radar (ADR 0021): search → skip what is known → score → shortlist.
+"""The job radar (ADR 0021): search -> skip what is known -> score -> shortlist.
 
-It *proposes*: nothing here contacts a company or applies anywhere. The only model calls are the
-existing fit analyses, through the tenant-bound gateway, so the user's daily AI quota applies;
-the radar also leaves ``QUOTA_RESERVE`` calls untouched for the user's own chat and letters.
-Whether a job is shortlisted is decided by code (score ≥ the user's minimum), never by anything
-the job text says. No FastAPI imports; the LLM and the provider arrive as arguments."""
+It only proposes. Model calls are the fit analyses through the tenant-bound gateway (the daily AI
+quota applies; ``QUOTA_RESERVE`` calls are left for the user). Shortlisting is decided by code
+(score >= the user's minimum). No FastAPI imports.
+"""
 
 import logging
 from collections.abc import Awaitable, Callable
@@ -96,9 +95,8 @@ async def run_search(
     quota: int,
     now: datetime | None = None,
 ) -> RadarRun | None:
-    """One run of one search. Returns None, writing nothing, if another run of this search is in
-    progress. Otherwise it always leaves a ``radar_runs`` row that says what happened and why it
-    stopped (done | limit | quota | no_profile | ai_unavailable | provider_error | internal_error)."""
+    """One run of one search. Returns None, writing nothing, if another run is in progress; otherwise
+    always leaves a ``radar_runs`` row saying why it stopped."""
     now = now or datetime.now(UTC)
     search = await get_search(db, org_id=org_id, search_id=search_id)
     # ponytail: check-then-insert, so two runs started in the same instant can both pass; the
@@ -298,7 +296,7 @@ async def _finish(
     return run
 
 
-# ---- searches
+# searches
 
 
 async def create_search(
@@ -361,9 +359,8 @@ PENDING_FOR = timedelta(
 def run_refusal(
     search: RadarSearch, latest: RadarRun | None, now: datetime
 ) -> str | None:
-    """Why "Run now" is not allowed yet, or None. A run that was asked for and has not started
-    is never doubled. Otherwise a normal run waits out the cool-down, and one that was
-    interrupted can be retried at once."""
+    """Why "Run now" is not allowed yet, or None. Never doubles a queued run; interrupted runs retry
+    at once, others wait out the cool-down."""
     asked = search.requested_at
     if (
         asked is not None
@@ -402,9 +399,8 @@ async def close_abandoned(
 async def request_run(
     db: AsyncSession, *, org_id: UUID, user_id: UUID, search_id: UUID
 ) -> UUID:
-    """Queue a run (task row + job in one transaction, ADR 0017). Refused if this search ran or
-    started a run in the last few minutes ("Run now" cannot be used to drain the AI quota),
-    unless its last run was interrupted: then it is simply retried."""
+    """Queue a run (task row + job in one transaction, ADR 0017). Refused within the cool-down so
+    "Run now" cannot drain the AI quota, unless the last run was interrupted."""
     search = await get_search(db, org_id=org_id, search_id=search_id)
     now = datetime.now(UTC)
     latest = await close_abandoned(
@@ -429,7 +425,7 @@ async def request_run(
     return task_run_id
 
 
-# ---- results and runs
+# results and runs
 
 
 @dataclass(frozen=True)
@@ -507,7 +503,7 @@ async def list_runs(db: AsyncSession, *, org_id: UUID, limit: int) -> list[Radar
     return await repository.list_runs(db, org_id=org_id, limit=limit)
 
 
-# ---- the daily run (every user's enabled searches)
+# the daily run (every user's enabled searches)
 
 
 def _day_start(now: datetime) -> datetime:
@@ -572,9 +568,8 @@ async def _run_each(
     notify: Notify | None = None,
     failures_before_pause: int,
 ) -> int:
-    """Run each ``(search id, org id, owner user id)`` in its own session, one after another,
-    so one failure cannot touch the others. Returns how many runs were started. Consent is
-    checked again right before each run: a withdrawal during a long batch stops the rest."""
+    """Run each ``(search id, org id, owner user id)`` in its own session. Returns how many started.
+    Consent is re-checked before each run."""
     started = 0
     for search_id, org_id, user_id in targets:
         async with session_factory() as session:
@@ -668,8 +663,7 @@ async def run_due_searches(
 async def interrupted_searches(
     db: AsyncSession, *, now: datetime, policy_version: str
 ) -> list[tuple[UUID, UUID, UUID]]:
-    """Daily searches whose latest run today was interrupted, a while ago, and that have not used
-    their automatic retries: the AI or the job source was down, so the work is simply tried again.
+    """Daily searches whose latest run today was interrupted a while ago and have retries left.
     Same owner rules as the daily run (not blocked, active in the last 30 days)."""
     runs = await repository.runs_since(db, since=_day_start(now))
     by_search: dict[UUID, list[RadarRun]] = {}
@@ -880,7 +874,7 @@ async def sweep_old_runs(db: AsyncSession, *, cutoff: datetime) -> int:
     return deleted
 
 
-# ---- seeing and following the radar
+# seeing and following the radar
 
 
 def next_daily_run(now: datetime) -> datetime:
@@ -981,7 +975,7 @@ async def keep_anyway(
     return posting.id
 
 
-# ---- lifecycle: resume, inactivity, public links (ADR 0024)
+# Lifecycle: resume, inactivity, public links (ADR 0024)
 
 
 async def resume(

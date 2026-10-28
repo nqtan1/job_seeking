@@ -1,7 +1,5 @@
-"""``applications`` and ``application_events`` (ARCHITECTURE.md §4.3): the tracker and its
-status timeline. An application may exist without a job from the inbox (``job_id`` NULL, and
-``SET NULL`` if the job is deleted: it is the user's own record). Events are append-only and
-repeat ``org_id`` so every query and the privacy deletion can filter by tenant directly."""
+"""``applications`` and ``application_events`` (ARCHITECTURE.md §4.3). Events are append-only and
+repeat ``org_id`` so queries and privacy deletion filter by tenant directly."""
 
 import uuid
 from datetime import date, datetime

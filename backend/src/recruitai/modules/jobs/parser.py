@@ -1,11 +1,5 @@
-"""Rule-based clean-up of an LLM-extracted ``JobPosition`` (ported from the legacy
-``application/jobs/analysis/parser.py``). A small model often leaves location, contract,
-salary or experience empty even when the text states them; these regexes fill the gaps.
-
-Not ported: the "create sub-model if None" and "split a string into a list" steps (the typed
-schema makes both impossible now). Fixed from the legacy: the K€ regex had a literal
-backslash (``\\\\.``), and deduplicating ``benefits`` crashed when it was ``None``.
-"""
+"""Rule-based clean-up of an LLM-extracted ``JobPosition``: a small model often leaves location,
+contract, salary or experience empty even when the text states them; regexes fill the gaps."""
 
 import hashlib
 import re

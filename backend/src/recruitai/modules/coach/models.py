@@ -1,7 +1,5 @@
-"""``conversations`` and ``messages`` (ADR 0016). Conversation state is ordinary org-scoped
-data (exportable, deletable with the account), not an in-memory agent. ``messages.org_id`` is
-repeated so every query and the privacy deletion can filter by tenant directly. A
-conversation outlives its job posting (``job_id`` is ``SET NULL``)."""
+"""``conversations`` and ``messages`` (ADR 0016). ``messages.org_id`` is repeated so queries and
+privacy deletion filter by tenant directly; a conversation outlives its job (``SET NULL``)."""
 
 import uuid
 from datetime import datetime

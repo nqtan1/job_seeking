@@ -1,9 +1,6 @@
-"""Domain error hierarchy. Services raise these; ``core.error_handlers`` turns them into
-RFC 9457 ``application/problem+json``.
+"""Domain errors; ``core.error_handlers`` turns them into RFC 9457 problem+json.
 
-This module must stay free of FastAPI/Starlette (services import it; import-linter enforces
-it). ``detail`` is a message the *developer authored for the user*: never pass ``str(exc)`` or
-anything derived from user input, a stack trace, SQL, or a provider error.
+FastAPI-free (import-linter). ``detail`` is developer-authored: never ``str(exc)``, user input, SQL or provider text.
 """
 
 import re

@@ -1,4 +1,4 @@
-"""applications service against the real DB (P2-26)."""
+"""applications service against the real DB."""
 
 from datetime import UTC, date, datetime
 

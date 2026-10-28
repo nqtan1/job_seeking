@@ -1,14 +1,5 @@
-"""``FitCheck`` is the LLM output schema for a fit analysis and the stored
-``fit_analyses.data``. Moved from the legacy ``domain/fit/schema.py``.
-
-Not ported: ``FitAnalysisRequest/Response`` (they carry file paths and recruiter fields; the
-API takes a ``job_id`` and reads the caller's profile) and the interview-kit models (a
-separate feature, not part of the fit report).
-
-``key_missing_requirements``, ``confidence``, ``summary`` and ``constructive_feedback`` are
-required (nullable where unknown): with optional fields the small self-hosted model skips
-them under guided decoding, and ``summary``/``constructive_feedback`` are what the user reads.
-"""
+"""``FitCheck``: the LLM output schema for a fit analysis and the stored ``fit_analyses.data``.
+Required-but-nullable fields: optional ones are skipped by the small model under guided decoding."""
 
 from datetime import datetime
 from enum import StrEnum
@@ -29,12 +20,10 @@ class Recommendation(StrEnum):
 
 
 class FitCheck(BaseModel):
-    """Structured fit assessment between a candidate's profile and a job, evaluated through
-    a persona-specific lens (corporate / PhD / startup).
+    """Structured fit assessment of a candidate profile against a job, through a persona lens.
 
-    Field order matters: guided decoding fills fields in schema order, so the reasoning
-    (strengths, gaps, reasons) comes *before* the score and verdict. With the verdict first,
-    the small self-hosted model committed to a score with no reasoning behind it."""
+    Field order matters: guided decoding fills in schema order, so reasoning comes before the
+    score and verdict."""
 
     strengths: list[str] = Field(
         ...,

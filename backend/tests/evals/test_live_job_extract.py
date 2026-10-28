@@ -1,4 +1,4 @@
-"""Golden-set eval: live job extraction on the self-hosted text model (P2-06). Same opt-in as
+"""Golden-set eval: live job extraction on the self-hosted text model. Same opt-in as
 ``test_live_cv_extract.py``: ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q``."""
 
 import os

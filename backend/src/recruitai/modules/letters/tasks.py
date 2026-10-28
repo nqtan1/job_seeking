@@ -1,14 +1,8 @@
-"""``letters:render_pdf``: letter → LaTeX → Tectonic → PDF → storage (ADR 0010).
+"""``letters:render_pdf``: letter -> LaTeX -> Tectonic -> PDF -> storage (ADR 0010). Worker only.
 
-Runs in the worker only. Layers of defence for the LaTeX we compile (raw mode accepts text a
-user wrote): (1) ``check_tex_allowed`` rejects dangerous commands before compiling, with a
-clean error; (2) Tectonic runs with ``--untrusted`` (no shell escape, no external files), a
-wall-clock timeout and a memory limit; (3) templated letters are escaped, so they can't form
-a command at all (``latex_escape``).
-
-Failures set ``render_status='failed'`` and a *safe* ``error_code`` on the ``task_runs`` row
-(never exception text). Transient failures (a compiler crash, a timeout) are retried 3 times;
-an input the user must fix (forbidden command) fails at once.
+Defence for the LaTeX we compile: ``check_tex_allowed`` rejects dangerous commands; Tectonic runs
+``--untrusted`` with a timeout and memory limit; templated text is escaped. Failures set
+``render_status='failed'`` and a safe ``error_code`` (never exception text); transient ones retry 3x.
 """
 
 import asyncio

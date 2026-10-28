@@ -1,16 +1,8 @@
 """Procrastinate app + the transactional-enqueue helper (ADR 0017).
 
-A task may only be enqueued through ``enqueue()``, which defers the job on the *caller's own*
-session connection (``task.configure(connection=...)``), so the business write and the job
-commit or roll back together. Calling ``task.defer_async()`` directly reintroduces the
-orphan-job / lost-job races the P1-13 spike demonstrated.
-
-``task_runs`` is the domain-level table every task-status read goes through (P1-14's
-``GET /api/v1/tasks/{id}``) — never Procrastinate's own tables directly. Procrastinate's
-internal schema (``procrastinate_jobs`` etc.) is *not* managed by Alembic: it evolves with
-the Procrastinate version, independently of our migrations, and is applied with its own CLI
-(``uv run procrastinate --app=recruitai.worker.app schema --apply``), the same way
-``alembic upgrade head`` applies ours.
+Enqueue only through ``enqueue()``: it defers on the caller's session connection so the business
+write and the job commit or roll back together. Status reads go through ``task_runs``, never
+Procrastinate's tables. Its schema is not managed by Alembic (apply with its own CLI).
 """
 
 import asyncio

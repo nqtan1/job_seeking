@@ -1,4 +1,4 @@
-"""Dev-only signed-download route (P1-09), through real HTTP via the ``client`` fixture —
+"""Dev-only signed-download route, through real HTTP via the ``client`` fixture —
 proves the route resolves storage through ``dependency_overrides`` like any other route,
 not a baked-in instance from app construction."""
 

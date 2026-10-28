@@ -1,4 +1,4 @@
-"""/api/v1/fit-analyses through real HTTP (P2-13): the fit report flow + cross-tenant."""
+"""/api/v1/fit-analyses through real HTTP: the fit report flow + cross-tenant."""
 
 import httpx
 import pytest

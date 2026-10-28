@@ -1,19 +1,9 @@
 """Spelling and grammar corrections the user can accept one by one.
 
-The model only *proposes* ``(wrong, right, reason, context)``. Code decides what is shown, so
-the user is never offered a change to words they did not write:
-
-* ``wrong`` must be found in the text at a word boundary. Matching ignores typography the
-  model normalises away (curly vs straight apostrophes, non-breaking spaces, zero-width
-  characters, decomposed accents) and maps back to the original text.
-* A repeated word is located with the model's ``context`` fragment; if that cannot pin one
-  occurrence, the proposal is dropped rather than guessing (a wrong guess would "fix" a
-  correct word).
-* A correction fixes a word or a short phrase; rewrites, changed digits and stray invisible
-  characters are dropped.
-
-Offsets are UTF-16 code units, what the browser's ``String.slice`` uses. No FastAPI or
-database imports.
+The model only proposes ``(wrong, right, reason, context)``; code decides what is shown: ``wrong``
+must match at a word boundary (typography-insensitive), ambiguous repeats are dropped rather than
+guessed, and rewrites, changed digits or invisible characters are dropped. Offsets are UTF-16
+code units (browser ``String.slice``). No FastAPI or database imports.
 """
 
 import html

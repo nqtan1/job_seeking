@@ -95,11 +95,9 @@ async def owned_org_ids(db: AsyncSession, *, user_id: UUID) -> list[UUID]:
 async def delete_account_rows(
     db: AsyncSession, *, user_id: UUID, org_ids: list[UUID]
 ) -> None:
-    """Hard-delete the user and everything of theirs, in the caller's transaction. Deleting an
-    organization cascades (ON DELETE CASCADE) to every module's rows: documents, profile, jobs,
-    fit analyses, letters and versions, applications and events, coach conversations and
-    messages, ``ai_calls``, ``task_runs``. Queued/finished Procrastinate jobs for those orgs
-    live outside our schema, so they are removed explicitly."""
+    """Hard-delete the user and everything of theirs, in the caller's transaction. Org deletion
+    cascades to every module's rows; queued Procrastinate jobs live outside our schema, so they
+    are removed explicitly."""
     for org_id in org_ids:
         if await db.scalar(text("SELECT to_regclass('procrastinate_jobs')")):
             await db.execute(

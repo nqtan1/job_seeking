@@ -1,4 +1,4 @@
-"""candidates service against the real DB, with FakeLLMGateway and real LocalStorage (P2-03)."""
+"""candidates service against the real DB, with FakeLLMGateway and real LocalStorage."""
 
 import pytest
 from sqlalchemy import func, select

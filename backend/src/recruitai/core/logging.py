@@ -1,13 +1,7 @@
 """Structured JSON logging with request/org/user/task correlation (ARCHITECTURE.md §4.8).
 
-Privacy rules enforced here, not left to discipline (CLAUDE.md, ADR 0014):
-* the exception **message** is never logged (DB errors embed row values, e.g. emails): only
-  the exception type chain, the sqlstate, and stack frames;
-* emails, JWTs and ``Bearer`` tokens are scrubbed from every message and extra field;
-* ``extra=`` fields must be scalars, and keys that usually hold personal data are redacted;
-* only the URL *path* is ever logged (see ``core.middleware``); uvicorn's access log, which
-  prints the query string, is silenced, and HTTP-client loggers that print URLs are pinned
-  to WARNING.
+Privacy (ADR 0014): never the exception message (only type chain, sqlstate, frames); emails, JWTs
+and Bearer tokens scrubbed; ``extra=`` scalars only; URL path only (uvicorn access log silenced).
 """
 
 import json
@@ -68,7 +62,7 @@ def get_context() -> dict[str, str]:
     return dict(_context.get() or {})
 
 
-# ---------------------------------------------------------------- scrubbing
+# scrubbing
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 _JWT = re.compile(r"eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*")
@@ -89,7 +83,7 @@ def scrub(text: str) -> str:
     return _EMAIL.sub("[email]", text)
 
 
-# ---------------------------------------------------------------- formatting
+# formatting
 
 _STANDARD_ATTRS = frozenset(
     {

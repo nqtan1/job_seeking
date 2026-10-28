@@ -1,8 +1,5 @@
-"""``privacy:export_user_data``: build the caller's data-export ZIP in the worker.
-
-Same failure convention as ``letters:render_pdf``: 3 attempts with backoff for anything
-unexpected, then ``task_runs.status='failed'`` with a safe ``error_code`` (never exception
-text, which could contain user data)."""
+"""``privacy:export_user_data``: build the data-export ZIP in the worker. Same failure convention
+as ``letters:render_pdf`` (3 attempts, then a safe ``error_code``)."""
 
 import logging
 from datetime import UTC, datetime
@@ -53,7 +50,7 @@ async def export_user_data(
         await mark_failed(session, run_id, error_code="export_failed")
 
 
-# ---- Scheduled retention sweeps (ARCHITECTURE.md §11.2). Idempotent, so a missed or doubled
+# Scheduled retention sweeps (ARCHITECTURE.md §11.2). Idempotent, so a missed or doubled
 # run is harmless; no task_runs row (nobody polls housekeeping). Failures are logged by type
 # only and retried at the next cron tick.
 

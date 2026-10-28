@@ -1,4 +1,4 @@
-"""jobs/parser.py (P2-08b): rule-based gap filling after LLM extraction."""
+"""jobs/parser.py: rule-based gap filling after LLM extraction."""
 
 from recruitai.modules.jobs.parser import post_process
 from recruitai.modules.jobs.schemas import JobPosition

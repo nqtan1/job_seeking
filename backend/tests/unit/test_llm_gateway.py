@@ -1,4 +1,4 @@
-"""ai/gateway.py (P1-11): the LLMGateway protocol + FakeLLMGateway."""
+"""ai/gateway.py: the LLMGateway protocol + FakeLLMGateway."""
 
 import pytest
 from pydantic import BaseModel

@@ -1,6 +1,5 @@
-"""Job inbox: add a job from pasted text, an uploaded file, or a saved France Travail result;
-plus the cached France Travail search. No FastAPI imports; the LLM, storage and provider
-arrive as arguments."""
+"""Job inbox (pasted text, uploaded files, France Travail results) and the cached search.
+No FastAPI imports; the LLM, storage and provider arrive as arguments."""
 
 import asyncio
 import hashlib
@@ -110,10 +109,8 @@ async def _already(
 async def _already_locked(
     db: AsyncSession, *, org_id: UUID, source_hash: str
 ) -> list[JobPosting]:
-    """The same check, made right before saving and under a lock held until the commit, so
-    two identical adds that ran their model calls side by side (a double click, two tabs)
-    cannot both save: the second finds the first's rows and keeps those. The model call itself
-    is NOT covered (the gateway commits before it), only the save."""
+    """The same check, made right before saving under a lock held until commit, so two identical
+    concurrent adds cannot both save. The model call itself is not covered."""
     await repository.lock_source(db, org_id=org_id, source_hash=source_hash)
     return await _already(db, org_id=org_id, source_hash=source_hash)
 
@@ -150,10 +147,8 @@ MAX_TOTAL_BYTES = 12 * 1024 * 1024
 async def _load_parts(
     db: AsyncSession, storage: Storage, *, org_id: UUID, document_ids: list[UUID]
 ) -> tuple[list[Part], str]:
-    """The model input for a batch of ``jd`` documents, and its fingerprint (the same bytes
-    give the same fingerprint, however often or under whatever name they were uploaded).
-    Ownership and kind are checked per document before any model call; a size cap bounds
-    what one request carries inline."""
+    """The model input for a batch of ``jd`` documents, and its content fingerprint. Ownership and
+    kind are checked before any model call; a size cap bounds the inline payload."""
     parts: list[Part] = []
     digests: set[str] = set()
     total = 0
@@ -181,15 +176,9 @@ async def add_from_file(
     org_id: UUID,
     document_ids: list[UUID],
 ) -> Added:
-    """One or several files, read together as ONE input: one inbox job per distinct offer.
-    The same files added again return their existing jobs without a model call.
-    Several files may be pages/screenshots of one offer or different offers; the model sees
-    them all in the same calls, so a batch costs one index call plus one call per offer, not
-    one pipeline per file.
-
-    Step 1 lists the offers (one short call); step 2 extracts each offer with its own call, in
-    parallel, so 20 offers take about as long as the slowest one, not 20 times as long.
-    All-or-nothing: if any offer fails, nothing is saved and the user retries the batch.
+    """One or several files read together as ONE input: one inbox job per distinct offer. The same
+    files again return the existing jobs without a model call. Step 1 lists the offers, step 2
+    extracts each in parallel. All-or-nothing.
     ponytail: a failed offer could be skipped and reported instead, if retries get annoying."""
     files, source_hash = await _load_parts(
         db, storage, org_id=org_id, document_ids=document_ids

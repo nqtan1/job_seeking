@@ -1,6 +1,5 @@
-"""What goes into the coach's prompt, bounded (design §2). The candidate's identity is left out:
-the coach needs their experience, not their name, and what the model never sees it cannot put
-in a web search. Character caps stand in for tokens (about 4 characters each)."""
+"""What goes into the coach's prompt, bounded (design §2). The candidate's identity is left out so
+it cannot reach a web search. Character caps stand in for tokens (about 4 characters each)."""
 
 from typing import Any
 

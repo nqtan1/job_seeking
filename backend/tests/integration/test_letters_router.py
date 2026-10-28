@@ -1,4 +1,4 @@
-"""/api/v1/letters through real HTTP (P2-18): the editing flow + cross-tenant."""
+"""/api/v1/letters through real HTTP: the editing flow + cross-tenant."""
 
 import httpx
 import pytest

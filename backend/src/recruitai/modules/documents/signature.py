@@ -1,9 +1,5 @@
-"""Signature image processing (ADR 0030). Pure: bytes in, bytes out, no DB or storage.
-
-Any accepted upload (PNG, JPEG, first page of a PDF) becomes ONE transparent RGBA PNG: only the
-ink stays, trimmed to its bounding box, at most ``MAX_SIDE_PX`` on a side. SVG never reaches the
-server (the browser converts it to PNG), so it is rejected like any unknown type.
-"""
+"""Signature image processing (ADR 0030). Pure: bytes in, bytes out.
+Any accepted upload becomes ONE trimmed transparent RGBA PNG; SVG is rejected."""
 
 import io
 import threading
@@ -103,11 +99,9 @@ def _channel_percentile(img: Image.Image, fraction: float) -> tuple[int, ...]:
 
 
 def _remove_paper(img: Image.Image) -> Image.Image:
-    """Opaque scan or photo -> ink with soft alpha. The paper colour (a high percentile per
-    channel) is divided out, lightness becomes alpha, and the ink colour comes from the nearest
-    darkest neighbours so a blue pen stays blue.
-    ponytail: one global paper colour; uneven lighting (a phone photo with a shadow) leaves a
-    faint haze. Upgrade: divide by a heavily blurred background estimate."""
+    """Opaque scan or photo -> ink with soft alpha: paper colour divided out, lightness becomes alpha.
+    ponytail: one global paper colour; uneven lighting leaves a faint haze. Upgrade: blurred
+    background estimate."""
     rgb = img.convert("RGB")
     paper = [max(c, 100) for c in _channel_percentile(rgb, 0.9)]
     bands = [

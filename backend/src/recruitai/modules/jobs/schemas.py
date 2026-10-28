@@ -1,11 +1,5 @@
-"""``JobPosition`` is the LLM output schema for job extraction and the stored
-``job_postings.data``. Moved from the legacy ``domain/jobs/analysis/schema.py`` (extraction
-part only: the candidate/recruiter analysis models are not ported) and
-``domain/jobs/search/schema.py``.
-
-Sources are manual text, an uploaded file, or France Travail. Pasting a URL to auto-fetch is
-v2 (D5), so no input model has a URL field.
-"""
+"""``JobPosition``: the LLM output schema for job extraction and the stored ``job_postings.data``.
+No URL input: auto-fetching a pasted URL is v2 (D5)."""
 
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -105,10 +99,8 @@ class CompensationInfo(BaseModel):
 class JobPosition(BaseModel):
     """Structured information for a job position.
 
-    Lists and the ``badges``/``profile`` fields are required (nullable where a value may be
-    absent), unlike the legacy defaults: with optional fields the small self-hosted model
-    returned an empty skeleton under guided decoding (measured, same as ``CVInformation``).
-    """
+    Lists and ``badges``/``profile`` are required (nullable where absent): with optional fields the
+    small self-hosted model returned an empty skeleton under guided decoding."""
 
     job_id: str | None = None
     title: str = Field(

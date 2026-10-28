@@ -1,4 +1,4 @@
-"""Coach edge cases that need real connections or an abandoned stream (P2-23e)."""
+"""Coach edge cases that need real connections or an abandoned stream."""
 
 import asyncio
 from unittest.mock import ANY

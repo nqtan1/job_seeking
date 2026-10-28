@@ -1,8 +1,5 @@
-"""Procrastinate worker entrypoint: ``uv run procrastinate --app=recruitai.worker.app worker``.
-
-Procrastinate's own schema is separate from Alembic (see core/tasks.py) and must be applied
-once before the worker can run: ``uv run procrastinate --app=recruitai.worker.app schema
---apply``.
+"""Procrastinate worker entrypoint. Its schema is separate from Alembic: apply it with
+``procrastinate --app=recruitai.worker.app schema --apply`` before the first run.
 """
 
 from uuid import UUID
@@ -39,8 +36,7 @@ export_user_data = privacy_tasks.export_user_data
 
 @app.task(name="core.tasks.dummy")
 async def dummy(task_run_id: str, should_fail: bool = False) -> None:
-    """Proves the enqueue -> worker -> task_runs pattern end to end (P1 exit criteria,
-    P1-13b). Not used by any real feature — those tasks land per-module from P2 on."""
+    """Proves enqueue -> worker -> task_runs end to end; used by no real feature."""
     async with session_factory() as session:
         if should_fail:
             await mark_failed(session, UUID(task_run_id), error_code="dummy_failure")

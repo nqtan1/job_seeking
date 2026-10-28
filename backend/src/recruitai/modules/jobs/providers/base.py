@@ -1,6 +1,5 @@
-"""``JobProvider``: the seam between the jobs service and an external job board (ARCHITECTURE.md
-§4.4). Providers are async, take an injected HTTP client, and raise ``AppError`` subclasses
-(``UpstreamUnavailable``, ``NotFound``, ``ValidationFailed``), never raw exceptions."""
+"""``JobProvider``: the seam to an external job board (ARCHITECTURE.md §4.4). Async, injected HTTP
+client, raises ``AppError`` subclasses only."""
 
 from typing import Protocol
 

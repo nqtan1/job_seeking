@@ -1,7 +1,4 @@
-"""Upload validation lives here, once (CLAUDE.md porting guide: legacy copied this per
-feature — don't repeat that). No FastAPI imports (import-linter enforced via the module
-list, same as every other service).
-"""
+"""Upload validation lives here, once. No FastAPI imports."""
 
 import asyncio
 import hashlib
@@ -80,9 +77,8 @@ async def _store(
     mime: str | None = None,
     max_bytes: int = MAX_UPLOAD_BYTES,
 ) -> Document:
-    """Size and content-type checks, then the object, then the row (no commit). ``mime`` is
-    only passed for files the system itself generated (never for uploads): they are trusted,
-    and a ZIP is not in the upload allowlist."""
+    """Size and content-type checks, then the object, then the row (no commit). ``mime`` is passed
+    only for trusted system-generated files."""
     if len(data) > max_bytes:
         raise ValidationFailed("File exceeds the size limit.")
     mime = mime or sniff_mime(data)
@@ -136,9 +132,8 @@ async def store_generated(
     mime: str | None = None,
     max_bytes: int = MAX_UPLOAD_BYTES,
 ) -> Document:
-    """A file the system made (a rendered letter PDF), as a ``documents`` row so retention and
-    export treat it like any other. Same checks as an upload, but ``kind`` may be one only the
-    system produces. The caller commits, together with whatever points at the document."""
+    """A system-made file (e.g. letter PDF) as a ``documents`` row. ``kind`` may be system-only.
+    The caller commits."""
     return await _store(
         db,
         storage,
@@ -229,9 +224,8 @@ async def delete_generated(
     kind: str,
     keep: UUID | None = None,
 ) -> None:
-    """Remove the org's system-generated documents of ``kind`` other than ``keep`` (rows and
-    objects). Call it *after* the replacement is stored: if storing fails, the old file must
-    still be there."""
+    """Remove the org's generated documents of ``kind`` other than ``keep``. Call it *after* the
+    replacement is stored."""
     for key in await repository.delete_of_kind(db, org_id=org_id, kind=kind, keep=keep):
         await storage.delete(key)
 
@@ -262,7 +256,7 @@ async def sweep_older_than(
     return len(documents_to_delete)
 
 
-# --- the user's signature image (ADR 0030): one per org, kind "signature" ---------------
+# The user's signature image (ADR 0030): one per org, kind "signature".
 
 
 async def _signature_out(

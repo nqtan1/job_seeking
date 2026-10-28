@@ -55,7 +55,7 @@ test('a span that no longer matches is dropped, never "fixed" somewhere else', (
   const text = 'Il à fini et il à gagné.'
   const stale = [{ key: 'body.0', start: 0, end: 1, wrong: 'à', right: 'a', reason: '' }]
   const out = applyIssue(text, stale, 0)
-  expect(out.text).toBe(text) // untouched
+  expect(out.text).toBe(text)
   expect(out.issues).toEqual([])
 })
 

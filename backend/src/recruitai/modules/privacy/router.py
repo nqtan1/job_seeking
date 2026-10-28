@@ -50,9 +50,8 @@ async def export_my_data(
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TaskAccepted:
-    """Queue an export of everything the account holds (JSON + the original files, as a
-    ZIP). Poll ``status_url``: when ``done`` it carries a signed ``download_url``; the archive
-    is kept until the next export replaces it (and is swept after 24 h)."""
+    """Queue an export of everything the account holds (JSON + original files, ZIP). Poll
+    ``status_url``; when ``done`` it carries a signed ``download_url``. Kept until replaced or 24 h."""
     task_id = await service.request_export(db, org_id=ctx.org_id, user_id=ctx.user_id)
     return TaskAccepted(task_id=task_id, status_url=f"/api/v1/tasks/{task_id}")
 
@@ -103,9 +102,8 @@ async def sign_out_everywhere(
     current_user: Annotated[CurrentUser, Depends(require_recent_auth)],
     app: Annotated[firebase_admin.App, Depends(get_firebase_app)],
 ) -> Response:
-    """Revoke every refresh token of the account: other devices are signed out at their next
-    token refresh (an already-issued ID token lives up to 1 h; sensitive endpoints refuse it
-    at once)."""
+    """Revoke every refresh token of the account. An issued ID token lives up to 1 h; sensitive
+    endpoints refuse it at once."""
     try:
         await run_in_threadpool(
             firebase_auth.revoke_refresh_tokens, current_user.firebase_uid, app=app

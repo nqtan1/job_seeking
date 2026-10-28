@@ -1,7 +1,5 @@
-"""``fit_analyses`` (ARCHITECTURE.md §4.3): one row per fit report. Re-running an analysis
-inserts a new row (history, and the model/prompt may have changed), so there is no unique
-constraint on ``(candidate_id, job_id)``. ``data`` holds ``FitCheck`` as JSONB; ``score`` and
-``verdict`` are copies for sorting/filtering the job inbox."""
+"""``fit_analyses`` (ARCHITECTURE.md §4.3): one row per fit report; re-running inserts a new row
+(history), so no unique ``(candidate_id, job_id)``. ``score``/``verdict`` copy ``data`` for sorting."""
 
 import uuid
 from datetime import datetime

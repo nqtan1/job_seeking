@@ -53,7 +53,7 @@ data "google_project" "this" {
   depends_on = [google_project_service.api]
 }
 
-# ---- P4-02: network, Cloud SQL, secrets, registry ----
+# network, Cloud SQL, secrets, registry
 
 resource "google_compute_network" "main" {
   name                    = "recruitai"
@@ -166,7 +166,7 @@ resource "google_artifact_registry_repository" "images" {
   depends_on = [google_project_service.api]
 }
 
-# ---- P4-03: files bucket ----
+# files bucket
 
 resource "google_storage_bucket" "files" {
   name                        = "${var.project_id}-files"

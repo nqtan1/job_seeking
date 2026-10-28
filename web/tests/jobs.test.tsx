@@ -132,7 +132,7 @@ test('the same text pasted twice says it is already there; a job is deleted afte
   ).toBeInTheDocument()
 
   await user.click(await screen.findByRole('button', { name: 'Delete Python Dev' }))
-  expect(mocks.DELETE).not.toHaveBeenCalled() // one click only asks
+  expect(mocks.DELETE).not.toHaveBeenCalled()
   expect(screen.getByText(/Your letters and tracked applications stay/)).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Confirm delete' }))
   await waitFor(() =>

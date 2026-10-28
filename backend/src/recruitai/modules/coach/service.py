@@ -1,11 +1,5 @@
-"""The career coach: a persisted, org-scoped conversation, answered turn by turn.
-
-Stateless at the model layer (ADR 0009/0016): every turn sends the system prompt plus the
-stored history, explicitly, through ``LLMGateway.stream``; no server-side agent memory. A
-turn is stored only once the reply is complete (exactly two messages: the user's and the
-coach's), so a failed or abandoned reply leaves the conversation as it was and the user can
-simply send the message again.
-"""
+"""The career coach: a persisted, org-scoped conversation (ADR 0009/0016). Stateless at the model
+layer; a turn is stored only once the reply is complete, so a failed one can just be resent."""
 
 import asyncio
 import hashlib
@@ -60,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 # How much past conversation goes back to the model each turn. Bounded twice (messages and
 # characters) so a very long chat can never overflow a small-context model; older turns are
-# simply left out (the legacy extra "summarize" model call is not ported).
+# simply left out.
 # Saved-jobs list shown when no job is in focus (titles only).
 SAVED_JOBS_MAX = 20
 HISTORY_MAX_MESSAGES = 12
@@ -331,15 +325,8 @@ async def stream_reply(
     replace_last: bool = False,
     language: Language = "en",
 ) -> AsyncGenerator[Event]:
-    """The coach's turn as events ``(name, data)``: ``context``, ``step``, ``token``,
-    ``citations``, ``suggestions``, ``notice``, then ``done``.
-
-    A bounded loop (ADR 0023): the model may call read-only tools up to ``coach_max_steps`` times
-    within ``coach_turn_timeout_s``, then it must answer. Everything that can be refused (bad
-    message, unknown conversation, no profile) and the first model call's errors (quota, provider
-    down) raise before the first event, so the route can still answer with problem+json. The turn
-    is stored only once the reply is complete. ``replace_last`` re-answers the last user message
-    and replaces the last reply (regenerate)."""
+    """The coach's turn as events ``(name, data)``. Bounded tool loop (ADR 0023). Refusals and the
+    first model call's errors raise before the first event (problem+json). ``replace_last`` regenerates."""
     conversation = await get_conversation(
         db, org_id=org_id, conversation_id=conversation_id
     )

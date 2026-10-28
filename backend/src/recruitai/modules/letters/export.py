@@ -1,6 +1,4 @@
-"""Plain-text and email-body versions of a letter, derived from the structured blocks (§10.2).
-No model call and no LaTeX: just the blocks, in reading order. DOCX, LinkedIn-message and
-follow-up-email formats are v2."""
+"""Plain-text and email-body versions of a letter from its blocks (§10.2). No model, no LaTeX."""
 
 from recruitai.modules.letters.schemas import LetterContent
 

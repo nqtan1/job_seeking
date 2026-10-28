@@ -1,13 +1,7 @@
 """``LLMGateway`` (ADR 0009, ARCHITECTURE.md §4.5): the only way any service calls a model.
 
-``Part`` is ours, not the vendor's — ``ai/gemini.py`` (P1-12) translates it into
-``google.genai.types.Part``, ``ai/qwen.py`` (P1-12b) into an OpenAI-style content block.
-Keeping the protocol vendor-neutral is the whole point of the gateway (ADR 0009's "why":
-business code stays independent of the SDK).
-
-Calls are stateless: no conversation history is kept here (ADR 0009, ADR 0016) — a caller
-that needs multi-turn context (coach, P2-23c) passes the full history explicitly every time,
-as part of ``parts``.
+``Part`` is vendor-neutral; each backend translates it. Calls are stateless (ADR 0009, 0016):
+callers needing history pass it in ``parts``.
 """
 
 from collections.abc import AsyncGenerator, Iterator

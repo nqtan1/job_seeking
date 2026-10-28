@@ -1,11 +1,7 @@
-"""Grounding check and quality panel (ARCHITECTURE.md §10.2), deterministic and free: no model
-call, so it can run on every edit. Pure functions over the letter, the Master profile and
-the job.
+"""Grounding check and quality panel (ARCHITECTURE.md §10.2): deterministic, no model call.
 
-Grounding flags what a reader would take as fact but the profile does not support: a known
-technology that is not in the profile, a number that appears nowhere in it, an employer name
-(introduced by "chez", "at"...) the profile and job never mention. These are warnings to highlight, not proof of a lie (the
-profile can be incomplete), and the matching is by exact token, so it errs towards flagging.
+Grounding flags technologies, numbers and employer names the profile does not support. They are
+warnings (the profile can be incomplete); matching is by exact token, so it errs towards flagging.
 """
 
 import json

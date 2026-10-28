@@ -1,11 +1,5 @@
-"""core/app_check.py (P1-17): App Check verification dependency.
-
-"Valid token passes" is mocked, not tested against a real token: firebase-admin's
-app_check.verify_token() always checks a real RS256 signature against Google's live JWKS
-endpoint (confirmed by reading the installed library — no emulator shortcut exists the way
-core/auth.py's ID-token verification has). Producing a genuinely valid token would need a
-real Firebase project and a real attestation provider (reCAPTCHA, Play Integrity); mocking
-verify_token proves our dependency's control flow is correct either way.
+"""core/app_check.py: App Check dependency. The valid-token case mocks ``verify_token``: firebase-admin
+always checks a real signature, with no emulator shortcut.
 """
 
 from unittest.mock import patch

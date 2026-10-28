@@ -1,4 +1,4 @@
-"""letters/export.py (P2-21a): text and email from the same blocks."""
+"""letters/export.py: text and email from the same blocks."""
 
 from recruitai.modules.letters.export import to_email, to_text
 from tests.unit.test_letters_latex import _content

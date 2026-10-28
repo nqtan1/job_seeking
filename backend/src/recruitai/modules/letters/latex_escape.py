@@ -1,10 +1,5 @@
-"""The one place user text becomes LaTeX-safe (ADR 0010).
-
-Every string that reaches a template goes through ``latex_escape``; ``escape_value`` applies it
-recursively to the whole content, so a template author cannot forget it. Escaping is a single
-pass over the characters (a regex substitution), so the braces *introduced* by an escape
-(``\\textbackslash{}``) are never escaped again.
-"""
+"""The one place user text becomes LaTeX-safe (ADR 0010). ``escape_value`` applies ``latex_escape``
+recursively; escaping is a single regex pass, so introduced braces are never escaped again."""
 
 import re
 from typing import Any

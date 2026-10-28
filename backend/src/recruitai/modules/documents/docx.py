@@ -1,9 +1,5 @@
-"""DOCX -> plain text, at the upload boundary only.
-
-A CV or job description in DOCX is converted to text when it is uploaded and the original is
-not kept, so every later reader (extraction, export, the self-hosted model) only ever sees
-``text/plain``: one parser, at the trust boundary, with hard limits. Standard library only.
-"""
+"""DOCX -> plain text at the upload boundary; the original is dropped so later readers only see
+``text/plain``. Standard library only, hard limits."""
 
 import io
 import re

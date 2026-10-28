@@ -1,10 +1,6 @@
-"""Dev-only signed-download route for ``LocalStorage`` (split from ``core/storage.py`` so
-services never import FastAPI). Never mounted when ``ENV=prod`` — see ``main.py``.
+"""Dev-only signed-download route for ``LocalStorage``; not mounted when ``ENV=prod``.
 
-Resolves storage via ``Depends(get_storage_dependency)`` at request time, like any other
-route, rather than closing over one instance at app-construction time — otherwise a test's
-``dependency_overrides`` override would never reach this route, and it would silently keep
-using the process-wide singleton instead of the fake.
+Resolves storage via ``Depends`` so test overrides reach it.
 """
 
 from typing import Annotated

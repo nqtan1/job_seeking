@@ -1,4 +1,4 @@
-"""Account deletion (P2-30): rows, queued jobs, files and the Firebase identity are all gone;
+"""Account deletion: rows, queued jobs, files and the Firebase identity are all gone;
 nobody else's data is touched; a revoked token is refused; a fresh sign-in starts empty."""
 
 import asyncio

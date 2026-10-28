@@ -36,9 +36,8 @@ async def radar_link(
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
-    """Withdraw radar consent from an e-mailed link. POST only (mail scanners prefetch GETs);
-    the token is the only credential and buys exactly this one action. It reads nothing, returns
-    nothing, signs nobody in; the answer does not depend on whether the account still exists."""
+    """Withdraw radar consent from an e-mailed link. POST only (mail scanners prefetch GETs); the
+    token is the only credential. The answer does not depend on whether the account exists."""
     claims = (
         links.verify(settings.radar_link_secret, body.token)
         if settings.radar_link_secret

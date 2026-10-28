@@ -1,7 +1,6 @@
-"""Golden-set eval: live fit analysis on the self-hosted Qwen text model and on Gemini on
-Vertex (P2-13/P2-14). Same opt-in as the other evals: ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q``. Synthetic data only.
+"""Golden-set eval: live fit analysis on self-hosted Qwen and on Gemini (Vertex).
 
-Asserts score *bands* for an obvious match and an obvious mismatch, never exact wording.
+Opt-in: ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q``. Asserts score bands, never exact wording.
 """
 
 import os

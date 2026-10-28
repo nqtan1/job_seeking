@@ -1,4 +1,4 @@
-"""/api/v1/jobs through real HTTP (P2-09): the three entry paths + cross-tenant."""
+"""/api/v1/jobs through real HTTP: the three entry paths + cross-tenant."""
 
 import httpx
 import pytest

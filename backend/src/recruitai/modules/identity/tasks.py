@@ -1,7 +1,5 @@
-"""``identity:send_application_reminders``: the daily digest of follow-ups and interviews.
-
-Scheduled, idempotent per day (an item is due on one day only), no ``task_runs`` row: nobody
-polls housekeeping. Failures are logged by type only; the next day's run simply continues."""
+"""``identity:send_application_reminders``: the daily digest. Idempotent per day, no ``task_runs``
+row; failures are logged by type only."""
 
 from datetime import UTC, datetime
 from uuid import UUID

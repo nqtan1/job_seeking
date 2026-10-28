@@ -1,4 +1,4 @@
-# ---- P4-04: Cloud Run (api, worker pool, migrate job) + service accounts ----
+# Cloud Run (api, worker pool, migrate job) + service accounts
 # Images are pushed by ./deploy.sh build (tags :latest + git sha). Terraform only owns the shape;
 # ignore_changes on the image lets `deploy.sh deploy` roll new revisions without drift.
 

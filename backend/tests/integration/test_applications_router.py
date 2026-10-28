@@ -1,4 +1,4 @@
-"""/api/v1/applications through real HTTP (P2-27) + cross-tenant (P2-27) + edges (P2-28)."""
+"""/api/v1/applications through real HTTP + cross-tenant + edges."""
 
 import httpx
 import pytest

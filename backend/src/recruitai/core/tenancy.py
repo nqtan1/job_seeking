@@ -1,14 +1,8 @@
 """Tenant resolution (ARCHITECTURE.md §4.4, ADR 0008).
 
-``OrgContext`` always comes from the token + the ``X-Org-Id`` header, never from anything in
-the request body. First-login provisioning (a ``users`` row, a personal ``organizations`` row,
-an ``owner`` ``memberships`` row) happens atomically in this same dependency, using
-``INSERT ... ON CONFLICT (firebase_uid)``: Postgres holds a row lock on the conflicting key for
-the duration of the transaction, so two concurrent first requests for the same brand-new user
-serialize on that lock — one of them inserts and creates the org, the other sees the conflict,
-takes no other action, and (once unblocked, after the first commits) can see and reuse the
-org the first one created. Neither path can observe or leave partial state, because the user
-row, the org row and the membership row are all inserted in one transaction with one commit.
+``OrgContext`` comes from the token + ``X-Org-Id``, never the body. First-login provisioning (user,
+personal org, owner membership) is one transaction using ``INSERT ... ON CONFLICT (firebase_uid)``,
+so concurrent first requests serialize on the row lock and share one org.
 """
 
 from collections.abc import Callable, Coroutine
@@ -77,7 +71,7 @@ async def _create_personal_org(session: AsyncSession, user_id: UUID) -> UUID:
 
 
 async def _touch_last_active(session: AsyncSession, user_id: UUID) -> None:
-    """At most one write per hour per user (P2-31's retention sweep reads this column)."""
+    """At most one write per hour per user (the retention sweep reads this column)."""
     await session.execute(
         update(User)
         .where(User.id == user_id)

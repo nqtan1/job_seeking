@@ -1,4 +1,4 @@
-# ---- P4-08: alerts from handbook 04 §5 (email only) ----
+# alerts from handbook 04 §5 (email only)
 # Not yet covered: new-error-type (Error Reporting), queue backlog, DB connections, daily AI spend.
 
 resource "google_monitoring_notification_channel" "email" {

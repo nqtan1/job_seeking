@@ -939,9 +939,8 @@ export interface paths {
         put?: never;
         /**
          * Export My Data
-         * @description Queue an export of everything the account holds (JSON + the original files, as a
-         *     ZIP). Poll ``status_url``: when ``done`` it carries a signed ``download_url``; the archive
-         *     is kept until the next export replaces it (and is swept after 24 h).
+         * @description Queue an export of everything the account holds (JSON + original files, ZIP). Poll
+         *     ``status_url``; when ``done`` it carries a signed ``download_url``. Kept until replaced or 24 h.
          */
         post: operations["export_my_data_api_v1_me_export_post"];
         delete?: never;
@@ -961,9 +960,8 @@ export interface paths {
         put?: never;
         /**
          * Sign Out Everywhere
-         * @description Revoke every refresh token of the account: other devices are signed out at their next
-         *     token refresh (an already-issued ID token lives up to 1 h; sensitive endpoints refuse it
-         *     at once).
+         * @description Revoke every refresh token of the account. An issued ID token lives up to 1 h; sensitive
+         *     endpoints refuse it at once.
          */
         post: operations["sign_out_everywhere_api_v1_me_sessions_revoke_post"];
         delete?: never;
@@ -1244,9 +1242,8 @@ export interface paths {
         put?: never;
         /**
          * Radar Link
-         * @description Withdraw radar consent from an e-mailed link. POST only (mail scanners prefetch GETs);
-         *     the token is the only credential and buys exactly this one action. It reads nothing, returns
-         *     nothing, signs nobody in; the answer does not depend on whether the account still exists.
+         * @description Withdraw radar consent from an e-mailed link. POST only (mail scanners prefetch GETs); the
+         *     token is the only credential. The answer does not depend on whether the account exists.
          */
         post: operations["radar_link_api_public_radar_link_post"];
         delete?: never;
@@ -2162,12 +2159,10 @@ export interface components {
         };
         /**
          * FitCheck
-         * @description Structured fit assessment between a candidate's profile and a job, evaluated through
-         *     a persona-specific lens (corporate / PhD / startup).
+         * @description Structured fit assessment of a candidate profile against a job, through a persona lens.
          *
-         *     Field order matters: guided decoding fills fields in schema order, so the reasoning
-         *     (strengths, gaps, reasons) comes *before* the score and verdict. With the verdict first,
-         *     the small self-hosted model committed to a score with no reasoning behind it.
+         *     Field order matters: guided decoding fills in schema order, so reasoning comes before the
+         *     score and verdict.
          */
         FitCheck: {
             /**
@@ -2416,9 +2411,8 @@ export interface components {
          * JobPosition
          * @description Structured information for a job position.
          *
-         *     Lists and the ``badges``/``profile`` fields are required (nullable where a value may be
-         *     absent), unlike the legacy defaults: with optional fields the small self-hosted model
-         *     returned an empty skeleton under guided decoding (measured, same as ``CVInformation``).
+         *     Lists and ``badges``/``profile`` are required (nullable where absent): with optional fields the
+         *     small self-hosted model returned an empty skeleton under guided decoding.
          */
         JobPosition: {
             /** Job Id */

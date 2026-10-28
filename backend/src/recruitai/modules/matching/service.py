@@ -82,9 +82,8 @@ async def latest_or_analyze(
     company_type: CompanyType = "corporate",
     language: Language = "en",
 ) -> FitAnalysis:
-    """The newest fit analysis of this job, or a fresh one if the user never ran it. A letter
-    argues from it, so it must exist. ponytail: a fit older than the last profile edit is
-    reused as is; re-run the fit to refresh it."""
+    """The newest fit analysis of this job, or a fresh one. ponytail: a fit older than the last
+    profile edit is reused as is; re-run the fit to refresh it."""
     existing = await repository.list_for_org(
         db, org_id=org_id, job_id=job_id, limit=1, offset=0
     )

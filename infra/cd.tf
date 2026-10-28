@@ -1,4 +1,4 @@
-# ---- P4-06/07: GitHub Actions deploys through Workload Identity Federation (no JSON keys) ----
+# GitHub Actions deploys through Workload Identity Federation (no JSON keys)
 
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "github"
@@ -32,7 +32,7 @@ resource "google_service_account_iam_member" "deploy_wif" {
 }
 
 resource "google_project_iam_member" "deploy" {
-  for_each = toset(["roles/run.developer", "roles/firebasehosting.admin"])
+  for_each = toset(["roles/run.developer", "roles/firebasehosting.admin", "roles/serviceusage.serviceUsageViewer"])
   project  = var.project_id
   role     = each.key
   member   = google_service_account.deploy.member

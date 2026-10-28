@@ -1,4 +1,4 @@
-"""core/tenancy.py (P1-07): atomic OrgContext provisioning."""
+"""core/tenancy.py: atomic OrgContext provisioning."""
 
 import asyncio
 from uuid import uuid4

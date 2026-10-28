@@ -1,4 +1,4 @@
-"""LaTeX escaping and template rendering (P2-19, ADR 0010 follow-up)."""
+"""LaTeX escaping and template rendering."""
 
 import re
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""P1-03: behaviour of the `documents` / `ai_calls` constraints (one test per rule)."""
+"""Behaviour of the `documents` / `ai_calls` constraints (one test per rule)."""
 
 import hashlib
 import uuid
@@ -68,7 +68,7 @@ async def _rejects(
             session.add(make(**over))
 
 
-# ------------------------------------------------------------------ documents
+# documents
 
 
 async def test_document_round_trip_ids_defaults_and_bigint_size(
@@ -167,7 +167,7 @@ async def test_deleting_an_org_deletes_only_its_documents_and_queries_filter_by_
     assert (await db_session.execute(select(Document.org_id))).scalars().all() == [b.id]
 
 
-# ------------------------------------------------------------------ ai_calls
+# ai_calls
 
 
 async def test_ai_call_round_trip_and_db_defaults(db_session: AsyncSession):

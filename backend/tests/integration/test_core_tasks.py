@@ -1,13 +1,7 @@
-"""core/tasks.py + worker.py (P1-13b): the real transactional-enqueue helper + task_runs,
-against the shared Alembic-migrated test database — a different (and more representative)
-setup than tests/fixtures/queue.py's isolated spike database, which only proves the
-atomicity primitive in the abstract, on a throwaway schema.
+"""core/tasks.py + worker.py: transactional enqueue + task_runs on the shared migrated test DB.
 
-Uses real commits (via ``db_engine``, not the rollback-wrapped ``db_session``): the worker
-runs on a separate connection and must see committed data. The ``real_org`` fixture cleans
-up after itself for exactly that reason — a leaked, permanently-committed row here would
-otherwise pollute every other test sharing this database (caught the hard way: it broke
-three unrelated tests' row counts before this fixture had a teardown).
+Uses real commits (the worker has its own connection); ``real_org`` cleans up after itself so
+committed rows do not leak into other tests.
 """
 
 from collections.abc import AsyncIterator

@@ -187,8 +187,6 @@ export function useRadarJobIds(): Set<string> {
   )
 }
 
-// ---- background consent (ADR 0024)
-
 export type Consent = components['schemas']['ConsentOut']
 const CONSENT = ['radar-consent']
 

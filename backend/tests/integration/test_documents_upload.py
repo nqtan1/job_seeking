@@ -1,4 +1,4 @@
-"""POST/GET /api/v1/documents (P1-10), through real HTTP."""
+"""POST/GET /api/v1/documents, through real HTTP."""
 
 import httpx
 

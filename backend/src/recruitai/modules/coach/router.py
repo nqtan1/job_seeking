@@ -1,15 +1,5 @@
-"""HTTP only: parse the request, call the service, map the result to a response.
-
-Streaming error convention (RFC 9457 problem+json describes ONE response, which a stream that
-has already started cannot be). So:
-
-* everything that can fail *before the first token* (empty message, unknown conversation, no
-  profile, quota, provider down) is a normal problem+json response, because no bytes have been
-  sent yet: the route pulls the first chunk before it starts the stream;
-* after the first token the stream is a series of ``token`` events and ends with exactly one
-  terminal event: ``done``, or ``error`` carrying a stable ``code`` and a safe ``detail``
-  (never exception text). There is no mid-stream resume in v1 (ADR 0016).
-"""
+"""HTTP only. Errors before the first token are problem+json; after it the stream ends with one
+``done`` or ``error`` event (stable ``code``, never exception text). No mid-stream resume (ADR 0016)."""
 
 import asyncio
 import json

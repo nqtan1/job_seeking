@@ -1,15 +1,8 @@
-"""Real Gemini backend (ADR 0009): Vertex AI in prod, API key in dev. Structured output via
-``google-genai``'s ``response_schema``. Cost protection is structural — the daily quota is
-checked inside ``generate()`` itself, never left to callers to remember (item 14 of the
-2026-09-28 review).
+"""Real Gemini backend (ADR 0009): Vertex AI in prod, API key in dev.
 
-Prompt versioning note: the ``LLMGateway`` protocol (P1-11, matching ADR 0009 exactly) has
-no separate ``prompt_version`` parameter, but ``ai_calls.prompt_version`` is required. This
-backend treats the ``feature`` argument itself as the versioned identifier a prompt module
-exports (ADR 0009's own example: ``PROMPT_VERSION = "cv_extract@3"``) — the full string is
-stored as ``prompt_version``, and the part before ``@`` is stored as the shorter, groupable
-``feature``. No caller exists yet (P2 builds the first one); worth confirming this
-convention against the real prompt modules when they land.
+The daily quota is checked inside ``generate()``, never left to callers. ``feature`` is the
+versioned prompt id (``cv_extract@3``): the full string is ``prompt_version``, the part before
+``@`` is ``feature``.
 """
 
 import asyncio

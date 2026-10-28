@@ -1,4 +1,4 @@
-"""/api/v1/profile through real HTTP (P2-04): walkthrough Flow B + cross-tenant."""
+"""/api/v1/profile through real HTTP: walkthrough Flow B + cross-tenant."""
 
 import httpx
 import pytest

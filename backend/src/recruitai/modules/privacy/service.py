@@ -1,9 +1,5 @@
-"""Data export (GDPR Art. 20) and, later, account deletion and retention sweeps.
-
-Each module exports its own org-scoped rows through its ``service.export_data``; this module
-only assembles them. The ZIP is built completely before anything is stored, and the document
-row is created only after the object is stored: a failure at any point leaves no document, so
-there is never a download link to an incomplete archive."""
+"""Data export (GDPR Art. 20), account deletion and retention sweeps. Each module exports its own
+rows via ``service.export_data``; the document row is created only after the object is stored."""
 
 import json
 import tempfile
@@ -144,14 +140,9 @@ async def delete_account(
     user_id: UUID,
     delete_identity: Callable[[], Awaitable[None]],
 ) -> None:
-    """Delete the account for good, in an order that is safe to retry after a failure:
-
-    1. storage objects first: if the DB step then fails the user still exists and can retry
-       (a row pointing at a missing file is harmless; a file nobody can reach is not);
-    2. database rows and queued jobs, committed at once;
-    3. the sign-in identity last (Firebase): if that fails only an empty identity is left,
-       and retrying deletes it.
-    ``delete_identity`` is passed in so this service never imports Firebase."""
+    """Delete the account for good, in an order that is safe to retry: storage objects, then DB rows
+    and queued jobs (one commit), then the Firebase identity last. ``delete_identity`` is passed in
+    so this service never imports Firebase."""
     org_ids = await identity.owned_org_ids(db, user_id=user_id)
     for org_id in org_ids:
         await storage.delete_prefix(f"orgs/{org_id}/")
@@ -160,7 +151,7 @@ async def delete_account(
     await delete_identity()
 
 
-# ---- Retention sweeps (ARCHITECTURE.md §11.2) -------------------------------------------------
+# Retention sweeps (ARCHITECTURE.md §11.2).
 # Each takes ``now`` so tests drive a fake clock, and each only ever touches rows past its own
 # threshold. None of them touches ``letters``: a draft letter is an ordinary letter, never swept.
 
@@ -205,10 +196,8 @@ async def sweep_inactive_accounts(
     """Warn at 30 and 7 days before the 24-month mark, then delete: **never delete without a
     warning sent first, and never right after one.**
 
-    A warning only counts if it was sent *after* the user's last activity (so coming back
-    cancels everything, with no reset step). Deletion needs the 7-day warning to have been sent
-    at least 7 days ago, so a late sweep (an outage) delays the deletion instead of skipping the
-    warning. A failed email leaves the user unmarked: the next run tries again."""
+    A warning counts only if sent after the user's last activity; deletion needs the 7-day warning
+    at least 7 days old. A failed email leaves the user unmarked: the next run retries."""
     result = {"warned": 0, "deleted": 0}
     users = await identity.inactive_users(
         db, idle_since=now - FIRST_WARNING_AT, limit=SWEEP_BATCH

@@ -1,4 +1,4 @@
-"""Golden-set eval: a live, streamed coach reply (P2-23e). Same opt-in as the other evals:
+"""Golden-set eval: a live, streamed coach reply. Same opt-in as the other evals:
 ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q -k coach``. Synthetic data only.
 
 This is the only check of the real ``stream()`` of both gateways (the unit tests use mocked

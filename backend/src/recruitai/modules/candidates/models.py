@@ -1,9 +1,5 @@
-"""``candidate_profiles`` (ARCHITECTURE.md §4.3): the user's Master profile.
-
-One row per org (``UNIQUE(org_id)``): a B2C org is one person, and extraction upserts that
-row. ``data`` holds ``CVInformation`` as JSONB; bump ``schema_version`` when its shape
-changes (no migration needed). ``name``/``email`` are copies for listing/search.
-"""
+"""``candidate_profiles`` (ARCHITECTURE.md §4.3): one row per org (``UNIQUE(org_id)``).
+``data`` is ``CVInformation`` JSONB; bump ``schema_version`` when its shape changes."""
 
 import uuid
 from datetime import datetime

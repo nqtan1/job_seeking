@@ -1,4 +1,4 @@
-"""GET /api/v1/tasks/{id} (P1-14): reads task_runs, org-scoped."""
+"""GET /api/v1/tasks/{id}: reads task_runs, org-scoped."""
 
 from uuid import UUID
 

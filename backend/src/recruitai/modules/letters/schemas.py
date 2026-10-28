@@ -1,11 +1,6 @@
 """Letter content as structured blocks (ARCHITECTURE.md §10.1), never raw LaTeX.
-
-Two models on purpose: ``LetterDraft`` is the LLM output schema (the five blocks the model
-writes, in writing order); ``LetterContent`` is the stored/rendered letter, which adds the
-blocks code fills in from the profile and job (``header``, ``recipient``, ``signature``) so
-the model can never invent contact details. Templates render ``LetterContent``; changing a
-template never needs the model again.
-"""
+``LetterDraft`` is the LLM output; ``LetterContent`` adds code-filled blocks (header, recipient,
+signature) so the model cannot invent contact details."""
 
 from datetime import datetime
 from typing import Annotated, Literal

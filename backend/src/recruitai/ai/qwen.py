@@ -1,8 +1,5 @@
-"""OpenAI-compatible (Qwen/vLLM) backend (ADR 0015). Dev/self-hosted only — ``Settings``
-rejects provider qwen when ``ENV=prod`` (same guard as ``api_key``, see config.py).
-
-``_sanitize_base_url`` is ported verbatim from
-``infrastructure/agents/agent_config.py`` (not rewritten — CLAUDE.md porting guide).
+"""OpenAI-compatible (Qwen/vLLM) backend (ADR 0015). Dev/self-hosted only: ``Settings`` rejects it
+when ``ENV=prod``.
 """
 
 import base64

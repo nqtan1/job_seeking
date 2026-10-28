@@ -1,5 +1,5 @@
 """Real ``LocalStorage`` pointed at a temp directory — not a hand-rolled fake, so tests
-exercise the exact same code path production dev/test traffic uses (P1-09)."""
+exercise the exact same code path production dev/test traffic uses."""
 
 from pathlib import Path
 

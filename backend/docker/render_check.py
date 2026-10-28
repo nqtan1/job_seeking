@@ -1,10 +1,7 @@
-"""Compiles every letter template, in French and English, with Tectonic, offline (ADR 0010).
+"""Compiles every letter template (fr/en, with a signature) with Tectonic, offline (ADR 0010).
 
-Run inside the worker image with no network: ``docker run --network none <image> python
-/app/docker/render_check.py``. It uses the production code path (``render_tex`` +
-``compile_tex``), every letter WITH a signature picture, so it proves the templates only need the pre-warmed package bundle, that
-hostile text cannot break out of a letter, and that ``--untrusted`` is accepted by the
-installed Tectonic. Exits non-zero on any failure.
+Run in the worker image with ``--network none``. Proves the templates need only the pre-warmed
+bundle, hostile text cannot break out, and ``--untrusted`` is accepted. Exits non-zero on failure.
 """
 
 import asyncio

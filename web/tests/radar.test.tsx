@@ -113,8 +113,8 @@ test('the user sees the radar working: status, last and next run, new matches an
   expect(within(strip).getByText('1 new match')).toBeInTheDocument()
   const card = (await screen.findByText('Dev Python')).closest('li') as HTMLElement
   expect(within(card).getByText('Fit 84%')).toBeInTheDocument()
-  expect(within(card).getByText('FastAPI experience')).toBeInTheDocument() // why it fits
-  expect(within(card).getByText('Kubernetes')).toBeInTheDocument() // what to watch
+  expect(within(card).getByText('FastAPI experience')).toBeInTheDocument()
+  expect(within(card).getByText('Kubernetes')).toBeInTheDocument()
   expect(screen.getByText(/AI use today: 12 of 50/)).toBeInTheDocument()
 })
 

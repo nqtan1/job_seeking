@@ -1,8 +1,4 @@
-"""core/storage.py (P1-09): LocalStorage + the object_key/signature helpers.
-
-GCSStorage is tested with a mocked client (never a real GCS call) in
-tests/unit/test_gcs_storage.py.
-"""
+"""core/storage.py: LocalStorage + the object_key/signature helpers (GCS: test_gcs_storage.py)."""
 
 import time
 from pathlib import Path

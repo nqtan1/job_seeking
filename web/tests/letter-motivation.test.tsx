@@ -36,7 +36,7 @@ beforeEach(() => {
 
 const open = async (user: ReturnType<typeof userEvent.setup>, job = 'j1') => {
   renderWithApp(<LettersPage />, { at: '/letters', path: '/letters' })
-  await screen.findByRole('option', { name: /Dev/ }) // the jobs have loaded
+  await screen.findByRole('option', { name: /Dev/ })
   await user.selectOptions(screen.getByLabelText('Job'), job)
 }
 

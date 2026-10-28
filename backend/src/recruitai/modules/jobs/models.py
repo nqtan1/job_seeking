@@ -1,18 +1,8 @@
 """``job_postings`` and ``job_search_cache`` (ARCHITECTURE.md §4.3).
 
-``job_postings`` is the user's job inbox: ``data`` holds ``JobPosition`` as JSONB (bump
-``schema_version`` when its shape changes, no migration needed). ``external_id`` is the
-provider's id for ``france_travail`` rows; manual and file rows have none, and Postgres treats
-NULLs as distinct in the unique constraint.
-
-``source_hash`` fingerprints the INPUT of a manual or file add (ADR 0025): one pasted text, or
-one set of uploaded files. A file may hold several offers, so several rows share a hash, which
-is why the index is not unique. Adding an input the org already has returns those rows and
-skips the model call.
-
-``job_search_cache`` holds public provider responses keyed by the query, shared across orgs
-and deliberately without ``org_id``: nothing personal is stored in it, and a per-org cache
-would defeat the point (France Travail rate limits). Rows expire after 24 h.
+``external_id`` is the provider id (NULLs are distinct in the unique constraint). ``source_hash``
+fingerprints a manual/file add (ADR 0025); one file may hold several offers, so it is not unique.
+``job_search_cache`` is shared across orgs and has no ``org_id`` on purpose: public data only.
 """
 
 import uuid
@@ -65,7 +55,7 @@ class JobPosting(Base):
 
 class JobSearchCache(Base):
     __tablename__ = "job_search_cache"
-    # The retention sweep (P2-31) deletes by expiry.
+    # The retention sweep deletes by expiry.
     __table_args__ = (Index("ix_job_search_cache_expires_at", "expires_at"),)
 
     key: Mapped[str] = mapped_column(String, primary_key=True)

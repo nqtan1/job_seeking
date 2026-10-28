@@ -1,7 +1,6 @@
 """Pure-ASGI request-context middleware: request id, ``X-Request-Id``, one access-log line.
 
-Pure ASGI (not ``BaseHTTPMiddleware``) so streaming responses (SSE, later) and contextvars
-behave. Logs the URL **path only**: never the query string, headers, or body.
+Pure ASGI so streaming (SSE) works. Logs the URL path only, never query, headers or body.
 """
 
 import logging

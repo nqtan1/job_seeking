@@ -1,9 +1,6 @@
-"""Golden-set eval (ARCHITECTURE §4.5): live CV extraction against the owner's self-hosted
-Qwen servers (text model + vision model).
+"""Golden-set eval (ARCHITECTURE §4.5): live CV extraction on the self-hosted Qwen servers.
 
-Opt-in: ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q`` (``-s`` prints the per-call stats used
-for the model comparison). Synthetic fixtures only (``tests/fixtures/live``). Config comes
-from ``Settings`` (``.env``); nothing from it is printed. Costs one real model call per case.
+Opt-in: ``RUN_LIVE_LLM=1 uv run pytest -m live -s -q``. Synthetic fixtures only; one real call per case.
 """
 
 import io

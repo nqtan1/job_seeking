@@ -26,12 +26,12 @@ function Harness({
 test('the list starts with All France, then Île-de-France with Paris first, then the other regions', async () => {
   const user = userEvent.setup()
   render(<Harness spy={vi.fn()} />)
-  expect(screen.getByRole('button', { name: /All France/ })).toBeInTheDocument() // the trigger says so too
+  expect(screen.getByRole('button', { name: /All France/ })).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /All France/ }))
 
   const all = screen.getAllByRole('button', { name: 'All France' })
-  expect(all[all.length - 1]).toHaveAttribute('aria-pressed', 'true') // the first row of the list
+  expect(all[all.length - 1]).toHaveAttribute('aria-pressed', 'true')
   const groups = screen.getAllByRole('group').filter((g) => g.tagName === 'FIELDSET')
   expect(groups[0]).toHaveAccessibleName(/Île-de-France/)
   expect(within(groups[0]).getAllByRole('checkbox')[0]).toHaveAccessibleName('Paris (75)')

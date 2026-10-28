@@ -95,7 +95,7 @@ export const useRender = (id: string) =>
 /**
  * Signed link to the rendered PDF. The server serves it inline under the letter's professional
  * name, so the iframe's own viewer (print, save) uses that name. Needs frame-src for the
- * storage origin in prod (P4-05).
+ * storage origin in prod.
  */
 export function usePdfPreview(letterId: string, pdfDocumentId: string | null) {
   const link = useQuery({

@@ -1,9 +1,5 @@
 """``documents`` (ARCHITECTURE.md §4.3): one row per stored file; the bytes live in ``Storage``.
-
-Tenant-owned: ``org_id`` + ``(org_id, created_at)`` index. ``storage_key`` is server-generated
-(``orgs/{org_id}/{kind}/{uuid}``, never from a filename) and unique, so two rows can never
-point at, and later delete, the same object.
-"""
+``storage_key`` is server-generated and unique, so two rows never share an object."""
 
 import uuid
 from datetime import datetime

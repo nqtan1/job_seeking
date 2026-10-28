@@ -1,4 +1,4 @@
-"""Retention sweeps (P2-31) on a fake clock: each touches only rows past its own threshold,
+"""Retention sweeps on a fake clock: each touches only rows past its own threshold,
 the inactivity warning always comes first, and a draft letter is never swept."""
 
 from datetime import UTC, datetime, timedelta

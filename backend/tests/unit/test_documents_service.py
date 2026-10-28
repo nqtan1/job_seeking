@@ -1,4 +1,4 @@
-"""modules/documents/service.py (P1-10): upload validation, centralized once."""
+"""modules/documents/service.py: upload validation, centralized once."""
 
 from uuid import uuid4
 

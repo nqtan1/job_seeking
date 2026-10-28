@@ -1,4 +1,4 @@
-"""Data export (P2-29): the ZIP holds exactly the caller's data, from every module."""
+"""Data export: the ZIP holds exactly the caller's data, from every module."""
 
 import io
 import json

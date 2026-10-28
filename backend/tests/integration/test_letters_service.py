@@ -1,4 +1,4 @@
-"""letters service against the real DB with FakeLLMGateway (P2-17)."""
+"""letters service against the real DB with FakeLLMGateway."""
 
 from datetime import UTC, datetime
 

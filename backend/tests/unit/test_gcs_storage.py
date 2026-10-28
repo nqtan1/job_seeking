@@ -1,4 +1,4 @@
-"""GCSStorage (P1-09): a mocked google-cloud-storage client — never a real GCS call."""
+"""GCSStorage: a mocked google-cloud-storage client — never a real GCS call."""
 
 from unittest.mock import MagicMock
 

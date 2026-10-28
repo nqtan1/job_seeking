@@ -1,4 +1,4 @@
-"""letters/tasks.py pieces that need no database (P2-20): the forbidden-input check and the
+"""letters/tasks.py pieces that need no database: the forbidden-input check and the
 Tectonic subprocess wrapper (driven by tiny fake `tectonic` scripts, never the real binary)."""
 
 import io

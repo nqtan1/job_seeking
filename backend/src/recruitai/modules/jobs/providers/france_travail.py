@@ -1,12 +1,5 @@
-"""France Travail (Offres d'emploi v2) provider, ported from the legacy
-``infrastructure/jobs/search/providers/france_travail.py``.
-
-Changes from the legacy copy: async ``httpx`` instead of ``requests``; the OAuth token is kept
-in memory (the legacy wrote it to the temp dir); every failure is an ``AppError`` with a fixed
-message (no exception text, no logged query parameters); job URLs are not accepted (D5, URL
-fetching is v2); the old ``_map_to_job_position`` is not ported, ``service.to_job_position``
-builds the current ``JobPosition`` from the standardized result instead.
-"""
+"""France Travail (Offres d'emploi v2) provider. Token kept in memory; every failure is an
+``AppError`` with a fixed message (no exception text, no logged query parameters)."""
 
 import asyncio
 import re

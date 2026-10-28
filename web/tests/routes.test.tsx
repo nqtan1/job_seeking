@@ -54,7 +54,7 @@ test('account menu: shows the email, opens settings, signs out', async () => {
   expect(screen.getByText('a@b.co', { selector: 'p' })).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Dark' }))
   expect(document.documentElement).toHaveClass('dark')
-  expect(localStorage.getItem('theme')).toBe('dark') // the choice persists
+  expect(localStorage.getItem('theme')).toBe('dark')
   await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
   expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
   expect(screen.queryByRole('menu')).not.toBeInTheDocument()

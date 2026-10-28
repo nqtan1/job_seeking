@@ -1,6 +1,5 @@
-"""Letters: generate from the Master profile + a job, change one block without touching the
-rest, keep every change as a version. No FastAPI imports; the LLM arrives as an argument and
-other modules are reached only through their services."""
+"""Letters: generate from the profile + a job, edit one block, keep every change as a version.
+No FastAPI imports; other modules are reached only through their services."""
 
 import unicodedata
 from datetime import UTC, datetime
@@ -570,9 +569,8 @@ RENDER_TASK = (
 
 
 async def request_render(db: AsyncSession, *, org_id: UUID, letter_id: UUID) -> UUID:
-    """Mark the letter 'queued' and enqueue its PDF render in ONE transaction (ADR 0017):
-    either both happen or neither does, so a letter is never 'queued' with no job behind it.
-    Asking again is fine (it re-renders, and also unsticks a render that never finished)."""
+    """Mark the letter 'queued' and enqueue its PDF render in ONE transaction (ADR 0017).
+    Asking again re-renders (and unsticks a render that never finished)."""
     letter = await _locked(db, org_id=org_id, letter_id=letter_id)
     content = letter.content
     # A letter the user writes themself starts with empty paragraphs: not a PDF yet.
@@ -632,9 +630,8 @@ async def assist(
     selection: str,
     action: AssistAction,
 ) -> str:
-    """A rewrite of ``selection`` for the user to accept or not. Never saves anything: the
-    client applies it through ``edit_block``. The selection must really be in the named block,
-    so this can't be used as a free general-purpose model call."""
+    """A rewrite of ``selection`` for the user to accept. Saves nothing. The selection must be in
+    the named block, so this is not a free general-purpose model call."""
     letter = await get_letter(db, org_id=org_id, letter_id=letter_id)
     block_text = (
         "\n".join(letter.content["body"]) if block == "body" else letter.content[block]
@@ -666,9 +663,8 @@ async def check_spelling(
     letter_id: UUID,
     items: list[SpellItem],
 ) -> list[SpellIssue]:
-    """Verified spelling/grammar corrections for the given paragraphs (the user's current,
-    possibly unsaved text). Saves nothing: the client applies the ones the user accepts, then
-    saves through ``edit_block``. The letter gives the language and proves the org owns it."""
+    """Verified spelling/grammar corrections for the given (possibly unsaved) paragraphs. Saves
+    nothing; the letter gives the language and proves the org owns it."""
     letter = await get_letter(db, org_id=org_id, letter_id=letter_id)
     paragraphs = "\n".join(
         f'<paragraph key="{i.key}">\n{unicodedata.normalize("NFC", i.text)}\n</paragraph>'

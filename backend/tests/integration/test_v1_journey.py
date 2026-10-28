@@ -1,4 +1,4 @@
-"""The whole v1 individual journey (ARCHITECTURE.md §8.1) through /api/v1 (P2-33).
+"""The whole v1 individual journey (ARCHITECTURE.md §8.1) through /api/v1.
 
 Real Postgres (committed), the real Firebase emulator, the real worker; only the three
 external things are fake: the language model, the job board, and the PDF compiler (the real

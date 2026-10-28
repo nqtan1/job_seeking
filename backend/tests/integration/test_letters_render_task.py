@@ -1,4 +1,4 @@
-"""letters:render_pdf against the real DB, storage and worker, with a fake compiler (P2-20).
+"""letters:render_pdf against the real DB, storage and worker, with a fake compiler.
 The real Tectonic binary is exercised separately, inside the worker image (CI)."""
 
 from collections.abc import AsyncIterator

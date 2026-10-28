@@ -1,11 +1,7 @@
-"""One place that turns every failure into RFC 9457 problem+json.
+"""Turns every failure into RFC 9457 problem+json.
 
-Nothing here may echo exception text, validation input, or provider messages: the body is
-built only from developer-authored ``AppError.detail``, the HTTP status phrase, and the
-field location + error *type* of validation failures. Unhandled errors are logged (the
-formatter strips the exception message) and answered with a generic 500. Every response
-carries the request id (body ``request_id`` + ``X-Request-Id`` header) so a user-reported
-error can be traced in the logs.
+Never echoes exception text, validation input or provider messages. Every response carries the
+request id.
 """
 
 import logging

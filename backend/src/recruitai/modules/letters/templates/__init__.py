@@ -1,12 +1,8 @@
-"""Render ``LetterContent`` to LaTeX with the Jinja templates next to this file (ADR 0010).
+"""Render ``LetterContent`` to LaTeX with the Jinja templates beside this file (ADR 0010).
 
-Jinja delimiters are ``\\VAR{..}`` / ``\\BLOCK{..}`` so template braces never clash with
-LaTeX. All text is escaped in Python *before* it reaches a template (``escape_value``), so a
-template can't forget to. Templates only use packages the worker image pre-warms
-(``geometry``, ``graphicx``, ``fontspec`` with the bundled Latin Modern OpenType fonts, ``babel`` in French
-and English): Tectonic is offline at runtime, and ``docker/sample.tex`` pre-warms exactly this
-set. Fonts via ``fontspec`` (not T1 + ``inputenc``) because Tectonic is XeTeX: it reads UTF-8
-directly, so ``œ``, ``’``, ``«»`` and ``€`` need a Unicode font. The ``latex_override`` mode skips this module entirely (the caller's job).
+Delimiters are ``\\VAR{..}`` / ``\\BLOCK{..}``; text is escaped in Python before reaching a template.
+Only packages the worker image pre-warms are used (Tectonic is offline; see ``docker/sample.tex``);
+``fontspec`` because Tectonic is XeTeX. ``latex_override`` skips this module.
 """
 
 from datetime import date

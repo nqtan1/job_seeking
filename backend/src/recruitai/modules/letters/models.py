@@ -1,12 +1,7 @@
 """``letters`` and ``letter_versions`` (ARCHITECTURE.md §4.3, §10.3).
 
-``content`` holds ``LetterContent`` as JSONB (bump ``schema_version`` when its shape changes).
-A letter outlives its job posting (``job_id`` is ``SET NULL``): it is the user's own work.
-There is deliberately no expiry column or sweep hook: a draft is an ordinary letter, only
-temporary preview PDFs expire (GCS ``tmp/`` lifecycle rule, §4.7/§11.2).
-
-``letter_versions`` is the history of ``content`` (PK ``(letter_id, n)``). ``org_id`` is
-repeated on it so every query, and the privacy deletion, can filter by tenant directly.
+``content`` is ``LetterContent`` JSONB. A letter outlives its job (``SET NULL``) and has no expiry;
+only temporary preview PDFs expire. ``letter_versions`` repeats ``org_id`` for tenant filtering.
 """
 
 import uuid

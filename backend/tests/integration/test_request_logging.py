@@ -1,4 +1,4 @@
-"""P1-05: request ids, the access log, and the guarantee that no query string, body, or
+"""Request ids, the access log, and the guarantee that no query string, body, or
 personal data reaches the logs."""
 
 import asyncio
@@ -81,7 +81,7 @@ def _access(lines: list[dict]) -> list[dict]:
     return [r for r in lines if r.get("event") == "http_request"]
 
 
-# ------------------------------------------------------------------ request id and access log
+# request id and access log
 
 
 async def test_request_ids_are_generated_unique_honoured_when_valid_and_replaced_when_not(
@@ -156,7 +156,7 @@ async def test_nothing_private_ever_reaches_the_logs(client, capsys):
     assert '"path": "/t/ok"' in out and "/users/[email]/cv" in out
 
 
-# ------------------------------------------------------------------ correlation
+# correlation
 
 
 async def test_ids_bound_in_async_and_sync_routes_reach_the_access_line_without_mixing(
@@ -215,7 +215,7 @@ async def test_unhandled_error_is_traceable_keeps_bound_ids_and_leaks_nothing(
     )
 
 
-# ------------------------------------------------------------------ the real server
+# the real server
 
 
 def _free_port() -> int:

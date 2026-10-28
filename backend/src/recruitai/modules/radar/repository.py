@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.modules.radar.models import Consent, RadarResult, RadarRun, RadarSearch
 
-# ---- searches
+# searches
 
 
 async def count_searches(session: AsyncSession, *, org_id: UUID) -> int:
@@ -71,7 +71,7 @@ async def delete_search(session: AsyncSession, search: RadarSearch) -> None:
     await session.flush()
 
 
-# ---- results (also the "seen" ledger)
+# results (also the "seen" ledger)
 
 
 async def seen_external_ids(
@@ -180,7 +180,7 @@ async def scored_since(
     ).scalar_one()
 
 
-# ---- runs
+# runs
 
 
 async def start_run(
@@ -406,7 +406,7 @@ async def searches_by_ids(
     return list(rows.scalars())
 
 
-# ---- consent (append-only; ADR 0024)
+# Consent (append-only; ADR 0024)
 
 
 async def add_consent(

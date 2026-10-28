@@ -32,7 +32,7 @@ vi.mock('@/features/coach/api', () => ({
       onEvent('token', { text: 'Hello **' })
       onEvent('token', { text: 'there**' })
       onEvent('notice', { code: 'web_unavailable' })
-      await new Promise<void>((resolve) => (mocks.finish = resolve)) // keep the stream open
+      await new Promise<void>((resolve) => (mocks.finish = resolve))
     },
   ),
 }))

@@ -1,4 +1,4 @@
-"""GET /api/v1/me (P1-08): the auth+tenancy pipeline end to end, walkthrough §3 Flow A."""
+"""GET /api/v1/me: the auth+tenancy pipeline end to end, walkthrough §3 Flow A."""
 
 import httpx
 

@@ -32,7 +32,7 @@ beforeEach(() => {
     if (url === '/api/v1/letters/{letter_id}') return { data: letter }
     if (url === '/api/v1/tasks/{task_id}') return { data: { status: 'done' } }
     if (url.endsWith('/versions')) return { data: [] }
-    return { data: { download_url: '/pdf/l1.pdf' } } // PDF link
+    return { data: { download_url: '/pdf/l1.pdf' } }
   })
 })
 

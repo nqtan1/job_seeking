@@ -1,4 +1,4 @@
-"""_sanitize_base_url (P1-12b): ported verbatim from
+"""_sanitize_base_url: ported verbatim from
 infrastructure/agents/agent_config.py — same cases the legacy code handled."""
 
 import pytest

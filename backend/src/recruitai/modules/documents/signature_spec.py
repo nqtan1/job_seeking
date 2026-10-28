@@ -1,11 +1,5 @@
-"""The signature contract shared by the upload endpoints, the letter renderer and the web app:
-the physical limits of the signature block on a letter and the arithmetic that fits an image
-into them. Pure: no I/O, no Pillow.
-
-A signature sits in a block above the printed name. It is judged by its PRINTED size in mm, not
-by pixels: too small to read, too big for the block (it would collide with the text above or run
-past the margin), or too few pixels for that size (blurry on paper).
-"""
+"""The signature contract shared by upload endpoints, letter renderer and web app: the printed-size
+limits (mm) of the signature block and the arithmetic that fits an image into them. Pure."""
 
 from typing import Literal
 
@@ -31,10 +25,8 @@ MM_PER_INCH = 25.4
 
 
 def fit_mm(aspect: float, width_mm: float) -> tuple[float, float]:
-    """The size the renderer really prints for a requested width: the width is clamped to
-    ``[MIN_WIDTH_MM, MAX_WIDTH_MM]``, then shrunk (aspect kept) until the height fits
-    ``MAX_HEIGHT_MM``. ``aspect`` is width / height of the stored image. This is the automatic
-    fix applied at render time, so a PDF can never overflow its block."""
+    """The size the renderer prints for a requested width: clamped to ``[MIN_WIDTH_MM, MAX_WIDTH_MM]``,
+    then shrunk (aspect kept) until the height fits ``MAX_HEIGHT_MM``. ``aspect`` = width / height."""
     width = min(max(width_mm, MIN_WIDTH_MM), MAX_WIDTH_MM)
     if width / aspect > MAX_HEIGHT_MM:
         width = MAX_HEIGHT_MM * aspect

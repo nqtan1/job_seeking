@@ -1,7 +1,4 @@
-"""GET /api/v1/tasks/{id}: reads the task_runs row, never Procrastinate internals directly.
-Split from core/tasks.py (FastAPI-dependent) the same way error_handlers.py/storage_routes.py
-are split from their framework-free counterparts.
-"""
+"""GET /api/v1/tasks/{id}: reads the task_runs row, never Procrastinate internals."""
 
 from typing import Annotated
 from uuid import UUID

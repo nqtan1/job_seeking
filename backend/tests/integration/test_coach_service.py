@@ -1,4 +1,4 @@
-"""coach service against the real DB with FakeLLMGateway streams (P2-23c)."""
+"""coach service against the real DB with FakeLLMGateway streams."""
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -1,12 +1,8 @@
-"""Admin overrides of the model each AI feature uses (ADR 0022, stage B).
+"""Admin overrides of the model per AI feature (ADR 0022, stage B).
 
-``config.yaml`` stays the default; a row in ``ai_settings`` replaces one feature's provider and
-model without a deploy. Only models on an allowlist are accepted and ``ENV=prod`` stays Vertex
-only. Every change is audited (who, old → new) and reversible by removing the override. Prompts
-are not touched here: they stay in code.
-
-Gateways read the effective settings through a short in-process cache (``TTL_S``), so another
-instance picks a change up within that time. No FastAPI imports."""
+``config.yaml`` is the default; an ``ai_settings`` row replaces one feature's provider/model, only
+from an allowlist, and prod stays Vertex. Audited, cached for ``TTL_S``. No FastAPI imports.
+"""
 
 import logging
 import time

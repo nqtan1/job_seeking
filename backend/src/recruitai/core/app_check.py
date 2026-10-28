@@ -1,14 +1,6 @@
-"""Firebase App Check verification (ARCHITECTURE.md §4.5). Ready to use on AI-cost-relevant
-endpoints as they land in P2 — not wired to every route yet, that's a per-endpoint decision.
+"""Firebase App Check verification (ARCHITECTURE.md §4.5), applied per AI-cost endpoint.
 
-Unlike ``core/auth.py``'s ID tokens, App Check has no emulator-mode shortcut in
-firebase-admin: ``app_check.verify_token()`` always performs a real RS256 signature check
-against Google's live JWKS endpoint (confirmed by reading the installed library — there is
-no ``is_emulated()`` branch the way ``_token_gen.py`` has for ID tokens). There is no way to
-produce a token that passes verification without a real Firebase project and a real
-attestation provider (reCAPTCHA, Play Integrity, etc.) — the "valid token" test mocks
-``app_check.verify_token`` itself, the same way P1-06 mocks ``ExpiredIdTokenError`` for a
-case the Auth emulator can't produce.
+firebase-admin has no emulator shortcut here, so tests mock ``app_check.verify_token``.
 """
 
 from typing import Annotated

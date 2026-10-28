@@ -1,4 +1,4 @@
-"""/api/v1/coach through real HTTP incl. the SSE stream (P2-23d)."""
+"""/api/v1/coach through real HTTP incl. the SSE stream."""
 
 import json
 
