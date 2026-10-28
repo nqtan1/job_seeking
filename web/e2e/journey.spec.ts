@@ -1,10 +1,13 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
 
 // Synthetic fixtures only.
 const FIXTURES = path.resolve(import.meta.dirname, '../../backend/tests/fixtures')
 const JD = fs.readFileSync(path.join(FIXTURES, 'live/jd_python_paris.txt'), 'utf8')
+
+const nav = (page: Page, name: string) =>
+  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
 
 test('v1 journey: sign up → profile → job → fit → letter → tracker → export → delete account', async ({
   page,
@@ -24,7 +27,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page).toHaveURL(/\/jobs/) // back to the page that was asked for
 
   // Profile: upload a CV, review, save.
-  await page.getByRole('link', { name: 'Profile' }).click()
+  await nav(page, 'Profile').click()
   await page.getByLabel('CV file').setInputFiles(path.join(FIXTURES, 'cv_sample.pdf'))
   await page.getByRole('button', { name: 'Extract profile' }).click()
   await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue('', { timeout: 120_000 })
@@ -39,7 +42,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page.getByRole('region', { name: 'Recent chats' })).toContainText('Review my CV')
 
   // Jobs: paste a description.
-  await page.getByRole('link', { name: 'Jobs' }).click()
+  await nav(page, 'Jobs').click()
   await page.getByLabel('Job description text').fill(JD)
   await page.getByRole('button', { name: 'Add job' }).click()
   await expect(page.getByText(/Job added:/)).toBeVisible({ timeout: 120_000 })
@@ -69,7 +72,8 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   }
 
   // Tracker: add, move, see the timeline.
-  await page.getByRole('link', { name: 'Tracker' }).click()
+  await nav(page, 'Tracker').click()
+  await page.getByRole('button', { name: 'Track an application' }).first().click()
   await page.getByLabel('Company').fill('Fictiva Logiciels')
   await page.getByLabel('Status').selectOption('applied')
   await page.getByRole('button', { name: 'Add application' }).click()
@@ -77,12 +81,15 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(
     page.getByRole('region', { name: /Interview/ }).getByText('Fictiva Logiciels'),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Details' }).click()
+  await page.getByRole('button', { name: 'Open Fictiva Logiciels' }).click()
   await page.getByLabel('Contact').fill('Marie Curie')
-  await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await expect(page.getByText('Contact: Marie Curie')).toBeVisible()
+  await page.getByRole('button', { name: 'Save', exact: true }).click() // saves and closes the drawer
+  await page.getByRole('button', { name: 'Open Fictiva Logiciels' }).click()
+  await expect(page.getByLabel('Contact')).toHaveValue('Marie Curie')
   await page.getByRole('button', { name: 'Timeline' }).click()
   await expect(page.getByRole('list', { name: 'Timeline' })).toContainText('Interview')
+
+  await page.keyboard.press('Escape') // close the drawer
 
   // Settings: export (worker task), then delete the account.
   await page.getByRole('button', { name: 'Account menu' }).click()

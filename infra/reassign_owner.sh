@@ -3,13 +3,14 @@
 # IAM migrator. Runs a throwaway Cloud Run job in the VPC with the API image. Usage: ./reassign_owner.sh [project]
 set -euo pipefail
 P=${1:-dev-recruitai}; R=europe-west9
-IMG=$R-docker.pkg.dev/$P/recruitai/api:latest
+IMG=${IMG:-$R-docker.pkg.dev/$P/recruitai/api:latest}
 PY=$(cat <<'PYEOF' | base64 -w0
 import os, psycopg
 u = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
 m = '"recruitai-migrate@%s.iam"' % os.environ["P"]
 with psycopg.connect(u, autocommit=True) as c:
     c.execute(f"GRANT {m} TO CURRENT_USER")
+    c.execute(f"GRANT CREATE, USAGE ON SCHEMA public TO {m}")
     c.execute(f"REASSIGN OWNED BY CURRENT_USER TO {m}")
     print("owners:", c.execute("select distinct tableowner from pg_tables where schemaname='public'").fetchall())
 PYEOF

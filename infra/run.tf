@@ -286,7 +286,8 @@ resource "google_cloud_run_v2_job" "migrate" {
         # existing schema errors, which is fine; real DB failures already stopped `alembic` before it.
         command = ["sh", "-c", "alembic upgrade head && (procrastinate --app=recruitai.worker.app schema --apply || true) && python -m recruitai.core.db_grants"]
         dynamic "env" {
-          for_each = local.plain_env
+          # No e-mail here: the migrate SA cannot read BREVO_API_KEY, and Settings rejects brevo without it.
+          for_each = { for k, v in local.plain_env : k => v if k != "EMAIL_BACKEND" }
           content {
             name  = env.key
             value = env.value
