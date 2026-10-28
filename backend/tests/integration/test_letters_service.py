@@ -370,7 +370,7 @@ async def test_own_words_mode_keeps_their_text_and_only_gives_ideas(
 
     letter = await service.generate(
         db_session, fake_llm, org_id=org.id, job_id=job.id, mode="own_words",
-        length="standard", motivation=mine, now=NOW,
+        length="standard", motivation=mine, now=NOW, language="fr",
     )  # fmt: skip
 
     c = letter.content

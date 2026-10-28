@@ -1,5 +1,8 @@
+import { useT } from '@/i18n'
+
 /** A 0-100 score as a ring. The number stays in the DOM text so it reads as "72/100". */
 export function ScoreRing({ score, size = 96 }: { score: number; size?: number }) {
+  const t = useT()
   const value = Math.max(0, Math.min(100, Math.round(score)))
   const r = 42
   const c = 2 * Math.PI * r
@@ -7,7 +10,7 @@ export function ScoreRing({ score, size = 96 }: { score: number; size?: number }
   return (
     <div
       role="img"
-      aria-label={`Score ${value} out of 100`}
+      aria-label={t('ui.score_aria', { value })}
       className="relative shrink-0"
       style={{ width: size, height: size }}
     >

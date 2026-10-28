@@ -1,5 +1,6 @@
 import { ChevronDown, X } from 'lucide-react'
 import { useState } from 'react'
+import { useT } from '@/i18n'
 import { Input } from '@/components/ui/input'
 import { filterRegions, placeLabel, placesLabel } from '@/lib/regions'
 import { cn } from 'cn'
@@ -19,12 +20,13 @@ const split = (value: string | null | undefined) =>
 export function PlacePicker({
   value,
   onChange,
-  label = 'Places',
+  label,
 }: {
   value: string | null | undefined
   onChange: (value: string | null) => void
   label?: string
 }) {
+  const t = useT()
   const codes = split(value)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -34,14 +36,14 @@ export function PlacePicker({
   const regions = filterRegions(query)
 
   return (
-    <div role="group" aria-label={label} className="space-y-2">
+    <div role="group" aria-label={label ?? t('ui.places')} className="space-y-2">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
         className="flex w-full max-w-md items-center justify-between rounded-lg border bg-card px-3 py-2 text-left text-sm"
       >
-        <span className="truncate">{placesLabel(value)}</span>
+        <span className="truncate">{codes.length ? placesLabel(value) : t('ui.all_france')}</span>
         <ChevronDown className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
       {codes.length > 0 && (
@@ -54,7 +56,7 @@ export function PlacePicker({
               {placeLabel(c)}
               <button
                 type="button"
-                aria-label={`Remove ${placeLabel(c)}`}
+                aria-label={t('ui.remove', { name: placeLabel(c) })}
                 onClick={() => toggle(c)}
               >
                 <X className="size-3" />
@@ -66,8 +68,8 @@ export function PlacePicker({
       {open && (
         <div className="max-h-80 max-w-md space-y-3 overflow-y-auto rounded-lg border bg-popover p-3 shadow-md">
           <Input
-            aria-label="Search places"
-            placeholder="Search a city, department or region"
+            aria-label={t('ui.search_places')}
+            placeholder={t('ui.search_places_ph')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -80,7 +82,7 @@ export function PlacePicker({
               codes.length === 0 ? 'border-primary bg-primary text-primary-foreground' : 'bg-card',
             )}
           >
-            All France
+            {t('ui.all_france')}
           </button>
           {regions.map((r) => {
             const all = r.departments.map((x) => x.code)
@@ -92,12 +94,12 @@ export function PlacePicker({
                   <button
                     type="button"
                     className="font-normal underline"
-                    aria-label={`${allOn ? 'Clear' : 'Select all in'} ${r.name}`}
+                    aria-label={t(allOn ? 'ui.clear_in' : 'ui.select_all_in', { name: r.name })}
                     onClick={() =>
                       emit(allOn ? codes.filter((c) => !all.includes(c)) : [...codes, ...all])
                     }
                   >
-                    {allOn ? 'Clear' : 'Select all'}
+                    {allOn ? t('ui.clear') : t('ui.select_all')}
                   </button>
                 </legend>
                 {r.departments.map((x) => (
@@ -114,7 +116,7 @@ export function PlacePicker({
             )
           })}
           {regions.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nothing matches “{query}”.</p>
+            <p className="text-sm text-muted-foreground">{t('ui.no_match', { query })}</p>
           )}
         </div>
       )}

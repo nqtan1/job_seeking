@@ -186,13 +186,13 @@ export function placeLabel(code: string): string {
   return dep.city === dep.name ? `${dep.city} (${code})` : `${dep.city} · ${dep.name} (${code})`
 }
 
-/** "75,69" → "Paris (75), Lyon · Rhône (69)"; empty → "All France". */
+/** "75,69" → "Paris (75), Lyon · Rhône (69)"; empty → "" (the caller words "all France"). */
 export function placesLabel(value: string | null | undefined): string {
   const codes = (value ?? '')
     .split(/[,\s;]+/)
     .map((c) => c.trim().toUpperCase())
     .filter(Boolean)
-  return codes.length ? codes.map(placeLabel).join(', ') : 'All France'
+  return codes.length ? codes.map(placeLabel).join(', ') : ''
 }
 
 const plain = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()

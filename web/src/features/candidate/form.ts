@@ -1,17 +1,34 @@
 import { z } from 'zod'
+import type { Key, Vars } from '@/i18n'
 import type { Profile, ProfilePatch } from './api'
 
 // Loose objects keep fields the form does not render (location, skills_used, gpa...) so a PATCH
 // never drops them. Only what the backend does not enforce is validated here.
-const req = (label: string) => z.string().trim().min(1, `${label} is required.`)
-export const profileSchema = z.object({
-  personal_info: z.looseObject({ name: req('Name') }),
-  summary: z.string(),
-  experiences: z.array(z.looseObject({ job_title: req('Job title'), company: req('Company') })),
-  formations: z.array(z.looseObject({ degree: req('Degree'), institution: req('Institution') })),
-  skills: z.array(z.looseObject({ name: req('Skill') })),
-})
-export type FormValues = z.infer<typeof profileSchema>
+export const makeProfileSchema = (t: (key: Key, vars?: Vars) => string) => {
+  const req = (label: Key) =>
+    z
+      .string()
+      .trim()
+      .min(1, t('candidate.required', { label: t(label) }))
+  return z.object({
+    personal_info: z.looseObject({ name: req('candidate.l.name') }),
+    summary: z.string(),
+    experiences: z.array(
+      z.looseObject({
+        job_title: req('candidate.l.job_title'),
+        company: req('candidate.l.company'),
+      }),
+    ),
+    formations: z.array(
+      z.looseObject({
+        degree: req('candidate.l.degree'),
+        institution: req('candidate.l.institution'),
+      }),
+    ),
+    skills: z.array(z.looseObject({ name: req('candidate.l.skill') })),
+  })
+}
+export type FormValues = z.infer<ReturnType<typeof makeProfileSchema>>
 
 const nul = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v)
 const nullEmpty = <T extends object>(o: T) =>

@@ -70,6 +70,7 @@ async def create_fit_analysis(
         org_id=ctx.org_id,
         job_id=body.job_id,
         company_type=body.company_type,
+        language=ctx.language,
     )
     return _out(row)
 

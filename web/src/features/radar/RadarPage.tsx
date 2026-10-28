@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useT } from '@/i18n'
 import { useProfile } from '@/features/candidate/api'
 import { useTask } from '@/lib/api/tasks'
 import {
@@ -35,12 +36,13 @@ import { Timeline } from './Timeline'
 
 const MAX_SEARCHES = 3
 const PAUSE_LABEL = {
-  consent: 'needs consent',
-  inactive: 'no sign-in for 60 days',
-  failures: 'repeated failures',
+  consent: 'radar.pause.consent',
+  inactive: 'radar.pause.inactive',
+  failures: 'radar.pause.failures',
 } as const
 
 function SearchForm() {
+  const t = useT()
   const create = useCreateSearch()
   const { register, handleSubmit, reset, control } = useForm<SearchIn>({
     defaultValues: { min_score: 70, daily_limit: 5, enabled: true, contract_type: null },
@@ -63,18 +65,20 @@ function SearchForm() {
       )}
     >
       <div className="space-y-1">
-        <Label htmlFor="r-name">Name</Label>
-        <Input id="r-name" placeholder="Python, Paris" {...register('name', { required: true })} />
+        <Label htmlFor="r-name">{t('radar.f.name')}</Label>
+        <Input
+          id="r-name"
+          placeholder={t('radar.f.name_ph')}
+          {...register('name', { required: true })}
+        />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="r-query">Keywords</Label>
+        <Label htmlFor="r-query">{t('radar.f.keywords')}</Label>
         <Input id="r-query" {...register('query')} />
-        <p className="text-xs text-muted-foreground">
-          Separate alternatives with a comma: IA Engineer, ML Engineer finds either.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('radar.f.keywords_hint')}</p>
       </div>
       <div className="space-y-1 sm:col-span-2">
-        <Label>Where</Label>
+        <Label>{t('radar.f.where')}</Label>
         <Controller
           control={control}
           name="department"
@@ -82,7 +86,7 @@ function SearchForm() {
         />
       </div>
       <div className="space-y-1 sm:col-span-4">
-        <Label>Contract types</Label>
+        <Label>{t('radar.f.contracts')}</Label>
         <Controller
           control={control}
           name="contract_type"
@@ -90,11 +94,11 @@ function SearchForm() {
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="r-score">Minimum fit (%)</Label>
+        <Label htmlFor="r-score">{t('radar.f.min_fit')}</Label>
         <Input id="r-score" type="number" min={0} max={100} {...register('min_score')} />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="r-limit">Jobs scored per day (1–10)</Label>
+        <Label htmlFor="r-limit">{t('radar.f.daily_limit')}</Label>
         <Input id="r-limit" type="number" min={1} max={10} {...register('daily_limit')} />
       </div>
       {create.isError && (
@@ -103,7 +107,7 @@ function SearchForm() {
         </div>
       )}
       <Button type="submit" className="sm:w-fit" disabled={create.isPending}>
-        {create.isPending ? 'Adding…' : 'Add radar'}
+        {create.isPending ? t('radar.f.adding') : t('radar.f.add')}
       </Button>
     </form>
   )
@@ -111,6 +115,7 @@ function SearchForm() {
 
 /** The same fields as a new radar, filled in; saving changes only this radar. */
 function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
+  const t = useT()
   const update = useUpdateSearch()
   const { register, handleSubmit, control } = useForm<SearchIn>({
     defaultValues: {
@@ -143,18 +148,16 @@ function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
       )}
     >
       <div className="space-y-1">
-        <Label htmlFor={`e-name-${search.id}`}>Name</Label>
+        <Label htmlFor={`e-name-${search.id}`}>{t('radar.f.name')}</Label>
         <Input id={`e-name-${search.id}`} {...register('name', { required: true })} />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={`e-query-${search.id}`}>Keywords</Label>
+        <Label htmlFor={`e-query-${search.id}`}>{t('radar.f.keywords')}</Label>
         <Input id={`e-query-${search.id}`} {...register('query')} />
-        <p className="text-xs text-muted-foreground">
-          Separate alternatives with a comma: IA Engineer, ML Engineer finds either.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('radar.f.keywords_hint')}</p>
       </div>
       <div className="space-y-1 sm:col-span-2">
-        <Label>Where</Label>
+        <Label>{t('radar.f.where')}</Label>
         <Controller
           control={control}
           name="department"
@@ -162,7 +165,7 @@ function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
         />
       </div>
       <div className="space-y-1 sm:col-span-4">
-        <Label>Contract types</Label>
+        <Label>{t('radar.f.contracts')}</Label>
         <Controller
           control={control}
           name="contract_type"
@@ -170,7 +173,7 @@ function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={`e-score-${search.id}`}>Minimum fit (%)</Label>
+        <Label htmlFor={`e-score-${search.id}`}>{t('radar.f.min_fit')}</Label>
         <Input
           id={`e-score-${search.id}`}
           type="number"
@@ -180,7 +183,7 @@ function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
         />
       </div>
       <div className="space-y-1">
-        <Label htmlFor={`e-limit-${search.id}`}>Jobs scored per day (1–10)</Label>
+        <Label htmlFor={`e-limit-${search.id}`}>{t('radar.f.daily_limit')}</Label>
         <Input
           id={`e-limit-${search.id}`}
           type="number"
@@ -196,10 +199,10 @@ function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
       )}
       <div className="flex gap-2 sm:col-span-4">
         <Button type="submit" size="sm" disabled={update.isPending}>
-          Save changes
+          {t('radar.f.save')}
         </Button>
         <Button type="button" size="sm" variant="outline" onClick={onDone}>
-          Cancel
+          {t('radar.f.cancel')}
         </Button>
       </div>
     </form>
@@ -207,6 +210,7 @@ function EditForm({ search, onDone }: { search: Search; onDone: () => void }) {
 }
 
 function SearchCard({ search }: { search: Search }) {
+  const t = useT()
   const run = useRunSearch()
   const task = useTask(run.data?.task_id)
   const del = useDeleteSearch()
@@ -226,14 +230,16 @@ function SearchCard({ search }: { search: Search }) {
           <p className="flex items-center gap-2 font-medium">
             {search.name}
             {search.paused_reason && (
-              <StatusBadge tone="warning">paused: {PAUSE_LABEL[search.paused_reason]}</StatusBadge>
+              <StatusBadge tone="warning">
+                {t('radar.paused', { reason: t(PAUSE_LABEL[search.paused_reason]) })}
+              </StatusBadge>
             )}
           </p>
           <p className="text-xs text-muted-foreground">
             {[search.query, placesLabel(search.department), search.contract_type]
               .filter(Boolean)
               .join(' · ')}{' '}
-            · fit ≥ {search.min_score}% · up to {search.daily_limit} a day
+            · {t('radar.card.summary', { score: search.min_score, limit: search.daily_limit })}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -244,37 +250,39 @@ function SearchCard({ search }: { search: Search }) {
               disabled={toggle.isPending}
               onChange={(e) => toggle.mutate({ id: search.id, enabled: e.target.checked })}
             />
-            Daily
+            {t('radar.card.daily')}
           </label>
           <Button size="sm" loading={running} onClick={() => run.mutate(search.id)}>
-            {running ? 'Searching…' : 'Run now'}
+            {running ? t('radar.card.searching') : t('radar.card.run_now')}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            aria-label={`Edit ${search.name}`}
+            aria-label={t('radar.card.edit_aria', { name: search.name })}
             aria-expanded={editing}
             onClick={() => setEditing(!editing)}
           >
-            Edit
+            {t('radar.card.edit')}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            aria-label={`Delete ${search.name}`}
+            aria-label={t('radar.card.delete_aria', { name: search.name })}
             disabled={del.isPending}
             onClick={() => del.mutate(search.id)}
           >
-            Delete
+            {t('radar.card.delete')}
           </Button>
         </div>
       </div>
       {editing && <EditForm search={search} onDone={() => setEditing(false)} />}
-      {running && <StepProgress steps={['Searching offers…', 'Scoring how well you fit…']} />}
+      {running && (
+        <StepProgress steps={[t('radar.card.step_search'), t('radar.card.step_score')]} />
+      )}
       {run.isError && <ErrorMessage error={run.error} />}
       {status === 'failed' && (
         <p role="alert" className="text-sm text-destructive">
-          The run failed. Please try again later.
+          {t('radar.card.failed')}
         </p>
       )}
     </li>
@@ -283,25 +291,30 @@ function SearchCard({ search }: { search: Search }) {
 
 /** Today's AI use against the daily cap: the radar pauses early so chat and letters still work. */
 function AiUse() {
+  const t = useT()
   const use = useAiUse()
   if (!use.data) return null
   return (
     <p className="text-xs text-muted-foreground">
-      AI use today: {use.data.used} of {use.data.quota}. Your radar pauses at{' '}
-      {use.data.radar_stops_at} so chat and letters keep working.
+      {t('radar.ai_use', {
+        used: use.data.used,
+        quota: use.data.quota,
+        stops: use.data.radar_stops_at,
+      })}
     </p>
   )
 }
 
 function HowItWorks({ open }: { open: boolean }) {
+  const t = useT()
   return (
     <details open={open} className="rounded-xl border bg-card p-4 text-sm">
-      <summary className="cursor-pointer font-medium">How the radar works</summary>
+      <summary className="cursor-pointer font-medium">{t('radar.how.title')}</summary>
       <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
-        <li>Every morning it searches France Travail with your keywords.</li>
-        <li>It scores how well each new offer fits your profile, a few a day.</li>
-        <li>Good fits wait here, with the reasons. You keep, dismiss or review them.</li>
-        <li>It never applies for you and never contacts a company.</li>
+        <li>{t('radar.how.1')}</li>
+        <li>{t('radar.how.2')}</li>
+        <li>{t('radar.how.3')}</li>
+        <li>{t('radar.how.4')}</li>
       </ol>
     </details>
   )
@@ -309,14 +322,18 @@ function HowItWorks({ open }: { open: boolean }) {
 
 /** A one-click first radar from the user's own CV. */
 function Starter() {
+  const t = useT()
   const profile = useProfile()
   const create = useCreateSearch()
   const title = profile.data?.data.experiences?.[0]?.job_title
   if (!title) return null
+  const [starterA, starterB] = t('radar.starter', { title: '\u0001' }).split('\u0001')
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
       <p className="text-sm">
-        Start from your CV: look for <strong>{title}</strong> offers.
+        {starterA}
+        <strong>{title}</strong>
+        {starterB}
       </p>
       <Button
         size="sm"
@@ -325,7 +342,7 @@ function Starter() {
           create.mutate({ name: title, query: title, min_score: 70, daily_limit: 5, enabled: true })
         }
       >
-        Start this radar
+        {t('radar.starter_btn')}
       </Button>
       {create.isError && <ErrorMessage error={create.error} />}
     </div>
@@ -333,35 +350,36 @@ function Starter() {
 }
 
 export function RadarPage() {
+  const t = useT()
   const searches = useSearches()
   const [adding, setAdding] = useState(false)
   const count = searches.data?.length ?? 0
   const minScore = searches.data?.[0]?.min_score
   return (
-    <Page
-      title="Job radar"
-      description="Looks for offers every morning and scores how well you fit. You decide what happens next: it never applies for you."
-      wide
-    >
+    <Page title={t('radar.page.title')} description={t('radar.page.description')} wide>
       <ConsentBanner />
       <StatusStrip />
       {count > 0 && (
         <>
           <Insights />
-          <section aria-label="New matches" className="space-y-3">
-            <h2 className="text-sm font-semibold text-muted-foreground">New matches</h2>
+          <section aria-label={t('radar.page.new_matches')} className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              {t('radar.page.new_matches')}
+            </h2>
             <NewMatches />
           </section>
           <InProgress />
           <Rejected minScore={minScore} />
         </>
       )}
-      <section aria-label="Your radars" className="space-y-3">
+      <section aria-label={t('radar.page.your_radars')} className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-muted-foreground">Your radars</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            {t('radar.page.your_radars')}
+          </h2>
           {count < MAX_SEARCHES && (
             <Button size="sm" variant="outline" onClick={() => setAdding(!adding)}>
-              {adding ? 'Close' : 'New radar'}
+              {adding ? t('radar.page.close') : t('radar.page.new_radar')}
             </Button>
           )}
         </div>
@@ -369,7 +387,7 @@ export function RadarPage() {
         {adding && (
           <Card>
             <CardHeader>
-              <CardTitle>New radar</CardTitle>
+              <CardTitle>{t('radar.page.new_radar')}</CardTitle>
             </CardHeader>
             <CardContent>
               <SearchForm />

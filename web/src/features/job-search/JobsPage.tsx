@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { StepProgress } from '@/components/StepProgress'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { usePipeline } from '@/features/pipeline/api'
+import { sourceLabel, STATUS_KEY } from '@/features/tracker/constants'
 import { useRadarJobIds } from '@/features/radar/api'
 import { Briefcase, X } from 'lucide-react'
 import { useState } from 'react'
@@ -18,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useI18n, useT } from '@/i18n'
 import { DeleteJobButton } from './DeleteJobButton'
 import { JobDetailsFix } from './JobDetailsFix'
 import { companyOf } from './label'
@@ -33,26 +35,27 @@ import {
 } from './api'
 
 function ManualEntry({ add }: { add: ReturnType<typeof useAddJob> }) {
+  const t = useT()
   const { register, handleSubmit, reset, formState } = useForm<{ text: string }>()
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Paste a job description</CardTitle>
+        <CardTitle>{t('jobs.paste_title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <form
           className="space-y-3"
           onSubmit={handleSubmit(({ text }) => add.mutate({ text }, { onSuccess: () => reset() }))}
         >
-          <Label htmlFor="jd-text">Job description text</Label>
+          <Label htmlFor="jd-text">{t('jobs.paste_label')}</Label>
           <Textarea id="jd-text" rows={6} {...register('text', { required: true })} />
           {formState.errors.text && (
             <p role="alert" className="text-sm text-destructive">
-              Paste the job description first.
+              {t('jobs.paste_required')}
             </p>
           )}
           <Button type="submit" loading={add.isPending}>
-            {add.isPending ? 'Analysing…' : 'Add job'}
+            {add.isPending ? t('jobs.analysing') : t('jobs.add_job')}
           </Button>
         </form>
       </CardContent>
@@ -76,6 +79,8 @@ const isAllowed = (f: File) => ALLOWED_NAME.test(f.name) || ALLOWED_TYPE.has(f.t
 const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
 
 function FileEntry() {
+  const t = useT()
+  const steps = useSteps()
   const add = useAddJobFiles()
   const [files, setFiles] = useState<File[]>([])
   const [skipped, setSkipped] = useState<string[]>([])
@@ -101,11 +106,8 @@ function FileEntry() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Upload job description files</CardTitle>
-        <CardDescription>
-          PDF, Word, TXT, PNG or JPEG, up to {MAX_FILES} files at once. They are read together:
-          pages of one offer become one job, and every distinct offer becomes its own job.
-        </CardDescription>
+        <CardTitle>{t('jobs.upload_title')}</CardTitle>
+        <CardDescription>{t('jobs.upload_desc', { max: MAX_FILES })}</CardDescription>
       </CardHeader>
       <CardContent
         className={`space-y-3 transition-colors ${dragging ? 'bg-accent/40' : ''}`}
@@ -123,7 +125,7 @@ function FileEntry() {
           addFiles([...e.dataTransfer.files])
         }}
       >
-        <Label htmlFor="jd-file">Job description files</Label>
+        <Label htmlFor="jd-file">{t('jobs.upload_label')}</Label>
         <Input
           id="jd-file"
           type="file"
@@ -134,9 +136,7 @@ function FileEntry() {
             e.target.value = '' // so choosing the same file again still fires onChange
           }}
         />
-        <p className="text-xs text-muted-foreground">
-          Select several at once, pick again to add more, or drop files here.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('jobs.upload_hint')}</p>
         {files.length > 0 && (
           <ul className="space-y-1 text-sm">
             {files.map((f) => (
@@ -145,7 +145,7 @@ function FileEntry() {
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  aria-label={`Remove ${f.name}`}
+                  aria-label={t('jobs.remove_aria', { name: f.name })}
                   disabled={add.isPending}
                   onClick={() => setFiles((cur) => cur.filter((x) => x !== f))}
                 >
@@ -157,15 +157,15 @@ function FileEntry() {
         )}
         {skipped.length > 0 && (
           <p role="alert" className="text-sm text-destructive">
-            Skipped {skipped.join(', ')}: only PDF, Word, TXT, PNG or JPEG are accepted.
+            {t('jobs.skipped', { names: skipped.join(', ') })}
           </p>
         )}
         {tooMany && (
           <p role="alert" className="text-sm text-destructive">
-            Choose at most {MAX_FILES} files: remove {files.length - MAX_FILES}.
+            {t('jobs.too_many', { max: MAX_FILES, extra: files.length - MAX_FILES })}
           </p>
         )}
-        {add.isPending && <StepProgress steps={STEPS} />}
+        {add.isPending && <StepProgress steps={steps} />}
         {add.isError && <ErrorMessage error={add.error} />}
         <div className="flex items-center gap-2">
           <Button
@@ -177,11 +177,11 @@ function FileEntry() {
               })
             }
           >
-            {add.isPending ? 'Analysing…' : 'Upload and add'}
+            {add.isPending ? t('jobs.analysing') : t('jobs.upload_add')}
           </Button>
           {files.length > 0 && !add.isPending && (
             <Button variant="ghost" onClick={clear}>
-              Clear
+              {t('jobs.clear')}
             </Button>
           )}
         </div>
@@ -196,20 +196,21 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
   const { register, handleSubmit, control, setValue } = useForm<SearchParams>()
   const parse = useParseQuery()
   const [sentence, setSentence] = useState('')
+  const t = useT()
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Search France Travail</CardTitle>
+        <CardTitle>{t('jobs.search_title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1">
-          <Label htmlFor="sentence">Describe what you are looking for</Label>
+          <Label htmlFor="sentence">{t('jobs.describe_label')}</Label>
           <div className="flex gap-2">
             <Input
               id="sentence"
               value={sentence}
               maxLength={300}
-              placeholder="Data analyst in Lyon, CDI, remote"
+              placeholder={t('jobs.describe_placeholder')}
               onChange={(e) => setSentence(e.target.value)}
             />
             <Button
@@ -226,25 +227,26 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
                 })
               }
             >
-              {parse.isPending ? 'Reading…' : 'Fill the filters'}
+              {parse.isPending ? t('jobs.reading') : t('jobs.fill_filters')}
             </Button>
           </div>
           {parse.isError && <ErrorMessage error={parse.error} />}
           {parse.data && (
             <p className="text-xs text-muted-foreground">
-              Check the filters below, then search.
-              {parse.data.remote && ' Remote work is not a filter here: look for it in the offers.'}
-              {parse.data.notes.length > 0 && ` Not filterable: ${parse.data.notes.join('; ')}.`}
+              {t('jobs.check_filters')}
+              {parse.data.remote && t('jobs.remote_note')}
+              {parse.data.notes.length > 0 &&
+                t('jobs.not_filterable', { notes: parse.data.notes.join('; ') })}
             </p>
           )}
         </div>
         <form className="grid gap-3 sm:grid-cols-4" onSubmit={handleSubmit(setParams)}>
           <div className="space-y-1 sm:col-span-2">
-            <Label htmlFor="q">Keywords</Label>
+            <Label htmlFor="q">{t('jobs.keywords')}</Label>
             <Input id="q" {...register('query')} />
           </div>
           <div className="space-y-1 sm:col-span-2">
-            <Label>Where</Label>
+            <Label>{t('jobs.where')}</Label>
             <Controller
               control={control}
               name="department"
@@ -254,7 +256,7 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
             />
           </div>
           <div className="space-y-1 sm:col-span-4">
-            <Label>Contract types</Label>
+            <Label>{t('jobs.contract_types')}</Label>
             <Controller
               control={control}
               name="contract_type"
@@ -267,12 +269,12 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
             />
           </div>
           <Button type="submit" className="sm:col-span-4 sm:w-fit" disabled={search.isFetching}>
-            {search.isFetching ? 'Searching…' : 'Search'}
+            {search.isFetching ? t('jobs.searching') : t('jobs.search')}
           </Button>
         </form>
         {search.isError && <ErrorMessage error={search.error} />}
         {search.data?.results.length === 0 && (
-          <p className="text-sm text-muted-foreground">No offers found.</p>
+          <p className="text-sm text-muted-foreground">{t('jobs.no_offers')}</p>
         )}
         <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
           {search.data?.results.map((r) => (
@@ -287,10 +289,10 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
                 variant="outline"
                 size="sm"
                 disabled={add.isPending}
-                aria-label={`Add ${r.title}`}
+                aria-label={t('jobs.add_aria', { title: r.title })}
                 onClick={() => add.mutate({ externalId: r.id })}
               >
-                Add
+                {t('jobs.add')}
               </Button>
             </li>
           ))}
@@ -303,6 +305,7 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
 const VERDICT_TONE = { go: 'success', maybe: 'warning', no_go: 'danger' } as const
 
 function JobList() {
+  const { t, locale } = useI18n()
   const jobs = useJobs()
   const pipeline = usePipeline()
   const fromRadar = useRadarJobIds()
@@ -313,8 +316,8 @@ function JobList() {
     return (
       <EmptyState
         icon={Briefcase}
-        title="No jobs yet"
-        description="Paste a description, upload a file or search offers to add your first job."
+        title={t('jobs.empty_title')}
+        description={t('jobs.empty_desc')}
       />
     )
   const rows = bestFirst
@@ -330,11 +333,11 @@ function JobList() {
         aria-pressed={bestFirst}
         onClick={() => setBestFirst(!bestFirst)}
       >
-        {bestFirst ? 'Newest first' : 'Best fit first'}
+        {bestFirst ? t('jobs.newest_first') : t('jobs.best_first')}
       </Button>
       <ul
         className="max-h-[min(28rem,55vh)] xl:max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto rounded-xl border bg-muted/30 p-2"
-        aria-label="Your jobs"
+        aria-label={t('jobs.your_jobs')}
       >
         {rows.map((j) => {
           const fit = pipeline.fit(j.id)
@@ -347,38 +350,41 @@ function JobList() {
                   <p className="truncate font-medium">{j.data.title}</p>
                   <p className="truncate text-sm text-muted-foreground">{companyOf(j)}</p>
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge tone="info">{j.source.replace('_', ' ')}</StatusBadge>
-                    {fromRadar.has(j.id) && <StatusBadge tone="success">From radar</StatusBadge>}
+                    <StatusBadge tone="info">{sourceLabel(t, j.source)}</StatusBadge>
+                    {fromRadar.has(j.id) && (
+                      <StatusBadge tone="success">{t('jobs.from_radar')}</StatusBadge>
+                    )}
                     {isStale(postingAgeDays(j.data.source_meta.posted_on)) && (
                       <StatusBadge tone="warning">
-                        Posted {postingAgeDays(j.data.source_meta.posted_on)} days ago: may be
-                        filled
+                        {t('jobs.stale', {
+                          days: postingAgeDays(j.data.source_meta.posted_on) ?? 0,
+                        })}
                       </StatusBadge>
                     )}
                     {fit ? (
                       <StatusBadge
                         tone={VERDICT_TONE[fit.data.recommendation as keyof typeof VERDICT_TONE]}
                       >
-                        Fit {Math.round(fit.score)}%
+                        {t('jobs.fit_pct', { score: Math.round(fit.score) })}
                       </StatusBadge>
                     ) : (
-                      <StatusBadge>Fit not checked</StatusBadge>
+                      <StatusBadge>{t('jobs.fit_unchecked')}</StatusBadge>
                     )}
                     <StatusBadge tone={letters.length ? 'success' : 'neutral'}>
                       {letters.length
-                        ? `${letters.length} letter${letters.length > 1 ? 's' : ''}`
-                        : 'No letter'}
+                        ? t('jobs.letters', { count: letters.length })
+                        : t('jobs.no_letter')}
                     </StatusBadge>
                     {app && (
                       <StatusBadge tone="success">
-                        Tracked: {app.status.replace('_', ' ')}
+                        {t('jobs.tracked', { status: t(STATUS_KEY[app.status]) })}
                       </StatusBadge>
                     )}
                   </div>
                   <JobDetailsFix job={j} />
                 </div>
                 <span className="shrink-0 text-xs text-muted-foreground">
-                  {new Date(j.created_at).toLocaleDateString()}
+                  {new Date(j.created_at).toLocaleDateString(locale)}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -386,19 +392,19 @@ function JobList() {
                   to={`/jobs/${j.id}/fit`}
                   className={buttonVariants({ variant: fit ? 'outline' : 'default', size: 'sm' })}
                 >
-                  {fit ? 'Fit report' : 'Check fit'}
+                  {fit ? t('jobs.fit_report') : t('jobs.check_fit')}
                 </Link>
                 <Link
                   to={letters[0] ? `/letters/${letters[0].id}` : `/letters?job=${j.id}`}
                   className={buttonVariants({ variant: 'outline', size: 'sm' })}
                 >
-                  {letters[0] ? 'Open letter' : 'Write letter'}
+                  {letters[0] ? t('jobs.open_letter') : t('jobs.write_letter')}
                 </Link>
                 <Link
                   to={`/?job=${j.id}`}
                   className={buttonVariants({ variant: 'outline', size: 'sm' })}
                 >
-                  Discuss this job
+                  {t('jobs.discuss')}
                 </Link>
                 <ApplyActions
                   jobId={j.id}
@@ -415,17 +421,22 @@ function JobList() {
   )
 }
 
-const STEPS = ['Reading the job description…', 'Extracting missions and requirements…']
+const useSteps = () => {
+  const t = useT()
+  return [t('jobs.step_read'), t('jobs.step_extract')]
+}
 
 export function JobsPage() {
   const add = useAddJob()
+  const t = useT()
+  const steps = useSteps()
   return (
-    <Page title="Jobs" description="Add offers, then check how well you fit." wide>
+    <Page title={t('jobs.page_title')} description={t('jobs.page_desc')} wide>
       {add.isError && <ErrorMessage error={add.error} />}
-      {add.isPending && <StepProgress steps={STEPS} />}
+      {add.isPending && <StepProgress steps={steps} />}
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 xl:grid-cols-2">
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">Your jobs</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground">{t('jobs.your_jobs')}</h2>
           <JobList />
         </section>
         <div className="space-y-6">

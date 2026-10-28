@@ -26,6 +26,7 @@ from recruitai.core.errors import (
     ValidationFailed,
 )
 from recruitai.core.export import rows_as_dicts
+from recruitai.core.language import Language
 from recruitai.core.tasks import enqueue
 from recruitai.modules.applications import service as applications
 from recruitai.modules.candidates import service as candidates
@@ -183,6 +184,7 @@ async def _execute(
         quota - QUOTA_RESERVE - await usage.count_calls_today(db, user_id=user_id)
     )
     budget = min(left_limit, left_quota, MAX_AI_CALLS_PER_RUN)
+    language = await identity.user_language(db, user_id)
     if budget <= 0:
         reason = "limit" if left_limit <= 0 else "quota"
         return await _finish(db, run, search, now, "ok", reason, counts)
@@ -224,7 +226,9 @@ async def _execute(
         posting_id = posting.id  # read now: the object expires on a rollback
         counts["added"] += 1
         try:
-            fit = await matching.analyze(db, llm, org_id=org_id, job_id=posting_id)
+            fit = await matching.analyze(
+                db, llm, org_id=org_id, job_id=posting_id, language=language
+            )
         except (QuotaExceeded, UpstreamUnavailable) as exc:
             # Take back the job this run added: no score, so no reason to clutter the inbox.
             await jobs.delete_job(db, org_id=org_id, job_id=posting_id)
@@ -711,37 +715,55 @@ async def retry_interrupted_searches(
     )
 
 
+_NEW_MATCHES: dict[str, Callable[[int], str]] = {
+    "en": lambda n: f"- {n} new job{'s' if n > 1 else ''} match your radar",
+    "fr": lambda n: (
+        f"- {n} nouvelle{'s' if n > 1 else ''} offre{'s' if n > 1 else ''} pour votre radar"
+    ),
+    "vi": lambda n: f"- {n} việc làm mới phù hợp với radar của bạn",
+}
+_STOP_RADARS = {
+    "en": "Stop radars",
+    "fr": "Arrêter les radars",
+    "vi": "Dừng các radar",
+}
+
+
 async def new_match_lines(
     db: AsyncSession,
     *,
     now: datetime,
     link_for: Callable[[UUID, UUID], str] | None = None,
-) -> dict[UUID, list[str]]:
+) -> dict[UUID, Callable[[Language], list[str]]]:
     """Digest lines per org: how many new shortlisted jobs since yesterday, and the best three,
     then (if ``link_for`` is given) a no-login link that withdraws the radar consent."""
     since = now - timedelta(days=1)
     counts = await repository.new_counts_since(db, since=since)
     best = await repository.top_new_since(db, since=since, per_org=3)
-    lines: dict[UUID, list[str]] = {}
-    for org_id, n in counts.items():
-        head = (
-            f"- {n} new job{'s' if n > 1 else ''} match your radar / "
-            f"{n} nouvelle{'s' if n > 1 else ''} offre{'s' if n > 1 else ''} pour votre radar"
-        )
-        top = [
-            f"    · {r.title or 'Job'}, {r.company or '?'} ({round(r.score or 0)}%)"
-            for r in best.get(org_id, [])
-        ]
-        lines[org_id] = [head, *top]
-    if link_for and lines:
+    links: dict[UUID, str] = {}
+    if link_for and counts:
         owners = await identity.active_owner_ids(
-            db, org_ids=list(lines), active_since=datetime.min.replace(tzinfo=UTC)
+            db, org_ids=list(counts), active_since=datetime.min.replace(tzinfo=UTC)
         )
-        for org_id, user_id in owners.items():
-            lines[org_id].append(
-                "  Stop radars / Arrêter les radars: " + link_for(org_id, user_id)
+        links = {org: link_for(org, user) for org, user in owners.items()}
+
+    def lines_for(org_id: UUID, n: int) -> Callable[[Language], list[str]]:
+        def build(language: Language) -> list[str]:
+            head = _NEW_MATCHES[language](n)
+            top = [
+                f"    · {r.title or '?'}, {r.company or '?'} ({round(r.score or 0)}%)"
+                for r in best.get(org_id, [])
+            ]
+            link = (
+                [f"  {_STOP_RADARS[language]}: {links[org_id]}"]
+                if org_id in links
+                else []
             )
-    return lines
+            return [head, *top, *link]
+
+        return build
+
+    return {org_id: lines_for(org_id, n) for org_id, n in counts.items()}
 
 
 async def get_consent(
@@ -1006,7 +1028,7 @@ async def pause_inactive(
             out["paused"] += 1
         elif u.radar_notice_at is None or u.radar_notice_at < u.last_active:
             pause_on = (u.last_active + IDLE_PAUSE_AFTER).date().isoformat()
-            if await notice(u.email, {"pause_on": pause_on}):
+            if await notice(u.email, {"pause_on": pause_on, "language": u.language}):
                 await identity.mark_radar_notice(db, user_id=u.user_id, at=now)
                 await db.commit()
                 out["noticed"] += 1

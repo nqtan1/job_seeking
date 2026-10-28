@@ -1,20 +1,22 @@
 import { NavLink } from 'react-router'
 import { cn } from 'cn'
+import { useT, type Key } from '@/i18n'
 
 const TABS = [
-  { to: '/admin', label: 'Overview', end: true },
-  { to: '/admin/ai', label: 'AI console', end: false },
+  { to: '/admin', label: 'admin.tab.overview' as Key, end: true },
+  { to: '/admin/ai', label: 'admin.tab.ai' as Key, end: false },
 ]
 
 /** The admin area's two screens. */
 export function AdminTabs() {
+  const t = useT()
   return (
-    <nav aria-label="Admin sections" className="flex gap-1 border-b">
-      {TABS.map((t) => (
+    <nav aria-label={t('admin.tabs_aria')} className="flex gap-1 border-b">
+      {TABS.map((l) => (
         <NavLink
-          key={t.to}
-          to={t.to}
-          end={t.end}
+          key={l.to}
+          to={l.to}
+          end={l.end}
           className={({ isActive }) =>
             cn(
               '-mb-px border-b-2 px-3 py-1.5 text-sm',
@@ -22,7 +24,7 @@ export function AdminTabs() {
             )
           }
         >
-          {t.label}
+          {t(l.label)}
         </NavLink>
       ))}
     </nav>

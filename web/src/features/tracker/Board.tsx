@@ -1,9 +1,10 @@
 import { useState } from 'react'
+import { useT } from '@/i18n'
 import { cn } from 'cn'
 import type { Application, Status } from './api'
 import { ApplicationCard } from './ApplicationCard'
 import type { Attention } from './attention'
-import { COLUMNS, DOT } from './constants'
+import { COLUMNS, DOT, STATUS_KEY } from './constants'
 
 /**
  * Desktop: columns side by side, scrolling in both axes under sticky headers.
@@ -20,18 +21,19 @@ export function Board({
   onOpen: (id: string) => void
   onDrop: (status: Status, id: string) => void
 }) {
+  const t = useT()
   const [over, setOver] = useState<Status>()
-  const [tab, setTab] = useState<Status>(
-    () => COLUMNS.find(([s]) => apps.some((a) => a.status === s))![0],
+  const [tab, setTab] = useState<Status>(() =>
+    COLUMNS.find((s) => apps.some((a) => a.status === s))!,
   )
   return (
     <div className="space-y-3">
       <div
         role="tablist"
-        aria-label="Status"
+        aria-label={t('tracker.board.status')}
         className="-mx-6 flex gap-1 overflow-x-auto px-6 pb-1 md:hidden"
       >
-        {COLUMNS.map(([status, label]) => (
+        {COLUMNS.map((status) => (
           <button
             key={status}
             type="button"
@@ -43,7 +45,7 @@ export function Board({
               tab === status ? 'border-primary bg-primary text-primary-foreground' : 'bg-card',
             )}
           >
-            {label}
+            {t(STATUS_KEY[status])}
             <span className="text-xs opacity-80">
               {apps.filter((a) => a.status === status).length}
             </span>
@@ -51,7 +53,8 @@ export function Board({
         ))}
       </div>
       <div className="md:flex md:max-h-[calc(100dvh-14rem)] md:min-h-80 md:gap-3 md:overflow-auto md:pb-2">
-        {COLUMNS.map(([status, label]) => {
+        {COLUMNS.map((status) => {
+          const label = t(STATUS_KEY[status])
           const items = apps.filter((a) => a.status === status)
           return (
             <section
@@ -91,7 +94,7 @@ export function Board({
               </ul>
               {items.length === 0 && (
                 <p className="px-3 pb-4 text-center text-xs text-muted-foreground">
-                  Empty. Applications you move to “{label}” show up here.
+                  {t('tracker.board.empty', { label })}
                 </p>
               )}
             </section>

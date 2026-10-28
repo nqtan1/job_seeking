@@ -66,7 +66,7 @@ test('tick cities, a whole region, search without accents, and go back to all of
 
 test('labels and filtering', () => {
   expect(placesLabel('75,69')).toBe('Paris (75), Lyon · Rhône (69)')
-  expect(placesLabel(null)).toBe('All France')
+  expect(placesLabel(null)).toBe('') // the caller words "all France" in the user's language
   expect(filterRegions('lyon')[0].departments.map((x) => x.code)).toEqual(['69'])
   expect(filterRegions('Île-de-France')[0].departments).toHaveLength(8)
 })

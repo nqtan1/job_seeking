@@ -13,6 +13,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { DeleteJobButton } from '@/features/job-search/DeleteJobButton'
+import { useT } from '@/i18n'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { JobDescription } from './JobDescription'
 import { useJob, useLatestFit, useRunFit, type CompanyType, type Fit } from './api'
@@ -43,13 +44,10 @@ const List = ({
     </Card>
   )
 
-const VERDICT: Record<string, string> = {
-  go: 'Strong match',
-  maybe: 'Possible match',
-  no_go: 'Weak match',
-}
+const VERDICTS = ['go', 'maybe', 'no_go']
 
 function Report({ fit }: { fit: Fit }) {
+  const t = useT()
   const d = fit.data
   return (
     <div className="space-y-4">
@@ -57,23 +55,25 @@ function Report({ fit }: { fit: Fit }) {
         <CardContent className="flex flex-wrap items-center gap-6">
           <ScoreRing score={fit.score} />
           <div className="min-w-0 flex-1 space-y-1">
-            <p className="text-lg font-semibold">{VERDICT[d.recommendation] ?? d.recommendation}</p>
-            {d.summary && <p className="text-sm text-muted-foreground">{d.summary}</p>}
-            <p className="text-xs text-muted-foreground">
-              AI-generated analysis: a guide, not a verdict. Check it against the offer.
+            <p className="text-lg font-semibold">
+              {VERDICTS.includes(d.recommendation)
+                ? t(`fit.${d.recommendation}` as 'fit.go')
+                : d.recommendation}
             </p>
+            {d.summary && <p className="text-sm text-muted-foreground">{d.summary}</p>}
+            <p className="text-xs text-muted-foreground">{t('fit.disclaimer')}</p>
           </div>
         </CardContent>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
-        <List title="Strengths" items={d.strengths} tone="success" />
-        <List title="Gaps" items={d.gaps} tone="warning" />
+        <List title={t('fit.strengths')} items={d.strengths} tone="success" />
+        <List title={t('fit.gaps')} items={d.gaps} tone="warning" />
       </div>
-      <List title="Missing requirements" items={d.key_missing_requirements} tone="danger" />
+      <List title={t('fit.missing_reqs')} items={d.key_missing_requirements} tone="danger" />
       {d.constructive_feedback && (
         <Card>
           <CardHeader>
-            <CardTitle>Advice</CardTitle>
+            <CardTitle>{t('fit.advice')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">{d.constructive_feedback}</p>
@@ -84,13 +84,9 @@ function Report({ fit }: { fit: Fit }) {
   )
 }
 
-const STEPS = [
-  'Reading your profile and the job…',
-  'Comparing skills and requirements…',
-  'Writing your report…',
-]
-
 export function FitPage() {
+  const t = useT()
+  const steps = [t('fit.step_profile'), t('fit.step_compare'), t('fit.step_write')]
   const { jobId = '' } = useParams()
   const job = useJob(jobId)
   const latest = useLatestFit(jobId)
@@ -100,13 +96,13 @@ export function FitPage() {
 
   if (job.isPending || latest.isPending)
     return (
-      <Page title="Fit report" back={{ to: '/jobs', label: 'Jobs' }}>
+      <Page title={t('fit.title')} back={{ to: '/jobs', label: t('fit.back') }}>
         <ListSkeleton />
       </Page>
     )
   if (job.isError || latest.isError)
     return (
-      <Page title="Fit report" back={{ to: '/jobs', label: 'Jobs' }}>
+      <Page title={t('fit.title')} back={{ to: '/jobs', label: t('fit.back') }}>
         <ErrorMessage error={job.error ?? latest.error} />
       </Page>
     )
@@ -115,15 +111,15 @@ export function FitPage() {
   return (
     <Page
       title={job.data.data.title}
-      description={job.data.data.company.name?.trim() || 'Company not set'}
-      back={{ to: '/jobs', label: 'Jobs' }}
+      description={job.data.data.company.name?.trim() || t('jobs.company_unset')}
+      back={{ to: '/jobs', label: t('fit.back') }}
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to={`/?job=${jobId}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
-            Discuss this job
+            {t('jobs.discuss')}
           </Link>
           {fit && (
             <>
@@ -131,7 +127,7 @@ export function FitPage() {
                 to={`/letters?job=${jobId}`}
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
-                Write a cover letter
+                {t('fit.write_letter')}
               </Link>
               <ApplyActions jobId={jobId} jobSource={job.data.source} />
             </>
@@ -142,43 +138,37 @@ export function FitPage() {
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3">
           <div className="space-y-1">
-            <Label htmlFor="company-type">Company type</Label>
+            <Label htmlFor="company-type">{t('fit.company_type')}</Label>
             <NativeSelect
               id="company-type"
               value={type}
               onChange={(e) => setType(e.target.value as CompanyType)}
               className="w-fit"
             >
-              <NativeSelectOption value="corporate">Corporate</NativeSelectOption>
-              <NativeSelectOption value="startup">Startup</NativeSelectOption>
-              <NativeSelectOption value="phd">PhD / research</NativeSelectOption>
+              <NativeSelectOption value="corporate">{t('fit.corporate')}</NativeSelectOption>
+              <NativeSelectOption value="startup">{t('fit.startup')}</NativeSelectOption>
+              <NativeSelectOption value="phd">{t('fit.phd')}</NativeSelectOption>
             </NativeSelect>
           </div>
           <Button loading={run.isPending} onClick={() => run.mutate(type)}>
-            {run.isPending ? 'Analysing…' : fit ? 'Re-run analysis' : 'Analyse my fit'}
+            {run.isPending ? t('jobs.analysing') : fit ? t('fit.rerun') : t('fit.analyse')}
           </Button>
         </CardContent>
       </Card>
-      {run.isPending && <StepProgress steps={STEPS} />}
+      {run.isPending && <StepProgress steps={steps} />}
       {run.isError && <ErrorMessage error={run.error} />}
       {fit ? (
         <Report fit={fit} />
       ) : (
-        <EmptyState
-          icon={Target}
-          title="No analysis yet"
-          description="Run the analysis to see your score, strengths and gaps for this job."
-        />
+        <EmptyState icon={Target} title={t('fit.empty_title')} description={t('fit.empty_desc')} />
       )}
       <JobDescription job={job.data} />
       <Card>
         <CardHeader>
-          <CardTitle>Delete this job</CardTitle>
+          <CardTitle>{t('fit.delete_title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Removes the job and its fit report. Your letters and tracked applications stay.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('fit.delete_desc')}</p>
           <DeleteJobButton
             id={jobId}
             title={job.data.data.title}

@@ -28,6 +28,7 @@ from recruitai.core.db import count_rows
 from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.filenames import safe_filename
+from recruitai.core.language import Language
 from recruitai.core.storage import Storage
 from recruitai.core.tasks import enqueue
 from recruitai.modules.candidates import service as candidates
@@ -43,7 +44,6 @@ from recruitai.modules.letters.schemas import (
     BodyIdea,
     CompanyType,
     Header,
-    Language,
     Length,
     LetterCheck,
     LetterContent,
@@ -104,12 +104,17 @@ def _build_content(
             date=today,
         ),
         recipient=Recipient(
-            company=(job.get("company") or {}).get("name") or None,
+            company=_known_company((job.get("company") or {}).get("name")),
             address=(job.get("company") or {}).get("address") or None,
         ),
         signature=person.get("name") or "",
         **draft.model_dump(),
     )
+
+
+def _known_company(name: str | None) -> str | None:
+    """The job list's "not disclosed" placeholder is a miss, not a company name."""
+    return None if not name or name == "Entreprise non divulguée" else name
 
 
 async def _profile_and_job(
@@ -150,12 +155,14 @@ async def motivation_questions(
     *,
     org_id: UUID,
     job_id: UUID,
-    language: Language = "fr",
+    language: Language = "en",
 ) -> list[MotivationQuestion]:
     """Three questions tailored to this job, employer and profile, whose answers become the
     personal heart of the letter. Uses the job's fit analysis (run now if there is none)."""
     profile, job = await _profile_and_job(db, org_id=org_id, job_id=job_id)
-    fit = await matching.latest_or_analyze(db, llm, org_id=org_id, job_id=job_id)
+    fit = await matching.latest_or_analyze(
+        db, llm, org_id=org_id, job_id=job_id, language=language
+    )
     found = await generate_retrying_invalid(
         llm,
         schema=MotivationQuestions,
@@ -185,7 +192,7 @@ async def generate(
     *,
     org_id: UUID,
     job_id: UUID,
-    language: Language = "fr",
+    language: Language = "en",
     tone: Tone = "professional",
     length: Length = "standard",
     company_type: CompanyType = "corporate",
@@ -200,7 +207,12 @@ async def generate(
     # The letter argues why the candidate fits, so it starts from the fit analysis (run now if
     # the user never did) and the candidate's own words.
     fit = await matching.latest_or_analyze(
-        db, llm, org_id=org_id, job_id=job_id, company_type=company_type
+        db,
+        llm,
+        org_id=org_id,
+        job_id=job_id,
+        company_type=company_type,
+        language=language,
     )
     argument = _ARGUMENT.format(
         fit=compact_json(
@@ -260,11 +272,17 @@ _PARAGRAPHS: dict[str, int] = {"short": 2, "standard": 3, "detailed": 4}
 _SUBJECT = {
     "fr": "Candidature au poste de {title}",
     "en": "Application for the {title} position",
+    "vi": "Ứng tuyển vị trí {title}",
 }
-_SALUTATION = {"fr": "Madame, Monsieur,", "en": "Dear Hiring Manager,"}
+_SALUTATION = {
+    "fr": "Madame, Monsieur,",
+    "en": "Dear Hiring Manager,",
+    "vi": "Kính gửi Quý Công ty,",
+}
 _CLOSING = {
     "fr": "Je vous prie d'agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
     "en": "Sincerely,",
+    "vi": "Trân trọng.",
 }
 
 

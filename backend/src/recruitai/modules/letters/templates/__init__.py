@@ -15,12 +15,15 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
+from recruitai.core.language import Language
 from recruitai.modules.letters.latex_escape import escape_value
-from recruitai.modules.letters.schemas import Language, LetterContent, Template
+from recruitai.modules.letters.schemas import LetterContent, Template
 
 _LABELS = {
     "fr": {"subject": "Objet :", "babel": "french"},
     "en": {"subject": "Subject:", "babel": "english"},
+    # Hyphenation is the only thing babel does here; Vietnamese words are one syllable.
+    "vi": {"subject": "V/v:", "babel": "english"},
 }
 _MONTHS_FR = [
     "janvier", "février", "mars", "avril", "mai", "juin",
@@ -57,6 +60,8 @@ def format_date(iso: str | None, language: Language) -> str:
         return iso
     if language == "fr":
         return f"{d.day} {_MONTHS_FR[d.month - 1]} {d.year}"
+    if language == "vi":
+        return f"{d.day} tháng {d.month} năm {d.year}"
     return f"{d.day} {d.strftime('%B')} {d.year}"
 
 
@@ -88,7 +93,9 @@ def render_tex(
             )
         ),
         "date": date_text,
-        "date_line": f"Le {date_text}" if language == "fr" else date_text,
+        "date_line": {"fr": f"Le {date_text}", "vi": f"Ngày {date_text}"}.get(
+            language, date_text
+        ),
         "subject": c["subject"],
         "salutation": c["salutation"],
         "paragraphs": [c["opening"], *c["body"]],

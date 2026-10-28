@@ -11,6 +11,26 @@ from recruitai.core.errors import UpstreamUnavailable
 CTX = {"days_left": 7, "delete_on": "2028-01-01"}
 
 
+@pytest.mark.parametrize(
+    ("language", "greeting", "other"),
+    [
+        ("fr", "Bonjour", "Hello"),
+        ("vi", "Xin chào", "Hello"),
+        ("en", "Hello", "Bonjour"),
+    ],
+)
+def test_each_email_is_in_one_language_only(language, greeting, other):
+    for template, context in [
+        ("inactivity_warning", CTX),
+        ("radar_inactivity_notice", {"pause_on": "2028-01-01"}),
+        ("radar_paused_failures", {"name": "Data"}),
+        ("application_reminders", {"count": 1, "lines": "- x"}),
+    ]:
+        subject, body = render(template, {**context, "language": language})
+        assert greeting in body and other not in body
+        assert " / " not in subject  # the old bilingual subject
+
+
 async def test_the_fake_records_what_would_be_sent_and_renders_the_template():
     sender = FakeEmailSender()
     await sender.send("ada@example.test", "inactivity_warning", CTX)
@@ -18,9 +38,7 @@ async def test_the_fake_records_what_would_be_sent_and_renders_the_template():
         ("ada@example.test", "inactivity_warning", CTX)
     ]
     subject, body = render("inactivity_warning", CTX)
-    assert (
-        "7" in subject and "2028-01-01" in body and "Bonjour" in body
-    )  # both languages
+    assert "7" in subject and "2028-01-01" in body and "Hello" in body
     with pytest.raises(
         KeyError
     ):  # a bad template/context fails in tests, not in production
@@ -85,3 +103,11 @@ def test_the_api_key_is_required_only_when_brevo_is_selected():
         _settings(email_backend="brevo")
     brevo = get_email_sender(_settings(email_backend="brevo", brevo_api_key="k"))
     assert isinstance(brevo, BrevoEmailSender)
+
+
+def test_every_ai_prompt_gets_one_language_rule():
+    from recruitai.ai.prompts.language import with_language
+
+    for code, name in [("en", "English"), ("fr", "French"), ("vi", "Vietnamese")]:
+        out = with_language("SYSTEM", code)
+        assert out.startswith("SYSTEM") and f"in {name}" in out and "Never mix" in out

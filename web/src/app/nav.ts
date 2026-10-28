@@ -1,9 +1,11 @@
 import { Briefcase, FileText, Kanban, Radar, UserRound, type LucideIcon } from 'lucide-react'
+import type { Key } from '@/i18n'
 
-export const NAV: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: '/profile', label: 'Profile', icon: UserRound },
-  { to: '/jobs', label: 'Jobs', icon: Briefcase },
-  { to: '/radar', label: 'Radar', icon: Radar },
-  { to: '/letters', label: 'Letters', icon: FileText },
-  { to: '/tracker', label: 'Tracker', icon: Kanban },
+/** `label` is a message key: translate at render. */
+export const NAV: { to: string; label: Key; icon: LucideIcon }[] = [
+  { to: '/profile', label: 'nav.profile', icon: UserRound },
+  { to: '/jobs', label: 'nav.jobs', icon: Briefcase },
+  { to: '/radar', label: 'nav.radar', icon: Radar },
+  { to: '/letters', label: 'nav.letters', icon: FileText },
+  { to: '/tracker', label: 'nav.tracker', icon: Kanban },
 ]

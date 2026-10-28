@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from recruitai.core.language import Language
+
 
 class UserOut(BaseModel):
     id: UUID
@@ -32,6 +34,7 @@ class MeResponse(BaseModel):
     is_admin: bool = False
     email_reminders: bool = True
     weekly_goal: int | None = None
+    language: Language = "en"
     session: SessionPolicyOut
 
 
@@ -92,6 +95,7 @@ class PreferencesIn(BaseModel):
 
     email_reminders: bool | None = None
     weekly_goal: int | None = Field(None, ge=1, le=50)
+    language: Language | None = None
 
 
 class AiFeatureOut(BaseModel):

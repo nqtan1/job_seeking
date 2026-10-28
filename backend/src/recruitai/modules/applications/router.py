@@ -306,5 +306,9 @@ async def interview_prep(
 ) -> InterviewPrep:
     """Likely questions with answer outlines from your own profile; nothing is stored."""
     return await service.interview_prep(
-        db, llm, org_id=ctx.org_id, application_id=application_id
+        db,
+        llm,
+        org_id=ctx.org_id,
+        application_id=application_id,
+        language=ctx.language,
     )

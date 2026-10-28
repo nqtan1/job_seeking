@@ -1,15 +1,16 @@
 import { useState } from 'react'
+import { useT, type Key } from '@/i18n'
 import { Input } from '@/components/ui/input'
 import { cn } from 'cn'
 
 /** France Travail contract codes the user can tick. Anything else goes in "Other". */
-const KNOWN: [code: string, label: string][] = [
-  ['CDI', 'CDI'],
-  ['CDD', 'CDD'],
-  ['MIS', 'Intérim'],
-  ['SAI', 'Seasonal'],
-  ['LIB', 'Freelance'],
-  ['FRA', 'Franchise'],
+const KNOWN: [code: string, label: Key | null][] = [
+  ['CDI', null],
+  ['CDD', null],
+  ['MIS', 'ui.contract_mis'],
+  ['SAI', 'ui.contract_sai'],
+  ['LIB', 'ui.contract_lib'],
+  ['FRA', 'ui.contract_fra'],
 ]
 const KNOWN_CODES = KNOWN.map(([code]) => code)
 
@@ -27,12 +28,13 @@ const split = (value: string | null | undefined) =>
 export function ContractPicker({
   value,
   onChange,
-  label = 'Contract types',
+  label,
 }: {
   value: string | null | undefined
   onChange: (value: string | null) => void
   label?: string
 }) {
+  const t = useT()
   const codes = split(value)
   const ticked = codes.filter((c) => KNOWN_CODES.includes(c))
   const [other, setOther] = useState(codes.filter((c) => !KNOWN_CODES.includes(c)).join(', '))
@@ -50,7 +52,7 @@ export function ContractPicker({
       on ? 'border-primary bg-primary text-primary-foreground' : 'bg-card hover:bg-accent',
     )
   return (
-    <div role="group" aria-label={label} className="space-y-2">
+    <div role="group" aria-label={label ?? t('ui.contract_types')} className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
         <button
           type="button"
@@ -61,7 +63,7 @@ export function ContractPicker({
             onChange(null)
           }}
         >
-          All contracts
+          {t('ui.all_contracts')}
         </button>
         {KNOWN.map(([code, text]) => (
           <button
@@ -71,13 +73,13 @@ export function ContractPicker({
             className={chip(ticked.includes(code))}
             onClick={() => toggle(code)}
           >
-            {text}
+            {text ? t(text) : code}
           </button>
         ))}
       </div>
       <Input
-        aria-label="Other contract codes"
-        placeholder="Other codes, e.g. CCE, REP"
+        aria-label={t('ui.other_codes')}
+        placeholder={t('ui.other_codes_ph')}
         value={other}
         onChange={(e) => {
           setOther(e.target.value)

@@ -95,7 +95,8 @@ async def create_letter(
     db: Annotated[AsyncSession, Depends(get_db)],
     llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
 ) -> LetterOut:
-    letter = await service.generate(db, llm, org_id=ctx.org_id, **body.model_dump())
+    fields = body.model_dump() | {"language": body.language or ctx.language}
+    letter = await service.generate(db, llm, org_id=ctx.org_id, **fields)
     return _out(letter)
 
 
@@ -116,7 +117,11 @@ async def motivation_questions(
     """Three questions tailored to this job and the candidate. Their answers, sent with
     ``POST /letters`` as ``answers``, are what makes the letter personal. Saves nothing."""
     questions = await service.motivation_questions(
-        db, llm, org_id=ctx.org_id, job_id=body.job_id, language=body.language
+        db,
+        llm,
+        org_id=ctx.org_id,
+        job_id=body.job_id,
+        language=body.language or ctx.language,
     )
     return MotivationQuestionsOut(questions=questions)
 

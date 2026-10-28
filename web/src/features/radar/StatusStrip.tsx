@@ -2,11 +2,13 @@ import { Radar } from 'lucide-react'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { cn } from 'cn'
 import { Button } from '@/components/ui/button'
+import { useI18n } from '@/i18n'
 import { useRadarStatus, useRunSearch } from './api'
-import { STOP, when } from './format'
+import { stopText, when } from './format'
 
 /** The radar at a glance: working or idle, what it did last, when it runs next. */
 export function StatusStrip() {
+  const { t, locale } = useI18n()
   const status = useRadarStatus(true)
   const retry = useRunSearch()
   if (!status.data) return null
@@ -15,7 +17,7 @@ export function StatusStrip() {
   return (
     <div className="space-y-2">
       <section
-        aria-label="Radar status"
+        aria-label={t('radar.s.aria')}
         className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-card p-4"
       >
         <p className="flex items-center gap-2 text-sm font-medium">
@@ -26,24 +28,34 @@ export function StatusStrip() {
             )}
           />
           {running
-            ? `Working… found ${last?.found ?? 0}, scored ${last?.scored ?? 0}`
+            ? t('radar.s.working', { found: last?.found ?? 0, scored: last?.scored ?? 0 })
             : searches === 0
-              ? 'No radar yet'
-              : 'Idle'}
+              ? t('radar.s.none')
+              : t('radar.s.idle')}
         </p>
         {last && !running && (
           <p className="text-sm text-muted-foreground">
-            Last run {when(last.started_at)}: looked at {last.scored} new offer
-            {last.scored === 1 ? '' : 's'}, kept {last.shortlisted}
-            {last.stop_reason && last.stop_reason !== 'done' ? ` (${STOP[last.stop_reason]})` : ''}
+            {t('radar.s.last_run', {
+              when: when(last.started_at, t, locale),
+              count: last.scored,
+              kept: last.shortlisted,
+              stop:
+                last.stop_reason && last.stop_reason !== 'done'
+                  ? ` (${stopText(t, last.stop_reason)})`
+                  : '',
+            })}
           </p>
         )}
         <p className="text-sm text-muted-foreground">
-          {next ? `Next run ${when(next)}` : searches ? 'Daily search is off' : ''}
+          {next
+            ? t('radar.s.next', { when: when(next, t, locale) })
+            : searches
+              ? t('radar.s.daily_off')
+              : ''}
         </p>
         <p className="ml-auto flex items-center gap-1.5 text-sm font-medium">
           <Radar className="size-4 text-primary" />
-          {matches} new match{matches === 1 ? '' : 'es'}
+          {t('radar.s.matches', { count: matches })}
         </p>
       </section>
       {interrupted && (
@@ -52,11 +64,15 @@ export function StatusStrip() {
           className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm"
         >
           <p>
-            <strong>The last run was interrupted</strong>
-            {` (${STOP[status.data.interrupted_reason ?? ''] ?? 'something went wrong'}). It found ${last.found} offer${last.found === 1 ? '' : 's'} and scored ${last.scored}. Nothing was lost: a retry picks up the same offers.`}
+            <strong>{t('radar.s.interrupted')}</strong>
+            {t('radar.s.interrupted_body', {
+              reason: stopText(t, status.data.interrupted_reason ?? ''),
+              count: last.found,
+              scored: last.scored,
+            })}
           </p>
           <Button size="sm" disabled={retry.isPending} onClick={() => retry.mutate(last.search_id)}>
-            Retry now
+            {t('radar.s.retry')}
           </Button>
           {retry.isError && <ErrorMessage error={retry.error} />}
         </div>

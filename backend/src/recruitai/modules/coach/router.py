@@ -307,6 +307,7 @@ async def send_message(
             org_id=ctx.org_id,
             conversation_id=conversation_id,
             content=body.content,
+            language=ctx.language,
         )
     )
 
@@ -341,5 +342,6 @@ async def regenerate(
             conversation_id=conversation_id,
             content=None,
             replace_last=True,
+            language=ctx.language,
         )
     )

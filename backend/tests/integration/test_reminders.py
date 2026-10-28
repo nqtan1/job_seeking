@@ -7,7 +7,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.core.auth import CurrentUser
-from recruitai.core.email import FakeEmailSender
+from recruitai.core.email import FakeEmailSender, render
 from recruitai.core.tenancy import get_org_context
 from recruitai.modules.applications import repository
 from recruitai.modules.identity import service
@@ -103,3 +103,27 @@ async def test_weekly_goal_line_only_on_monday_and_only_when_opted_in(
 
     assert await service.send_application_reminders(db_session, sender, now=monday) == 1
     assert "1 of 3" in sender.sent[0].context["lines"]
+
+
+async def test_language_is_a_preference_and_the_digest_follows_it(
+    db_session: AsyncSession,
+):
+    _ada, ada_ctx = await _user(db_session, "lang")
+    await service.set_preferences(
+        db_session,
+        user_id=ada_ctx.user_id,
+        changes={"language": "vi", "weekly_goal": 3},
+    )
+    await service.set_preferences(
+        db_session, user_id=ada_ctx.user_id, changes={"language": None}
+    )  # null never clears it
+    assert (await service.get_me(db_session, ada_ctx)).language == "vi"
+
+    await _application(
+        db_session, ada_ctx.org_id, "Sent Co", applied_at=date(2026, 10, 1)
+    )
+    monday = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
+    sender = FakeEmailSender()
+    assert await service.send_application_reminders(db_session, sender, now=monday) == 1
+    assert "Mục tiêu tuần" in sender.sent[0].context["lines"]
+    assert "Xin chào" in render("application_reminders", sender.sent[0].context)[1]

@@ -37,7 +37,7 @@ class Letter(Base):
         CheckConstraint(
             "template IN ('classic', 'modern', 'compact', 'lettre_fr')", name="template"
         ),
-        CheckConstraint("language IN ('fr', 'en')", name="language"),
+        CheckConstraint("language IN ('fr', 'en', 'vi')", name="language"),
         CheckConstraint(
             "tone IN ('professional', 'warm', 'confident', 'academic', 'formal')",
             name="tone",

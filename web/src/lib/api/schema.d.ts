@@ -1256,6 +1256,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ping
+         * @description Public and free: the web app calls it as soon as it loads, so a scaled-to-zero
+         *     instance is already starting while the user signs in (Hosting only forwards /api/**).
+         */
+        get: operations["ping_api_ping_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ready": {
         parameters: {
             query?: never;
@@ -2459,12 +2480,8 @@ export interface components {
             motivation?: string | null;
             /** Answers */
             answers?: components["schemas"]["Answer"][];
-            /**
-             * Language
-             * @default fr
-             * @enum {string}
-             */
-            language: "fr" | "en";
+            /** Language */
+            language?: ("en" | "fr" | "vi") | null;
             /**
              * Tone
              * @default professional
@@ -2519,7 +2536,7 @@ export interface components {
              * Language
              * @enum {string}
              */
-            language: "fr" | "en";
+            language: "en" | "fr" | "vi";
             /**
              * Tone
              * @enum {string}
@@ -2618,6 +2635,12 @@ export interface components {
             email_reminders: boolean;
             /** Weekly Goal */
             weekly_goal?: number | null;
+            /**
+             * Language
+             * @default en
+             * @enum {string}
+             */
+            language: "en" | "fr" | "vi";
             session: components["schemas"]["SessionPolicyOut"];
         };
         /** MessageIn */
@@ -2725,12 +2748,8 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
-            /**
-             * Language
-             * @default fr
-             * @enum {string}
-             */
-            language: "fr" | "en";
+            /** Language */
+            language?: ("en" | "fr" | "vi") | null;
         };
         /** MotivationQuestionsOut */
         MotivationQuestionsOut: {
@@ -2797,6 +2816,8 @@ export interface components {
             email_reminders?: boolean | null;
             /** Weekly Goal */
             weekly_goal?: number | null;
+            /** Language */
+            language?: ("en" | "fr" | "vi") | null;
         };
         /**
          * ProblemDetail
@@ -8079,6 +8100,24 @@ export interface operations {
                         [key: string]: string;
                     };
                 };
+            };
+        };
+    };
+    ping_api_ping_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

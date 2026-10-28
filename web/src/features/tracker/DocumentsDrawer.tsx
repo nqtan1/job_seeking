@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useI18n } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -11,13 +12,7 @@ import {
 } from './api'
 import { Drawer } from './Drawer'
 
-const KIND_LABEL: Record<string, string> = {
-  cv: 'CV',
-  letter_pdf: 'Letter (PDF)',
-  attachment: 'Attachment',
-}
-const docName = (d: { kind: string; created_at: string; size: number }) =>
-  `${KIND_LABEL[d.kind] ?? d.kind} · ${new Date(d.created_at).toLocaleDateString()} · ${Math.max(1, Math.round(d.size / 1024))} KB`
+const KINDS = ['cv', 'letter_pdf', 'attachment']
 
 /** Left-side reader: the files sent with this application, viewable in place (interview prep). */
 export function DocumentsDrawer({
@@ -29,6 +24,9 @@ export function DocumentsDrawer({
   name: string
   onClose: () => void
 }) {
+  const { t, locale } = useI18n()
+  const docName = (d: { kind: string; created_at: string; size: number }) =>
+    `${KINDS.includes(d.kind) ? t(`tracker.docs.kind_${d.kind}` as 'tracker.docs.kind_cv') : d.kind} · ${new Date(d.created_at).toLocaleDateString(locale)} · ${Math.max(1, Math.round(d.size / 1024))} KB`
   const attached = useApplicationDocuments(app.id, true)
   const available = useAvailableDocuments(true)
   const attach = useAttachDocument(app.id)
@@ -40,18 +38,20 @@ export function DocumentsDrawer({
   const choices = (available.data ?? []).filter((d) => !taken.has(d.document_id))
   return (
     <Drawer
-      label={`Documents for ${name}`}
-      title="Documents sent"
+      label={t('tracker.docs.label', { name })}
+      title={t('tracker.docs.title')}
       subtitle={name}
       side="left"
       onClose={onClose}
     >
-      {attached.isPending && <p className="text-xs text-muted-foreground">Loading documents…</p>}
+      {attached.isPending && (
+        <p className="text-xs text-muted-foreground">{t('tracker.docs.loading')}</p>
+      )}
       {attached.isError && <ErrorMessage error={attached.error} />}
       {attached.data && docs.length === 0 && (
-        <p className="text-sm text-muted-foreground">No documents attached yet.</p>
+        <p className="text-sm text-muted-foreground">{t('tracker.docs.none')}</p>
       )}
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Attached documents">
+      <div className="flex flex-wrap gap-2" role="tablist" aria-label={t('tracker.docs.attached')}>
         {docs.map((d) => (
           <Button
             key={d.document_id}
@@ -87,32 +87,32 @@ export function DocumentsDrawer({
               rel="noopener noreferrer"
               className="text-xs underline underline-offset-2"
             >
-              Open in new tab
+              {t('tracker.docs.open')}
             </a>
             <a
               href={current.save_url}
               className="text-xs underline underline-offset-2"
-              aria-label={`Download ${current.filename}`}
+              aria-label={t('tracker.docs.download_aria', { file: current.filename })}
             >
-              Download
+              {t('tracker.docs.download')}
             </a>
             <Button
               size="sm"
               variant="ghost"
               disabled={detach.isPending}
-              aria-label={`Remove ${current.filename}`}
+              aria-label={t('tracker.docs.remove_aria', { file: current.filename })}
               onClick={() =>
                 detach.mutate(current.document_id, { onSuccess: () => setPicked(undefined) })
               }
             >
-              Remove from this application
+              {t('tracker.docs.remove')}
             </Button>
           </div>
         </>
       )}
       {choices.length > 0 && (
         <NativeSelect
-          aria-label="Attach a document"
+          aria-label={t('tracker.docs.attach_aria')}
           className="w-full"
           value=""
           disabled={attach.isPending}
@@ -121,7 +121,7 @@ export function DocumentsDrawer({
           }
         >
           <NativeSelectOption value="" disabled>
-            Attach a document…
+            {t('tracker.docs.attach')}
           </NativeSelectOption>
           {choices.map((d) => (
             <NativeSelectOption key={d.document_id} value={d.document_id}>

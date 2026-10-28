@@ -585,7 +585,7 @@ async def test_the_digest_names_the_best_new_matches(db_session: AsyncSession):
             company="Acme",
         )
 
-    lines = (await service.new_match_lines(db_session, now=NOW))[ctx.org_id]
+    lines = (await service.new_match_lines(db_session, now=NOW))[ctx.org_id]("en")
 
     assert lines[0].startswith("- 4 new jobs match your radar")
     assert [l.split(",")[0].strip(" ·") for l in lines[1:]] == [

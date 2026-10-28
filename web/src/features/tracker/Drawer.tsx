@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { useEffect, useRef, type ReactNode } from 'react'
+import { useT } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { cn } from 'cn'
 
@@ -22,6 +23,7 @@ export function Drawer({
   onClose: () => void
   children: ReactNode
 }) {
+  const t = useT()
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null
@@ -55,7 +57,7 @@ export function Drawer({
             ref={closeRef}
             size="icon-sm"
             variant="ghost"
-            aria-label="Close"
+            aria-label={t('tracker.close')}
             onClick={onClose}
           >
             <X />

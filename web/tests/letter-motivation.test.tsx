@@ -50,7 +50,7 @@ test('tailored questions, real answers and tapped strengths all go to the letter
   await user.click(screen.getByRole('button', { name: 'Ask me 3 questions about this job' }))
   await waitFor(() =>
     expect(mocks.POST).toHaveBeenCalledWith('/api/v1/letters/motivation-questions', {
-      body: { job_id: 'j1', language: 'fr' },
+      body: { job_id: 'j1', language: 'en' },
     }),
   )
   await user.click(await screen.findByRole('button', { name: 'Python depuis 5 ans' }))

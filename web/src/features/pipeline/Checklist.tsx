@@ -1,5 +1,6 @@
 import { Check, Circle } from 'lucide-react'
 import { Link } from 'react-router'
+import { useT } from '@/i18n'
 import { useJobs } from '@/features/job-search/api'
 import { useMe } from '@/features/settings/api'
 import { cn } from 'cn'
@@ -10,6 +11,7 @@ import { useApplications } from '@/features/tracker/api'
 
 /** "Your next steps": the whole journey on one card, shown until every step is done. */
 export function Checklist() {
+  const t = useT()
   const me = useMe()
   const jobs = useJobs()
   const fits = useAllFits()
@@ -17,13 +19,13 @@ export function Checklist() {
   const apps = useApplications()
   const radars = useSearches()
   const steps = [
-    { label: 'Add your CV', to: '/profile', done: !!me.data?.onboarding.has_profile },
-    { label: 'Add a job you like', to: '/jobs', done: (jobs.data?.length ?? 0) > 0 },
-    { label: 'Check how well you fit', to: '/jobs', done: (fits.data?.length ?? 0) > 0 },
-    { label: 'Write a cover letter', to: '/letters', done: (letters.data?.length ?? 0) > 0 },
-    { label: 'Track an application', to: '/tracker', done: (apps.data?.length ?? 0) > 0 },
+    { label: t('pipeline.step.cv'), to: '/profile', done: !!me.data?.onboarding.has_profile },
+    { label: t('pipeline.step.job'), to: '/jobs', done: (jobs.data?.length ?? 0) > 0 },
+    { label: t('pipeline.step.fit'), to: '/jobs', done: (fits.data?.length ?? 0) > 0 },
+    { label: t('pipeline.step.letter'), to: '/letters', done: (letters.data?.length ?? 0) > 0 },
+    { label: t('pipeline.step.track'), to: '/tracker', done: (apps.data?.length ?? 0) > 0 },
     {
-      label: 'Let the radar find jobs for you',
+      label: t('pipeline.step.radar'),
       to: '/radar',
       done: (radars.data?.length ?? 0) > 0,
     },
@@ -34,13 +36,13 @@ export function Checklist() {
   const next = steps.findIndex((s) => !s.done)
   return (
     <section
-      aria-label="Next steps"
+      aria-label={t('pipeline.next_aria')}
       className="mx-auto max-w-xl rounded-xl border bg-card p-4 text-left shadow-xs"
     >
       <p className="mb-2 text-sm font-semibold">
-        Your next steps{' '}
+        {t('pipeline.next')}{' '}
         <span className="font-normal text-muted-foreground">
-          ({done} of {steps.length})
+          {t('pipeline.progress', { done, total: steps.length })}
         </span>
       </p>
       <ol className="space-y-1">

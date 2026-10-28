@@ -27,6 +27,7 @@ from recruitai.core.auth import CurrentUser, get_current_user
 from recruitai.core.db import get_db
 from recruitai.core.errors import Forbidden, NotFound
 from recruitai.core.ids import new_id
+from recruitai.core.language import Language
 from recruitai.modules.identity.models import Membership, Organization, User
 
 LAST_ACTIVE_MIN_INTERVAL_S = 3600
@@ -37,6 +38,7 @@ class OrgContext:
     org_id: UUID
     user_id: UUID
     role: str
+    language: Language = "en"
 
 
 async def _provision_user(
@@ -136,7 +138,7 @@ async def _member_org(
     return org_id, role
 
 
-_UserRow = Row[UUID, str, datetime | None, datetime | None, UUID]
+_UserRow = Row[UUID, str, datetime | None, datetime | None, str, UUID]
 
 
 async def _lookup(session: AsyncSession, firebase_uid: str) -> _UserRow | None:
@@ -155,6 +157,7 @@ async def _lookup(session: AsyncSession, firebase_uid: str) -> _UserRow | None:
                 User.email,
                 User.blocked_at,
                 User.last_active_at,
+                User.language,
                 personal.label("personal_org_id"),
             ).where(User.firebase_uid == firebase_uid)
         )
@@ -198,7 +201,12 @@ async def get_org_context(
         else:
             org_id, role = await _member_org(db, user_id, x_org_id)
         await db.commit()
-        return OrgContext(org_id=org_id, user_id=user_id, role=role)
+        return OrgContext(
+            org_id=org_id,
+            user_id=user_id,
+            role=role,
+            language=row.language,
+        )
 
     user_id, inserted = await _provision_user(db, current_user)
     if not inserted and await _is_blocked(db, user_id):

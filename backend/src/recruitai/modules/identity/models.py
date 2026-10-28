@@ -39,6 +39,9 @@ class Organization(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint("language IN ('en', 'fr', 'vi')", name="language"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
     # UNIQUE: P1-07 provisions users with an atomic INSERT ... ON CONFLICT (firebase_uid).
@@ -57,6 +60,10 @@ class User(Base):
     )
     # Optional weekly application goal, mentioned in the Monday digest (null = off).
     weekly_goal: Mapped[int | None] = mapped_column(SmallInteger)
+    # UI, AI answers and e-mails all follow it (core/language.py).
+    language: Mapped[str] = mapped_column(
+        String(2), nullable=False, server_default="en"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

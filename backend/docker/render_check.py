@@ -37,7 +37,7 @@ def content(text: str) -> LetterContent:
 async def main() -> int:
     failures = 0
     for template in TEMPLATES:
-        for language in ("fr", "en"):
+        for language in ("fr", "en", "vi"):
             for label, text in (("plain", "Ada Lovelace"), ("hostile", HOSTILE)):
                 tex = render_tex(content(text), template=template, language=language)  # type: ignore[arg-type]
                 try:

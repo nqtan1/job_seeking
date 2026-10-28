@@ -6,13 +6,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useT, type Key } from '@/i18n'
 import { toast } from '@/lib/toast'
 import { useUpdateProfile, type Profile } from './api'
-import { profileSchema, toForm, toPatch, type FormValues } from './form'
+import { makeProfileSchema, toForm, toPatch, type FormValues } from './form'
 
 const PERSONAL = ['name', 'email', 'phone', 'address', 'linkedin', 'github', 'website'] as const
 const EXPERIENCE = ['job_title', 'company', 'start_date', 'end_date'] as const
 const FORMATION = ['degree', 'field', 'institution'] as const
+
+const LABELS: Record<string, Key> = {
+  name: 'candidate.l.name',
+  email: 'candidate.l.email',
+  phone: 'candidate.l.phone',
+  address: 'candidate.l.address',
+  website: 'candidate.l.website',
+  job_title: 'candidate.l.job_title',
+  company: 'candidate.l.company',
+  start_date: 'candidate.l.start_date',
+  end_date: 'candidate.l.end_date',
+  degree: 'candidate.l.degree',
+  field: 'candidate.l.field',
+  institution: 'candidate.l.institution',
+}
+const NAMES: Record<string, string> = { linkedin: 'LinkedIn', github: 'GitHub' }
 
 export function ProfileForm({
   profile,
@@ -23,9 +40,10 @@ export function ProfileForm({
   onSaved?: () => void
   onCancel?: () => void
 }) {
+  const t = useT()
   const save = useUpdateProfile()
   const { register, control, handleSubmit, formState } = useForm<FormValues>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(makeProfileSchema(t)),
     defaultValues: toForm(profile),
   })
   const exp = useFieldArray({ control, name: 'experiences' })
@@ -39,15 +57,15 @@ export function ProfileForm({
       <Input id={path} {...register(path)} />
     </div>
   )
-  const NAMES: Record<string, string> = { linkedin: 'LinkedIn', github: 'GitHub' }
-  const label = (k: string) => NAMES[k] ?? k.replace('_', ' ').replace(/^./, (c) => c.toUpperCase())
+  const label = (k: string) => NAMES[k] ?? t(LABELS[k])
+  const numbered = (k: string, n: number) => t('candidate.numbered', { label: label(k), n })
 
   return (
     <form
       onSubmit={handleSubmit((v) =>
         save.mutate(toPatch(v), {
           onSuccess: () => {
-            toast('Profile saved.')
+            toast(t('candidate.saved'))
             onSaved?.()
           },
         }),
@@ -57,7 +75,7 @@ export function ProfileForm({
     >
       <Card>
         <CardHeader>
-          <CardTitle>Personal information</CardTitle>
+          <CardTitle>{t('candidate.h.personal')}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           {PERSONAL.map((k) => field(`personal_info.${k}`, label(k)))}
@@ -67,7 +85,7 @@ export function ProfileForm({
             </p>
           )}
           <div className="space-y-1 sm:col-span-2">
-            <Label htmlFor="summary">Summary</Label>
+            <Label htmlFor="summary">{t('candidate.h.summary')}</Label>
             <Textarea id="summary" rows={4} {...register('summary')} />
           </div>
         </CardContent>
@@ -75,7 +93,7 @@ export function ProfileForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Experience</CardTitle>
+          <CardTitle>{t('candidate.h.experience')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {exp.fields.map((f, i) => (
@@ -83,10 +101,12 @@ export function ProfileForm({
               key={f.id}
               className="grid gap-4 border-b pb-6 last:border-0 last:pb-0 sm:grid-cols-2"
             >
-              <legend className="sr-only">Experience {i + 1}</legend>
-              {EXPERIENCE.map((k) => field(`experiences.${i}.${k}`, `${label(k)} (${i + 1})`))}
+              <legend className="sr-only">{t('candidate.f.experience_n', { n: i + 1 })}</legend>
+              {EXPERIENCE.map((k) => field(`experiences.${i}.${k}`, numbered(k, i + 1)))}
               <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor={`experiences.${i}.description`}>Description ({i + 1})</Label>
+                <Label htmlFor={`experiences.${i}.description`}>
+                  {t('candidate.f.description_n', { n: i + 1 })}
+                </Label>
                 <Textarea
                   id={`experiences.${i}.description`}
                   rows={3}
@@ -95,11 +115,11 @@ export function ProfileForm({
               </div>
               {(errors.experiences?.[i]?.job_title || errors.experiences?.[i]?.company) && (
                 <p role="alert" className="text-sm text-destructive">
-                  Job title and company are required.
+                  {t('candidate.f.exp_required')}
                 </p>
               )}
               <Button type="button" variant="outline" size="sm" onClick={() => exp.remove(i)}>
-                Remove experience {i + 1}
+                {t('candidate.f.remove_exp', { n: i + 1 })}
               </Button>
             </fieldset>
           ))}
@@ -116,14 +136,14 @@ export function ProfileForm({
               })
             }
           >
-            Add experience
+            {t('candidate.f.add_exp')}
           </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Education</CardTitle>
+          <CardTitle>{t('candidate.h.education')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           {edu.fields.map((f, i) => (
@@ -131,15 +151,15 @@ export function ProfileForm({
               key={f.id}
               className="grid gap-4 border-b pb-6 last:border-0 last:pb-0 sm:grid-cols-3"
             >
-              <legend className="sr-only">Education {i + 1}</legend>
-              {FORMATION.map((k) => field(`formations.${i}.${k}`, `${label(k)} (${i + 1})`))}
+              <legend className="sr-only">{t('candidate.f.education_n', { n: i + 1 })}</legend>
+              {FORMATION.map((k) => field(`formations.${i}.${k}`, numbered(k, i + 1)))}
               {(errors.formations?.[i]?.degree || errors.formations?.[i]?.institution) && (
                 <p role="alert" className="text-sm text-destructive">
-                  Degree and institution are required.
+                  {t('candidate.f.edu_required')}
                 </p>
               )}
               <Button type="button" variant="outline" size="sm" onClick={() => edu.remove(i)}>
-                Remove education {i + 1}
+                {t('candidate.f.remove_edu', { n: i + 1 })}
               </Button>
             </fieldset>
           ))}
@@ -148,36 +168,38 @@ export function ProfileForm({
             variant="outline"
             onClick={() => edu.append({ degree: '', field: '', institution: '' })}
           >
-            Add education
+            {t('candidate.f.add_edu')}
           </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Skills</CardTitle>
+          <CardTitle>{t('candidate.h.skills')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             {skills.fields.map((f, i) => (
               <div key={f.id} className="flex items-end gap-2">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor={`skills.${i}.name`}>Skill {i + 1}</Label>
+                  <Label htmlFor={`skills.${i}.name`}>
+                    {t('candidate.f.skill_n', { n: i + 1 })}
+                  </Label>
                   <Input id={`skills.${i}.name`} {...register(`skills.${i}.name`)} />
                 </div>
                 <Button type="button" variant="outline" size="sm" onClick={() => skills.remove(i)}>
-                  Remove skill {i + 1}
+                  {t('candidate.f.remove_skill', { n: i + 1 })}
                 </Button>
               </div>
             ))}
           </div>
           {errors.skills && (
             <p role="alert" className="text-sm text-destructive">
-              Skill names cannot be empty.
+              {t('candidate.f.skills_empty')}
             </p>
           )}
           <Button type="button" variant="outline" onClick={() => skills.append({ name: '' })}>
-            Add skill
+            {t('candidate.f.add_skill')}
           </Button>
         </CardContent>
       </Card>
@@ -186,11 +208,11 @@ export function ProfileForm({
         {save.isError && <ErrorMessage error={save.error} />}
         {onCancel && (
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {t('candidate.f.cancel')}
           </Button>
         )}
         <Button type="submit" disabled={save.isPending}>
-          {save.isPending ? 'Saving…' : 'Save profile'}
+          {save.isPending ? t('candidate.f.saving') : t('candidate.f.save')}
         </Button>
       </div>
     </form>

@@ -10,6 +10,7 @@ from recruitai.ai.prompts.coach import (
     PROMPT_VERSION,
     SYSTEM_PROMPT_CAREER_COACH,
 )
+from recruitai.ai.prompts.language import with_language
 from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.modules.coach import repository, service
 from recruitai.modules.coach.service import HISTORY_MAX_CHARS, HISTORY_MAX_MESSAGES
@@ -59,7 +60,8 @@ async def test_three_turns_each_store_exactly_two_messages_and_send_the_history(
     assert r1 == "Votre CV est solide."
     first = fake_llm.calls[-1]
     assert (
-        first.system == SYSTEM_PROMPT_CAREER_COACH + JOB_FOCUS_OVERLAY
+        first.system
+        == with_language(SYSTEM_PROMPT_CAREER_COACH + JOB_FOCUS_OVERLAY, "en")
         and first.model == "smart"
     )
     assert first.feature == PROMPT_VERSION and first.schema is None

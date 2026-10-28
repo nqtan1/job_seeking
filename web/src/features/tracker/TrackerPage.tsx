@@ -1,6 +1,7 @@
 import { Kanban, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
+import { useT } from '@/i18n'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
@@ -15,6 +16,7 @@ import { Board } from './Board'
 import { AttentionPanel, Funnel } from './Insights'
 
 export function TrackerPage() {
+  const t = useT()
   const apps = useApplications()
   const change = useChangeStatus()
   const [adding, setAdding] = useState(false)
@@ -33,16 +35,16 @@ export function TrackerPage() {
   }
   return (
     <Page
-      title="Tracker"
-      description="Follow every application from first idea to offer."
+      title={t('tracker.title')}
+      description={t('tracker.description')}
       wide
       actions={
         <>
           <Link to="/tracker/proof" className={buttonVariants({ size: 'sm', variant: 'outline' })}>
-            Search record
+            {t('tracker.proof_link')}
           </Link>
           <Button size="sm" aria-expanded={adding} onClick={() => setAdding(!adding)}>
-            <Plus /> Track an application
+            <Plus /> {t('tracker.track')}
           </Button>
         </>
       }
@@ -50,7 +52,7 @@ export function TrackerPage() {
       {adding && (
         <Card>
           <CardHeader>
-            <CardTitle>Track an application</CardTitle>
+            <CardTitle>{t('tracker.track')}</CardTitle>
           </CardHeader>
           <CardContent>
             <ApplicationForm onDone={() => setAdding(false)} />
@@ -60,7 +62,7 @@ export function TrackerPage() {
       {apps.data && <AttentionPanel apps={apps.data} />}
       <Funnel />
       {apps.isPending && (
-        <div role="status" aria-label="Loading" className="flex gap-3 overflow-hidden">
+        <div role="status" aria-label={t('tracker.loading')} className="flex gap-3 overflow-hidden">
           {[0, 1, 2].map((i) => (
             <div key={i} className="w-full space-y-2 md:w-72 md:shrink-0">
               <Skeleton className="h-8 w-full" />
@@ -75,12 +77,12 @@ export function TrackerPage() {
       {apps.data?.length === 0 && (
         <EmptyState
           icon={Kanban}
-          title="No applications yet"
-          description="Track your first one to follow it from idea to offer."
+          title={t('tracker.empty.title')}
+          description={t('tracker.empty.description')}
           action={
             !adding && (
               <Button onClick={() => setAdding(true)}>
-                <Plus /> Track an application
+                <Plus /> {t('tracker.track')}
               </Button>
             )
           }

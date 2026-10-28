@@ -1,4 +1,5 @@
 import { type RouteObject } from 'react-router'
+import { tNow } from '@/i18n'
 import { AppLayout } from './AppLayout'
 import { RequireAuth } from './RequireAuth'
 import { SignInRoute } from './SignInRoute'
@@ -17,7 +18,7 @@ export const routes: RouteObject[] = [
   },
   {
     element: <RequireAuth />,
-    HydrateFallback: () => <p className="p-8 text-muted-foreground">Loading…</p>, // while the first page chunk loads
+    HydrateFallback: () => <p className="p-8 text-muted-foreground">{tNow('app.loading')}</p>, // while the first page chunk loads
     children: [
       {
         element: <AppLayout />,

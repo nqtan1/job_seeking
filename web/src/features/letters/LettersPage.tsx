@@ -12,26 +12,27 @@ import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { LANG_NAMES, LANGS, useI18n, type Lang } from '@/i18n'
 import { useJobs } from '@/features/job-search/api'
 import { DeleteLetterButton } from './DeleteLetterButton'
 import { MotivationBlock } from './MotivationBlock'
 import { useCreateLetter, useLetters, type LetterIn } from './api'
 
 const OPTIONS = {
-  language: ['fr', 'en'],
+  language: LANGS,
   tone: ['professional', 'warm', 'confident', 'academic', 'formal'],
   length: ['short', 'standard', 'detailed'],
   company_type: ['corporate', 'startup', 'phd'],
   template: ['classic', 'modern', 'compact', 'lettre_fr'],
 } as const
 
-const STEPS = [
-  'Reading your profile and the job…',
-  'Drafting your letter…',
-  'Polishing the wording…',
-]
-
 function NewLetter() {
+  const { t, lang } = useI18n()
+  const optionLabel = (k: keyof typeof OPTIONS, o: string) =>
+    k === 'language'
+      ? LANG_NAMES[o as Lang]
+      : t(`letters.${k === 'company_type' ? 'company' : k}.${o}` as never)
+  const steps = [t('letters.new.step1'), t('letters.new.step2'), t('letters.new.step3')]
   const jobs = useJobs()
   const create = useCreateLetter()
   const navigate = useNavigate()
@@ -43,7 +44,7 @@ function NewLetter() {
       motivation: '',
       answers: [],
       mode: 'ai',
-      language: 'fr',
+      language: lang,
       tone: 'professional',
       length: 'standard',
       company_type: 'corporate',
@@ -57,16 +58,16 @@ function NewLetter() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New cover letter</CardTitle>
+        <CardTitle>{t('letters.new.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         {jobs.data?.length === 0 ? (
           <p className="text-muted-foreground">
-            Add a job first on the{' '}
+            {t('letters.new.no_jobs').split('{link}')[0]}
             <Link to="/jobs" className="underline">
-              Jobs
-            </Link>{' '}
-            page.
+              {t('letters.new.jobs_link')}
+            </Link>
+            {t('letters.new.no_jobs').split('{link}')[1]}
           </p>
         ) : (
           <form
@@ -79,7 +80,7 @@ function NewLetter() {
             )}
           >
             <div className="space-y-1 sm:col-span-3">
-              <Label htmlFor="job_id">Job</Label>
+              <Label htmlFor="job_id">{t('letters.new.job')}</Label>
               <NativeSelect
                 id="job_id"
                 className="w-full"
@@ -93,7 +94,7 @@ function NewLetter() {
                 })}
               >
                 <NativeSelectOption value="" disabled>
-                  Choose a job…
+                  {t('letters.new.choose_job')}
                 </NativeSelectOption>
                 {jobs.data?.map((j) => (
                   <NativeSelectOption key={j.id} value={j.id}>
@@ -104,31 +105,23 @@ function NewLetter() {
             </div>
             {(Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).map((k) => (
               <div className="space-y-1" key={k}>
-                <Label htmlFor={k}>
-                  {k.replace('_', ' ').replace(/^./, (c) => c.toUpperCase())}
-                </Label>
+                <Label htmlFor={k}>{t(`letters.new.${k}`)}</Label>
                 <NativeSelect id={k} className="w-full" {...register(k)}>
                   {OPTIONS[k].map((o) => (
-                    <NativeSelectOption key={o}>{o}</NativeSelectOption>
+                    <NativeSelectOption key={o} value={o}>
+                      {optionLabel(k, o)}
+                    </NativeSelectOption>
                   ))}
                 </NativeSelect>
               </div>
             ))}
             <fieldset className="space-y-1 sm:col-span-3">
-              <legend className="text-sm font-medium">Who writes the letter?</legend>
+              <legend className="text-sm font-medium">{t('letters.new.who')}</legend>
               <div className="flex flex-wrap gap-2">
                 {(
                   [
-                    [
-                      'ai',
-                      'AI writes it',
-                      'A complete letter from your profile, the fit and your motivation.',
-                    ],
-                    [
-                      'own_words',
-                      'I write it myself',
-                      'Your words stay untouched. You get ideas for each paragraph.',
-                    ],
+                    ['ai', t('letters.new.mode_ai'), t('letters.new.mode_ai_hint')],
+                    ['own_words', t('letters.new.mode_own'), t('letters.new.mode_own_hint')],
                   ] as const
                 ).map(([value, title, hint]) => (
                   <label
@@ -148,7 +141,7 @@ function NewLetter() {
               key={`${jobId}-${language}`}
               own={mode === 'own_words'}
               jobId={jobId}
-              language={language === 'en' ? 'en' : 'fr'}
+              language={language ?? lang}
               highlights={highlights ?? []}
               note={motivation ?? ''}
               onHighlights={(v) => setValue('highlights', v)}
@@ -157,16 +150,16 @@ function NewLetter() {
             />
             {create.isPending && (
               <div className="sm:col-span-3">
-                <StepProgress steps={STEPS} />
+                <StepProgress steps={steps} />
               </div>
             )}
             {create.isError && <ErrorMessage error={create.error} />}
             <Button type="submit" className="sm:w-fit" loading={create.isPending}>
               {create.isPending
-                ? 'Preparing your letter…'
+                ? t('letters.new.preparing')
                 : mode === 'own_words'
-                  ? 'Create my letter with ideas'
-                  : 'Generate letter'}
+                  ? t('letters.new.create_own')
+                  : t('letters.new.generate')}
             </Button>
           </form>
         )}
@@ -176,19 +169,20 @@ function NewLetter() {
 }
 
 export function LettersPage() {
+  const { t, locale } = useI18n()
   const letters = useLetters()
   return (
-    <Page title="Letters" description="Cover letters tailored to a job and your profile.">
+    <Page title={t('letters.title')} description={t('letters.description')}>
       <NewLetter />
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">Your letters</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">{t('letters.your_letters')}</h2>
         {letters.isPending && <ListSkeleton rows={2} />}
         {letters.isError && <ErrorMessage error={letters.error} />}
         {letters.data?.length === 0 && (
           <EmptyState
             icon={FileText}
-            title="No letters yet"
-            description="Pick a job above and generate your first letter."
+            title={t('letters.empty.title')}
+            description={t('letters.empty.description')}
           />
         )}
         <ul className="space-y-2">
@@ -198,11 +192,11 @@ export function LettersPage() {
               className="flex items-center gap-2 rounded-xl border bg-card shadow-xs transition-colors hover:bg-accent/50"
             >
               <Link to={`/letters/${l.id}`} className="block min-w-0 flex-1 p-4">
-                <p className="font-medium">{l.content.subject || 'Untitled letter'}</p>
+                <p className="font-medium">{l.content.subject || t('letters.untitled')}</p>
                 <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                  <StatusBadge tone="info">{l.language}</StatusBadge>
-                  <StatusBadge>{l.tone}</StatusBadge>
-                  {new Date(l.updated_at).toLocaleDateString()}
+                  <StatusBadge tone="info">{LANG_NAMES[l.language]}</StatusBadge>
+                  <StatusBadge>{t(`letters.tone.${l.tone}`)}</StatusBadge>
+                  {new Date(l.updated_at).toLocaleDateString(locale)}
                 </p>
               </Link>
               <div className="pr-4">

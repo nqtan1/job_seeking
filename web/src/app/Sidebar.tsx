@@ -1,6 +1,7 @@
 import { LayoutDashboard, MessageSquare, PanelLeft, Sparkles, SquarePen } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, NavLink } from 'react-router'
+import { useT } from '@/i18n'
 import { useConversations } from '@/features/coach/api'
 import { useLetters } from '@/features/letters/api'
 import { RadarBadge } from '@/features/radar/RadarBadge'
@@ -23,6 +24,7 @@ function Label({ collapsed, children }: { collapsed: boolean; children: ReactNod
 }
 
 function Recent() {
+  const t = useT()
   const chats = useConversations().data?.slice(0, 8) ?? []
   const letters = useLetters().data?.slice(0, 5) ?? []
   if (chats.length + letters.length === 0) return null
@@ -30,22 +32,22 @@ function Recent() {
   return (
     <>
       {chats.length > 0 && (
-        <section aria-label="Recent chats">
-          <p className={heading}>Chats</p>
+        <section aria-label={t('nav.recent_chats')}>
+          <p className={heading}>{t('nav.chats')}</p>
           {chats.map((c) => (
             <NavLink key={c.id} to={`/chat/${c.id}`} className={active}>
               <MessageSquare className="size-4 shrink-0 opacity-60" />
-              <span className="truncate">{c.title ?? 'New chat'}</span>
+              <span className="truncate">{c.title ?? t('nav.new_chat')}</span>
             </NavLink>
           ))}
         </section>
       )}
       {letters.length > 0 && (
-        <section aria-label="Recent letters">
-          <p className={heading}>Letters</p>
+        <section aria-label={t('nav.recent_letters')}>
+          <p className={heading}>{t('nav.letters')}</p>
           {letters.map((l) => (
             <NavLink key={l.id} to={`/letters/${l.id}`} className={active}>
-              <span className="truncate pl-6">{l.content.subject || 'Untitled letter'}</span>
+              <span className="truncate pl-6">{l.content.subject || t('nav.untitled_letter')}</span>
             </NavLink>
           ))}
         </section>
@@ -56,6 +58,7 @@ function Recent() {
 
 /** The left column: new chat, tools, recent items, account. Shared by desktop and the mobile drawer. */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
+  const t = useT()
   const isAdmin = useMe().data?.is_admin
   return (
     <div className="flex h-full flex-col gap-1 p-2">
@@ -68,7 +71,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?
         </Link>
         {onToggle && (
           <button
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
             onClick={onToggle}
             className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-sidebar-accent"
           >
@@ -76,22 +79,22 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?
           </button>
         )}
       </div>
-      <NavLink to="/" end className={active} title="New chat">
+      <NavLink to="/" end className={active} title={t('nav.new_chat')}>
         <SquarePen className="size-4 shrink-0" />
-        <Label collapsed={collapsed}>New chat</Label>
+        <Label collapsed={collapsed}>{t('nav.new_chat')}</Label>
       </NavLink>
-      <nav aria-label="Main" className="space-y-0.5 pt-2">
+      <nav aria-label={t('nav.main')} className="space-y-0.5 pt-2">
         {NAV.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={active} title={label}>
+          <NavLink key={to} to={to} className={active} title={t(label)}>
             <Icon className="size-4 shrink-0" />
-            <Label collapsed={collapsed}>{label}</Label>
+            <Label collapsed={collapsed}>{t(label)}</Label>
             {to === '/radar' && <RadarBadge collapsed={collapsed} />}
           </NavLink>
         ))}
         {isAdmin && (
-          <NavLink to="/admin" className={active} title="Admin">
+          <NavLink to="/admin" className={active} title={t('nav.admin')}>
             <LayoutDashboard className="size-4 shrink-0" />
-            <Label collapsed={collapsed}>Admin</Label>
+            <Label collapsed={collapsed}>{t('nav.admin')}</Label>
           </NavLink>
         )}
       </nav>

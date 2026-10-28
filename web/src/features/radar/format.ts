@@ -1,44 +1,53 @@
-const time = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+import type { Key, Vars } from '@/i18n'
+
+export type Tr = (key: Key, vars?: Vars) => string
 
 const dayDiff = (d: Date, now: Date) => {
   const start = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
   return Math.round((start(d) - start(now)) / 86_400_000)
 }
+const shortDate = (d: Date, locale: string) =>
+  d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
 
 /** "today 08:30", "yesterday 08:30", "tomorrow 08:30", else "12 Oct 08:30" (the user's own clock). */
-export function when(iso: string, now = new Date()): string {
+export function when(iso: string, t: Tr, locale: string, now = new Date()): string {
   const d = new Date(iso)
   const diff = dayDiff(d, now)
   const day =
     diff === 0
-      ? 'today'
+      ? t('radar.today')
       : diff === 1
-        ? 'tomorrow'
+        ? t('radar.tomorrow')
         : diff === -1
-          ? 'yesterday'
-          : d.toLocaleDateString([], { day: 'numeric', month: 'short' })
-  return `${day} ${time(d)}`
+          ? t('radar.yesterday')
+          : shortDate(d, locale)
+  return `${day} ${d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`
 }
 
-/** "today", "yesterday" or the date: for when a match was found. */
-export function foundOn(iso: string, now = new Date()): string {
-  const diff = dayDiff(new Date(iso), now)
+/** "found today", "found yesterday" or the date: for when a match was found. */
+export function foundOn(iso: string, t: Tr, locale: string, now = new Date()): string {
+  const d = new Date(iso)
+  const diff = dayDiff(d, now)
   return diff === 0
-    ? 'found today'
+    ? t('radar.found_today')
     : diff === -1
-      ? 'found yesterday'
-      : `found ${new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' })}`
+      ? t('radar.found_yesterday')
+      : t('radar.found_on', { date: shortDate(d, locale) })
 }
 
-export const STOP: Record<string, string> = {
-  done: 'finished',
-  limit: 'stopped at your daily limit',
-  quota: 'paused to keep some of your daily AI use free',
-  no_profile: 'needs your CV first',
-  ai_unavailable: 'the AI was unavailable',
-  provider_error: 'the job source was unavailable',
-  stalled: 'the run did not finish',
-  worker_stopped: 'the run was cut off when the worker stopped',
-  invalid_search: 'the place or contract could not be used: edit this radar',
-  internal_error: 'something went wrong',
+const STOP_KEYS: Record<string, Key> = {
+  done: 'radar.stop.done',
+  limit: 'radar.stop.limit',
+  quota: 'radar.stop.quota',
+  no_profile: 'radar.stop.no_profile',
+  ai_unavailable: 'radar.stop.ai_unavailable',
+  provider_error: 'radar.stop.provider_error',
+  stalled: 'radar.stop.stalled',
+  worker_stopped: 'radar.stop.worker_stopped',
+  invalid_search: 'radar.stop.invalid_search',
+  internal_error: 'radar.stop.internal_error',
 }
+
+/** Why a run stopped, in words; unknown codes read as a generic failure. */
+export const stopText = (t: Tr, reason: string) =>
+  t(STOP_KEYS[reason] ?? 'radar.stop.internal_error')

@@ -1,26 +1,33 @@
 import { FileText, GraduationCap } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { useI18n, useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ApplyLink } from '@/features/pipeline/ApplyLink'
 import { useDeleteApplication, useEvents, type Application } from './api'
 import { ApplicationForm } from './ApplicationForm'
-import { LABEL, TONE, appName } from './constants'
+import { STATUS_KEY, TONE, appName } from './constants'
 import { DocumentsDrawer } from './DocumentsDrawer'
 import { Drawer } from './Drawer'
 
 function Timeline({ id }: { id: string }) {
+  const { t, locale } = useI18n()
   const events = useEvents(id, true)
-  if (events.isPending) return <p className="text-xs text-muted-foreground">Loading timeline…</p>
+  if (events.isPending)
+    return <p className="text-xs text-muted-foreground">{t('tracker.drawer.timeline_loading')}</p>
   if (events.isError) return <ErrorMessage error={events.error} />
   return (
-    <ol className="space-y-1 border-l pl-3 text-xs text-muted-foreground" aria-label="Timeline">
+    <ol
+      className="space-y-1 border-l pl-3 text-xs text-muted-foreground"
+      aria-label={t('tracker.drawer.timeline')}
+    >
       {events.data.map((e) => (
         <li key={e.id}>
-          {e.from_status ? `${LABEL[e.from_status]} → ` : ''}
-          <strong>{LABEL[e.to_status]}</strong> · {new Date(e.at).toLocaleDateString()}
+          {e.from_status ? `${t(STATUS_KEY[e.from_status])} → ` : ''}
+          <strong>{t(STATUS_KEY[e.to_status])}</strong> ·{' '}
+          {new Date(e.at).toLocaleDateString(locale)}
           {e.note ? ` · ${e.note}` : ''}
         </li>
       ))}
@@ -37,6 +44,7 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 /** Everything about one application that does not belong on the card. */
 export function ApplicationDrawer({ app, onClose }: { app: Application; onClose: () => void }) {
+  const t = useT()
   const del = useDeleteApplication()
   const [showDocs, setShowDocs] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
@@ -45,20 +53,20 @@ export function ApplicationDrawer({ app, onClose }: { app: Application; onClose:
   return (
     <>
       <Drawer
-        label={`Details for ${name}`}
+        label={t('tracker.drawer.details_for', { name })}
         title={app.company_name}
         subtitle={[app.job_title, app.location].filter(Boolean).join(' · ') || undefined}
         paused={showDocs}
         onClose={onClose}
       >
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge tone={TONE[app.status]}>{LABEL[app.status]}</StatusBadge>
+          <StatusBadge tone={TONE[app.status]}>{t(STATUS_KEY[app.status])}</StatusBadge>
           <ApplyLink jobId={app.job_id} />
           <Link
             to={`/tracker/${app.id}/prep`}
             className={buttonVariants({ size: 'sm', variant: 'outline' })}
           >
-            <GraduationCap /> Interview prep
+            <GraduationCap /> {t('tracker.drawer.prep')}
           </Link>
           <Button
             size="sm"
@@ -66,24 +74,24 @@ export function ApplicationDrawer({ app, onClose }: { app: Application; onClose:
             aria-haspopup="dialog"
             onClick={() => setShowDocs(true)}
           >
-            <FileText /> Documents
+            <FileText /> {t('tracker.drawer.documents')}
           </Button>
         </div>
-        <Section title="Details">
+        <Section title={t('tracker.drawer.details')}>
           <ApplicationForm app={app} onDone={onClose} />
         </Section>
-        <Section title="History">
+        <Section title={t('tracker.drawer.history')}>
           <Button
             size="sm"
             variant="outline"
             aria-expanded={showTimeline}
             onClick={() => setShowTimeline(!showTimeline)}
           >
-            Timeline
+            {t('tracker.drawer.timeline')}
           </Button>
           {showTimeline && <Timeline id={app.id} />}
         </Section>
-        <Section title="Danger zone">
+        <Section title={t('tracker.drawer.danger')}>
           {confirming ? (
             <div className="flex gap-2">
               <Button
@@ -92,20 +100,20 @@ export function ApplicationDrawer({ app, onClose }: { app: Application; onClose:
                 disabled={del.isPending}
                 onClick={() => del.mutate(app.id, { onSuccess: onClose })}
               >
-                Confirm delete
+                {t('tracker.drawer.confirm_delete')}
               </Button>
               <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>
-                Keep
+                {t('tracker.drawer.keep')}
               </Button>
             </div>
           ) : (
             <Button
               size="sm"
               variant="outline"
-              aria-label={`Delete ${name}`}
+              aria-label={t('tracker.drawer.delete_aria', { name })}
               onClick={() => setConfirming(true)}
             >
-              Delete application
+              {t('tracker.drawer.delete')}
             </Button>
           )}
           {del.isError && <ErrorMessage error={del.error} />}

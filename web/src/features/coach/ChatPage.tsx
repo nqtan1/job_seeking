@@ -19,6 +19,7 @@ import { ErrorMessage } from '@/components/ErrorMessage'
 import { Skeleton } from '@/components/Skeleton'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { useProfile } from '@/features/candidate/api'
+import { useT, type Key } from '@/i18n'
 import { cn } from 'cn'
 import { useJobs } from '@/features/job-search/api'
 import {
@@ -75,36 +76,25 @@ function applyEvent(p: Pending, name: string, data: StreamData): Pending {
   }
 }
 const PROMPTS = [
-  { icon: UserRound, text: 'Review my CV', send: 'Review my CV and tell me what to improve.' },
-  {
-    icon: Sparkles,
-    text: 'Prepare for an interview',
-    send: 'Help me prepare for an interview. Ask me the first question.',
-  },
-  {
-    icon: Briefcase,
-    text: 'Which job should I apply to first?',
-    send: 'Look at the jobs I saved and my profile. Which should I apply to first, and why?',
-  },
-  {
-    icon: FileText,
-    text: 'Write a follow-up email',
-    send: 'Help me write a short follow-up email for an application I sent a week ago with no reply.',
-  },
-]
+  { icon: UserRound, key: 'cv' },
+  { icon: Sparkles, key: 'interview' },
+  { icon: Briefcase, key: 'first_job' },
+  { icon: FileText, key: 'follow_up' },
+] as const
 const LINKS = [
-  { icon: Briefcase, text: 'Analyse a job', to: '/jobs' },
-  { icon: FileText, text: 'Write a cover letter', to: '/letters' },
-]
+  { icon: Briefcase, key: 'jobs', to: '/jobs' },
+  { icon: FileText, key: 'letters', to: '/letters' },
+] as const
 const card =
   'flex items-center gap-2 rounded-xl border bg-card p-3 text-left text-sm shadow-xs transition-colors hover:bg-accent'
 
 function CopyButton({ text }: { text: string }) {
+  const t = useT()
   const [done, setDone] = useState(false)
   return (
     <button
       type="button"
-      aria-label="Copy answer"
+      aria-label={t('coach.copy_aria')}
       className="mt-1 inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
       onClick={() => {
         void navigator.clipboard?.writeText(text).then(() => {
@@ -114,7 +104,7 @@ function CopyButton({ text }: { text: string }) {
       }}
     >
       {done ? <Check className="size-3" /> : <Copy className="size-3" />}
-      {done ? 'Copied' : 'Copy'}
+      {done ? t('coach.copied') : t('coach.copy')}
     </button>
   )
 }
@@ -159,6 +149,7 @@ function JobFocus({
   onChange: (jobId: string | null) => void
   disabled?: boolean
 }) {
+  const t = useT()
   const jobs = useJobs()
   const list = jobs.data ?? []
   const found = list.find((j) => j.id === jobId)
@@ -170,12 +161,12 @@ function JobFocus({
         <span className="inline-flex items-center gap-2 rounded-full border bg-card py-1 pr-1 pl-3">
           <Briefcase className="size-3.5 text-primary" aria-hidden />
           <span>
-            Focused on: <strong>{title ?? 'this job'}</strong>
+            {t('coach.focus.on')} <strong>{title ?? t('coach.focus.this_job')}</strong>
             {company && ` · ${company}`}
           </span>
           <button
             type="button"
-            aria-label="Remove job focus"
+            aria-label={t('coach.focus.remove')}
             disabled={disabled}
             className="rounded-full p-1 hover:bg-accent"
             onClick={() => onChange(null)}
@@ -184,19 +175,17 @@ function JobFocus({
           </button>
         </span>
       ) : (
-        <span className="text-muted-foreground">
-          No job attached. Attach one for advice tailored to it.
-        </span>
+        <span className="text-muted-foreground">{t('coach.focus.none')}</span>
       )}
       {list.length > 0 && (
         <select
-          aria-label="Focus on a job"
+          aria-label={t('coach.focus.select_aria')}
           value=""
           disabled={disabled}
           onChange={(e) => e.target.value && onChange(e.target.value)}
           className="rounded-md border bg-background px-2 py-1 text-sm"
         >
-          <option value="">{jobId ? 'Switch job…' : 'Choose a job…'}</option>
+          <option value="">{jobId ? t('coach.focus.switch') : t('coach.focus.choose')}</option>
           {list
             .filter((j) => j.id !== jobId)
             .map((j) => (
@@ -212,6 +201,7 @@ function JobFocus({
 
 /** The home screen: the career coach. `/` starts a chat; `/chat/:conversationId` reopens one. */
 export function ChatPage() {
+  const t = useT()
   const { conversationId } = useParams()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -293,11 +283,11 @@ export function ChatPage() {
       <div className="mx-auto max-w-lg p-6 pt-24">
         <EmptyState
           icon={UserRound}
-          title="Start with your CV"
-          description="The coach reads your profile to give advice that fits you. Upload your CV and come back."
+          title={t('coach.cv.title')}
+          description={t('coach.cv.description')}
           action={
             <Link to="/profile" className={buttonVariants()}>
-              Upload your CV
+              {t('coach.cv.upload')}
             </Link>
           }
         />
@@ -312,7 +302,7 @@ export function ChatPage() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center border-b px-6">
-        <h1 className="text-lg font-semibold tracking-tight">Career coach</h1>
+        <h1 className="text-lg font-semibold tracking-tight">{t('coach.title')}</h1>
         {conversationId && (
           <div className="ml-auto">
             <DeleteChatButton
@@ -333,19 +323,23 @@ export function ChatPage() {
           {history.isError && <ErrorMessage error={history.error} />}
           {empty && (
             <div className="space-y-6 pt-10 text-center">
-              <h2 className="text-2xl font-semibold tracking-tight">What can I help you with?</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">{t('coach.home')}</h2>
               <Checklist />
               <div className="mx-auto grid max-w-xl gap-2 sm:grid-cols-2">
-                {PROMPTS.map(({ icon: Icon, text: label, send: msg }) => (
-                  <button key={label} className={card} onClick={() => void send(msg)}>
+                {PROMPTS.map(({ icon: Icon, key }) => (
+                  <button
+                    key={key}
+                    className={card}
+                    onClick={() => void send(t(`coach.prompt.${key}.send` as Key))}
+                  >
                     <Icon className="size-4 text-primary" />
-                    {label}
+                    {t(`coach.prompt.${key}` as Key)}
                   </button>
                 ))}
-                {LINKS.map(({ icon: Icon, text: label, to }) => (
-                  <Link key={label} to={to} className={card}>
+                {LINKS.map(({ icon: Icon, key, to }) => (
+                  <Link key={key} to={to} className={card}>
                     <Icon className="size-4 text-primary" />
-                    {label}
+                    {t(`coach.link.${key}` as Key)}
                   </Link>
                 ))}
               </div>
@@ -355,7 +349,7 @@ export function ChatPage() {
             <div key={m.id} className="space-y-2">
               {m.role === 'assistant' && m.meta && (
                 <Activity
-                  steps={stepsFromMeta(m.meta)}
+                  steps={stepsFromMeta(m.meta, t)}
                   context={m.meta.context as Context}
                   queries={m.meta.queries}
                   citations={m.meta.citations}
@@ -376,7 +370,7 @@ export function ChatPage() {
                   onClick={() => regenerate(lastUser)}
                 >
                   <RefreshCw className="size-3" aria-hidden />
-                  Regenerate
+                  {t('coach.regenerate')}
                 </button>
               )}
             </div>
@@ -406,11 +400,11 @@ export function ChatPage() {
       <form onSubmit={submit} className="shrink-0 border-t bg-background p-4">
         <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card p-2 shadow-xs focus-within:ring-3 focus-within:ring-ring/40">
           <textarea
-            aria-label="Message"
+            aria-label={t('coach.message_aria')}
             rows={1}
             value={text}
             maxLength={MAX}
-            placeholder="Ask your coach…"
+            placeholder={t('coach.placeholder')}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKey}
             className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none [field-sizing:content]"
@@ -420,13 +414,13 @@ export function ChatPage() {
               type="button"
               size="icon"
               variant="outline"
-              aria-label="Stop"
+              aria-label={t('coach.stop')}
               onClick={() => abort.current?.abort()}
             >
               <Square />
             </Button>
           ) : (
-            <Button type="submit" size="icon" aria-label="Send" disabled={!text.trim()}>
+            <Button type="submit" size="icon" aria-label={t('coach.send')} disabled={!text.trim()}>
               <SendHorizontal />
             </Button>
           )}

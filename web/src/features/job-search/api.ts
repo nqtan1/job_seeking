@@ -3,6 +3,7 @@ import { api } from '@/lib/api/client'
 import { uploadDocument } from '@/lib/api/documents'
 import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
+import { tNow } from '@/i18n'
 import { toast } from '@/lib/toast'
 import { REFRESH_AFTER_RUN } from '@/features/radar/api'
 
@@ -28,7 +29,6 @@ export function useApplyUrl(jobId: string | null | undefined): string | null {
 /** The API answers 201 for a new job and 200 when the same input was added before (nothing was
  *  analysed, the existing job comes back). */
 const ALREADY_ADDED = 200
-const DUPLICATE_MESSAGE = 'Already in your jobs: nothing new was analysed.'
 
 const post = async (body: JobIn) => {
   const res = await api.POST('/api/v1/jobs', { body })
@@ -44,7 +44,7 @@ export function useAddJob() {
         ? post({ source: 'manual', text: input.text })
         : post({ source: 'france_travail', external_id: input.externalId }),
     onSuccess: ({ job, already }) => {
-      toast(already ? DUPLICATE_MESSAGE : `Job added: ${job.data.title}`)
+      toast(already ? tNow('jobs.duplicate') : tNow('jobs.added', { title: job.data.title }))
       return qc.invalidateQueries({ queryKey: KEY })
     },
   })
@@ -67,7 +67,7 @@ export function useAddJobFiles() {
       return { jobs: unwrap(res), already: res.response.status === ALREADY_ADDED }
     },
     onSuccess: ({ jobs, already }) => {
-      toast(already ? DUPLICATE_MESSAGE : `${jobs.length} job${jobs.length > 1 ? 's' : ''} added`)
+      toast(already ? tNow('jobs.duplicate') : tNow('jobs.files_added', { count: jobs.length }))
       return qc.invalidateQueries({ queryKey: KEY })
     },
   })

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
+import { setLang, type Lang } from '@/i18n'
 import { unwrap } from '@/lib/api/unwrap'
 
 export const useMe = () =>
@@ -39,3 +40,15 @@ export function useSetWeeklyGoal() {
 /** "Sign out of all devices": needs a recent sign-in (the caller runs `ensureRecentAuth`). */
 export const useRevokeSessions = () =>
   useMutation({ mutationFn: async () => void unwrap(await api.POST('/api/v1/me/sessions/revoke')) })
+
+/** Switches the interface at once, then saves it to the account (AI answers and e-mails follow). */
+export function useSetLanguage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (language: Lang) => {
+      setLang(language)
+      void unwrap(await api.PATCH('/api/v1/me/preferences', { body: { language } }))
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}

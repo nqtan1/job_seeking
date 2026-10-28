@@ -9,6 +9,7 @@ import { ListSkeleton } from '@/components/Skeleton'
 import { StepProgress } from '@/components/StepProgress'
 import { Button } from '@/components/ui/button'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
+import { useT } from '@/i18n'
 import { useTask } from '@/lib/api/tasks'
 import { describeError } from '@/lib/problem'
 import { DeleteLetterButton } from './DeleteLetterButton'
@@ -26,6 +27,7 @@ export function LetterPage() {
 }
 
 function LetterEditor({ letterId }: { letterId: string }) {
+  const t = useT()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const letter = useLetter(letterId)
@@ -44,25 +46,25 @@ function LetterEditor({ letterId }: { letterId: string }) {
     if (status === 'done') qc.invalidateQueries({ queryKey: ['letter', letterId] })
   }, [status, qc, letterId])
 
-  const back = { to: '/letters', label: 'Letters' }
+  const back = { to: '/letters', label: t('letters.title') }
   if (letter.isPending)
     return (
-      <Page title="Cover letter" back={back}>
+      <Page title={t('letters.page.title')} back={back}>
         <ListSkeleton />
       </Page>
     )
   if (letter.isError)
     return (
-      <Page title="Cover letter" back={back}>
+      <Page title={t('letters.page.title')} back={back}>
         <ErrorMessage error={letter.error} />
       </Page>
     )
 
   // A letter the user writes themself starts with empty paragraphs: no PDF until they are done.
-  const incomplete = editorBlocks(letter.data.content).some(
+  const incomplete = editorBlocks(letter.data.content, t).some(
     (b) => b.block !== 'subject' && !b.text.trim(),
   )
-  const blocks = editorBlocks(letter.data.content)
+  const blocks = editorBlocks(letter.data.content, t)
   type Block = (typeof blocks)[number]
   const textOf = (b: Block) => drafts[b.key] ?? b.text
   const issuesOf = (b: Block) => activeIssues(checked[b.key], textOf(b))
@@ -101,7 +103,6 @@ function LetterEditor({ letterId }: { letterId: string }) {
   const errorKeys = spell.isError ? (spell.variables ?? []).map((v) => v.key) : []
   const allIssues = blocks.flatMap((b) => issuesOf(b) ?? [])
   const checkedCount = checkable.filter((b) => issuesOf(b) !== undefined).length
-  const corrections = `${allIssues.length} ${allIssues.length === 1 ? 'correction' : 'corrections'}`
   const unsaved = blocks.filter((b) => drafts[b.key] !== undefined && drafts[b.key] !== b.text)
   // Several paragraphs corrected at once would otherwise need one Save each.
   const saveAll = async () => {
@@ -121,12 +122,8 @@ function LetterEditor({ letterId }: { letterId: string }) {
 
   return (
     <Page
-      title={letter.data.content.subject || 'Cover letter'}
-      description={
-        letter.data.ideas
-          ? 'Write each paragraph in your own words, using the ideas, then render the PDF.'
-          : 'Edit a paragraph, then render the PDF to preview it.'
-      }
+      title={letter.data.content.subject || t('letters.page.title')}
+      description={letter.data.ideas ? t('letters.page.desc_own') : t('letters.page.desc_ai')}
       back={back}
       wide
       actions={
@@ -135,10 +132,10 @@ function LetterEditor({ letterId }: { letterId: string }) {
             size="sm"
             loading={rendering}
             disabled={incomplete}
-            title={incomplete ? 'Write and save every paragraph first' : undefined}
+            title={incomplete ? t('letters.page.write_first') : undefined}
             onClick={() => render.mutate()}
           >
-            {rendering ? 'Rendering PDF…' : 'Render PDF'}
+            {rendering ? t('letters.page.rendering') : t('letters.page.render')}
           </Button>
           <DeleteLetterButton id={letterId} onDeleted={() => navigate('/letters')} />
           {letter.data.job_id && (
@@ -149,10 +146,7 @@ function LetterEditor({ letterId }: { letterId: string }) {
     >
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Drafted with AI from your profile and the job. Read it, make it yours, and check every
-            fact before you send it.
-          </p>
+          <p className="text-xs text-muted-foreground">{t('letters.page.ai_note')}</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
               size="sm"
@@ -162,8 +156,8 @@ function LetterEditor({ letterId }: { letterId: string }) {
               onClick={() => check(blocks.map((b) => b.key))}
             >
               {spell.isPending && checking.length > 1
-                ? 'Checking spelling…'
-                : 'Check spelling of the whole letter'}
+                ? t('letters.page.checking_all')
+                : t('letters.page.check_all')}
             </Button>
             {allIssues.length > 1 && (
               <Button
@@ -176,24 +170,33 @@ function LetterEditor({ letterId }: { letterId: string }) {
                   })
                 }
               >
-                Apply all {allIssues.length} corrections
+                {t('letters.page.apply_all', { n: allIssues.length })}
               </Button>
             )}
             {unsaved.length > 1 && (
               <Button size="sm" loading={edit.isPending} onClick={saveAll}>
-                {edit.isPending ? 'Saving…' : `Save ${unsaved.length} changes`}
+                {edit.isPending
+                  ? t('letters.page.saving')
+                  : t('letters.page.save_n', { n: unsaved.length })}
               </Button>
             )}
             <span role="status" aria-live="polite" className="text-sm text-muted-foreground">
               {checkedCount === 0
                 ? ''
                 : checkedCount < checkable.length
-                  ? `Checked ${checkedCount} of ${checkable.length} paragraphs: ${
-                      allIssues.length === 0 ? 'no issue so far' : `${corrections} suggested`
-                    }.`
+                  ? allIssues.length === 0
+                    ? t('letters.page.progress_none', {
+                        done: checkedCount,
+                        total: checkable.length,
+                      })
+                    : t('letters.page.progress', {
+                        done: checkedCount,
+                        total: checkable.length,
+                        count: allIssues.length,
+                      })
                   : allIssues.length === 0
-                    ? 'No spelling or grammar issue found.'
-                    : `${corrections} suggested below.`}
+                    ? t('letters.spell.none')
+                    : t('letters.page.below', { count: allIssues.length })}
             </span>
           </div>
           {spell.isError && errorKeys.length > 1 && <ErrorMessage error={spell.error} />}
@@ -207,7 +210,7 @@ function LetterEditor({ letterId }: { letterId: string }) {
               letterId={letterId}
               block={b}
               value={drafts[b.key] ?? b.text}
-              ideas={ideasFor(letter.data.ideas, b)}
+              ideas={ideasFor(letter.data.ideas, b, t)}
               issues={issuesOf(b)}
               ignored={checked[b.key]?.ignored}
               staleCheck={isStale(checked[b.key], textOf(b))}
@@ -245,30 +248,28 @@ function LetterEditor({ letterId }: { letterId: string }) {
 
         <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
           <ExportButtons letterId={letterId} />
-          {rendering && <StepProgress steps={['Typesetting your letter…']} />}
+          {rendering && <StepProgress steps={[t('letters.page.typesetting')]} />}
           {pdf.failed && (
             <p role="alert" className="text-sm text-destructive">
-              The PDF preview could not be loaded. Try rendering again.
+              {t('letters.page.pdf_failed')}
             </p>
           )}
           {renderFailed && (
             <p role="alert" className="text-sm text-destructive">
-              {render.isError
-                ? describeError(render.error)
-                : 'The PDF could not be rendered. Please try again.'}
+              {render.isError ? describeError(render.error) : t('letters.page.render_failed')}
             </p>
           )}
           {pdf.url ? (
             <iframe
-              title="Letter PDF preview"
+              title={t('letters.page.preview_title')}
               src={pdf.url}
               className="h-[70vh] w-full rounded-xl border bg-white shadow-xs"
             />
           ) : (
             <EmptyState
               icon={FileText}
-              title="No preview yet"
-              description="Render the PDF to preview your letter. Save your edits first."
+              title={t('letters.page.no_preview')}
+              description={t('letters.page.no_preview_desc')}
             />
           )}
           <QualityPanel letterId={letterId} />

@@ -4,42 +4,45 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useT } from '@/i18n'
 import { useEditRecipient, type Letter } from './api'
 
 /** Company, contact and address printed on the letter; empty ones are the model's misses. */
 export function RecipientPanel({ letter }: { letter: Letter }) {
+  const t = useT()
   const r = letter.content.recipient
+  const company = r.company === 'Entreprise non divulguée' ? '' : (r.company ?? '')
   const edit = useEditRecipient(letter.id)
   const { register, handleSubmit } = useForm({
     defaultValues: {
-      company: r.company ?? '',
+      company,
       contact_name: r.contact_name ?? '',
       address: r.address ?? '',
     },
   })
-  const empty = !r.company?.trim() && !r.contact_name?.trim() && !r.address?.trim()
+  const empty = !company.trim() && !r.contact_name?.trim() && !r.address?.trim()
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recipient</CardTitle>
+        <CardTitle>{t('letters.recipient.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <form className="grid gap-3 sm:grid-cols-2" onSubmit={handleSubmit((v) => edit.mutate(v))}>
           {empty && (
             <p className="text-sm text-muted-foreground sm:col-span-2">
-              Not found in the posting — add it so it prints on the letter.
+              {t('letters.recipient.empty')}
             </p>
           )}
           <div className="space-y-1">
-            <Label htmlFor="rcpt-company">Company</Label>
+            <Label htmlFor="rcpt-company">{t('letters.recipient.company')}</Label>
             <Input id="rcpt-company" {...register('company')} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="rcpt-contact">Contact name</Label>
+            <Label htmlFor="rcpt-contact">{t('letters.recipient.contact')}</Label>
             <Input id="rcpt-contact" {...register('contact_name')} />
           </div>
           <div className="space-y-1 sm:col-span-2">
-            <Label htmlFor="rcpt-address">Address</Label>
+            <Label htmlFor="rcpt-address">{t('letters.recipient.address')}</Label>
             <Input id="rcpt-address" {...register('address')} />
           </div>
           {edit.isError && (
@@ -49,7 +52,7 @@ export function RecipientPanel({ letter }: { letter: Letter }) {
           )}
           <div className="sm:col-span-2">
             <Button type="submit" size="sm" loading={edit.isPending}>
-              Save recipient
+              {t('letters.recipient.save')}
             </Button>
           </div>
         </form>

@@ -3,6 +3,7 @@ import { ErrorMessage } from '@/components/ErrorMessage'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useT, type Lang } from '@/i18n'
 import { useLatestFit } from '@/features/fit/api'
 import { useMotivationQuestions } from './api'
 
@@ -29,7 +30,7 @@ export function MotivationBlock({
   /** The user writes the letter: their text is kept word for word. */
   own: boolean
   jobId: string
-  language: 'fr' | 'en'
+  language: Lang
   highlights: string[]
   note: string
   onHighlights: (v: string[]) => void
@@ -37,12 +38,13 @@ export function MotivationBlock({
   /** Called with every question and the current text of each answer. */
   onAnswers: (v: Answer[]) => void
 }) {
+  const t = useT()
   const fit = useLatestFit(jobId)
   const ask = useMotivationQuestions()
   const [texts, setTexts] = useState<string[]>([])
   const questions = ask.data?.questions ?? []
   const strengths = fit.data?.data.strengths ?? []
-  const real = texts.filter((t) => t.trim().length >= REAL_ANSWER_CHARS).length
+  const real = texts.filter((x) => x.trim().length >= REAL_ANSWER_CHARS).length
   const noteIsReal = note.trim().length >= REAL_ANSWER_CHARS
   const enough = real >= 2 || (real >= 1 && noteIsReal)
 
@@ -61,12 +63,13 @@ export function MotivationBlock({
   return (
     <div className="space-y-4 sm:col-span-3">
       <div className="space-y-1">
-        <Label>Why you fit this job</Label>
+        <Label>{t('letters.motivation.why_fit')}</Label>
         {strengths.length > 0 ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Tap up to {MAX_HIGHLIGHTS} strengths to{' '}
-              {own ? 'get ideas about' : 'put forward in the letter'}.
+              {t(own ? 'letters.motivation.tap_own' : 'letters.motivation.tap_ai', {
+                max: MAX_HIGHLIGHTS,
+              })}
             </p>
             <div className="flex flex-wrap gap-2">
               {strengths.map((s) => (
@@ -86,19 +89,14 @@ export function MotivationBlock({
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
-            {jobId
-              ? 'A fit check runs automatically so the letter shows why you match this job.'
-              : 'Choose a job to see your strengths for it.'}
+            {jobId ? t('letters.motivation.fit_auto') : t('letters.motivation.choose_job')}
           </p>
         )}
       </div>
 
       <div className="space-y-2">
-        <Label>Why you want this job: in your own words</Label>
-        <p className="text-sm text-muted-foreground">
-          A recruiter decides on this part. Three short questions, specific to this job and your
-          profile; answer with real details (a name, a moment, a reason).
-        </p>
+        <Label>{t('letters.motivation.why_want')}</Label>
+        <p className="text-sm text-muted-foreground">{t('letters.motivation.intro')}</p>
         {questions.length === 0 && (
           <Button
             type="button"
@@ -117,7 +115,7 @@ export function MotivationBlock({
               )
             }
           >
-            {ask.isPending ? 'Preparing your questions…' : 'Ask me 3 questions about this job'}
+            {ask.isPending ? t('letters.motivation.preparing') : t('letters.motivation.ask')}
           </Button>
         )}
         {ask.isError && <ErrorMessage error={ask.error} />}
@@ -142,9 +140,7 @@ export function MotivationBlock({
         {questions.length > 0 && (
           <div className="space-y-1">
             <Label htmlFor="motivation">
-              {own
-                ? 'Anything else, in your own words (kept exactly as you write it)'
-                : 'Anything else you want the recruiter to know (optional)'}
+              {own ? t('letters.motivation.note_own') : t('letters.motivation.note_ai')}
             </Label>
             <Textarea
               id="motivation"
@@ -161,8 +157,8 @@ export function MotivationBlock({
             className="rounded-md border border-dashed border-amber-500/60 bg-amber-500/5 p-2 text-sm"
           >
             {questions.length === 0
-              ? 'No personal motivation yet. Without it the letter stays factual and a recruiter will notice. Answer the questions to make it yours.'
-              : 'Answer at least two questions with a real detail (a few words are not enough). Otherwise the letter stays factual.'}
+              ? t('letters.motivation.none_yet')
+              : t('letters.motivation.need_more')}
           </p>
         )}
       </div>

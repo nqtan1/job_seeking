@@ -13,10 +13,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
+from recruitai.core.language import Language
+
 SCHEMA_VERSION = 1
 
 Kind = Literal["cover"]  # spontaneous, follow-up, thank-you are v2 (§10.2)
-Language = Literal["fr", "en"]
 Tone = Literal["professional", "warm", "confident", "academic", "formal"]
 Length = Literal["short", "standard", "detailed"]
 Template = Literal["classic", "modern", "compact", "lettre_fr"]
@@ -148,7 +149,8 @@ class MotivationQuestions(BaseModel):
 
 class MotivationQuestionsIn(BaseModel):
     job_id: UUID
-    language: Language = "fr"
+    # None = the account language (the router fills it in).
+    language: Language | None = None
 
 
 class MotivationQuestionsOut(BaseModel):
@@ -172,7 +174,8 @@ class LetterIn(BaseModel):
     motivation: str | None = Field(None, max_length=1500)
     # Answers to the guided questions: the personal heart of the letter.
     answers: list[Answer] = Field(default_factory=list, max_length=4)
-    language: Language = "fr"
+    # None = the account language (the router fills it in).
+    language: Language | None = None
     tone: Tone = "professional"
     length: Length = "standard"
     company_type: CompanyType = "corporate"

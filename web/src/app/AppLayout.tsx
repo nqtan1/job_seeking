@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { Outlet } from 'react-router'
 import { Toaster } from '@/components/Toaster'
 import { SessionGuard } from '@/features/auth/SessionGuard'
+import { useMe } from '@/features/settings/api'
+import { setLang, useT } from '@/i18n'
 import { useRadarTitle } from '@/features/radar/useRadarTitle'
 import { cn } from 'cn'
 import { ColdStartNotice } from './ColdStartNotice'
@@ -20,9 +22,15 @@ const readCollapsed = () => {
 /** ChatGPT/Claude-style shell: the left column holds the tools and the account; the main area
  *  takes the rest. On small screens the column is a drawer. */
 export function AppLayout() {
+  const t = useT()
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const [drawer, setDrawer] = useState(false)
   useRadarTitle()
+  // The account's language wins over this device's guess, on every sign-in.
+  const language = useMe().data?.language
+  useEffect(() => {
+    if (language) setLang(language)
+  }, [language])
 
   useEffect(() => {
     try {
@@ -59,7 +67,7 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button
-            aria-label="Open menu"
+            aria-label={t('nav.open_menu')}
             onClick={() => setDrawer(true)}
             className="grid size-8 place-items-center rounded-lg hover:bg-muted"
           >

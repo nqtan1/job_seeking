@@ -33,8 +33,9 @@ def _notifier(settings: Settings) -> service.Notify:
     async def notify(user_id: UUID, template: str, context: dict[str, Any]) -> None:
         async with session_factory() as session:
             email = await identity.email_of(session, user_id=user_id)
+            language = await identity.user_language(session, user_id)
         if email:
-            await sender.send(email, template, context)
+            await sender.send(email, template, {**context, "language": language})
 
     return notify
 

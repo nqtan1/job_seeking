@@ -84,6 +84,7 @@ TONE_MODIFIERS: dict[str, str] = {
 LANGUAGE_INSTRUCTIONS: dict[str, str] = {
     "en": "Write in English. Use Clear, professional English.",
     "fr": "Écrivez en français. Utilisez un français clair et professionnel.",
+    "vi": "Viết bằng tiếng Việt. Dùng tiếng Việt rõ ràng, chuyên nghiệp, trang trọng.",
 }
 
 LENGTH_INSTRUCTIONS: dict[str, str] = {
@@ -258,6 +259,7 @@ SPELLING AND GRAMMAR CHECK:
 _SPELL_LANGUAGE = {
     "fr": "The text is in French: apply French orthography and grammar rules.",
     "en": "The text is in English: apply English orthography and grammar rules.",
+    "vi": "The text is in Vietnamese: apply Vietnamese orthography, tone marks and grammar rules.",
 }
 
 

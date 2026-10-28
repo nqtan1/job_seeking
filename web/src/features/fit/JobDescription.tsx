@@ -2,6 +2,7 @@ import { ExternalLink } from 'lucide-react'
 import { StatusBadge } from '@/components/StatusBadge'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useT } from '@/i18n'
 import type { components } from '@/lib/api/schema'
 
 type Job = components['schemas']['JobOut']
@@ -26,6 +27,7 @@ const Bullets = ({ title, items }: { title: string; items: string[] }) =>
 
 /** Everything the offer says, next to the analysis: facts, skills, missions, the full text. */
 export function JobDescription({ job }: { job: Job }) {
+  const t = useT()
   const d = job.data
   const facts = [
     d.badges.contract_type,
@@ -40,7 +42,7 @@ export function JobDescription({ job }: { job: Job }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-          Job description
+          {t('fit.job_description')}
           {url && (
             <a
               href={url}
@@ -48,7 +50,7 @@ export function JobDescription({ job }: { job: Job }) {
               rel="noopener noreferrer"
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              <ExternalLink className="size-3.5" /> View the original offer
+              <ExternalLink className="size-3.5" /> {t('fit.view_original')}
             </a>
           )}
         </CardTitle>
@@ -65,7 +67,7 @@ export function JobDescription({ job }: { job: Job }) {
         )}
         {skills.length > 0 && (
           <div className="space-y-1">
-            <p className="text-sm font-medium">Skills</p>
+            <p className="text-sm font-medium">{t('fit.skills')}</p>
             <ul className="flex flex-wrap gap-1.5">
               {skills.map((s) => (
                 <li key={s} className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
@@ -75,11 +77,11 @@ export function JobDescription({ job }: { job: Job }) {
             </ul>
           </div>
         )}
-        <Bullets title="Missions" items={d.missions} />
-        <Bullets title="Nice to have" items={d.profile.nice_to_have} />
+        <Bullets title={t('fit.missions')} items={d.missions} />
+        <Bullets title={t('fit.nice_to_have')} items={d.profile.nice_to_have} />
         {d.job_description_text && (
           <div className="space-y-1">
-            <p className="text-sm font-medium">Full text</p>
+            <p className="text-sm font-medium">{t('fit.full_text')}</p>
             <p className="max-h-96 overflow-y-auto text-sm whitespace-pre-wrap text-muted-foreground">
               {d.job_description_text}
             </p>
@@ -87,8 +89,8 @@ export function JobDescription({ job }: { job: Job }) {
         )}
         {!d.job_description_text && d.missions.length === 0 && skills.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            The offer has no more details here.
-            {url ? ' Open the original offer for the full text.' : ''}
+            {t('fit.no_details')}
+            {url ? t('fit.open_original') : ''}
           </p>
         )}
       </CardContent>

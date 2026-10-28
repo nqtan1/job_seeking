@@ -4,17 +4,18 @@ import { Spinner } from '@/components/Spinner'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useT } from '@/i18n'
 import { useAssist, type AssistAction } from './api'
 import type { EditorBlock } from './blocks'
 import { SpellPanel } from './SpellPanel'
 import type { SpellIssue } from './spellcheck'
 
-const ACTIONS: [AssistAction, string][] = [
-  ['shorten', 'Shorten'],
-  ['more_formal', 'More formal'],
-  ['more_concrete', 'More concrete'],
-  ['add_metric', 'Add a metric'],
-  ['fix_grammar', 'Fix grammar'],
+const ACTIONS: AssistAction[] = [
+  'shorten',
+  'more_formal',
+  'more_concrete',
+  'add_metric',
+  'fix_grammar',
 ]
 
 type Range = { start: number; end: number }
@@ -64,6 +65,7 @@ export function BlockEditor({
   onChange,
   onSave,
 }: Props) {
+  const t = useT()
   const assist = useAssist(letterId)
   const textarea = useRef<HTMLTextAreaElement>(null)
   // A selection and an AI suggestion carry offsets into the text they were made on: once the
@@ -90,7 +92,7 @@ export function BlockEditor({
       <Label htmlFor={block.key}>{block.label}</Label>
       {ideas.length > 0 && (
         <div className="rounded-md border border-dashed bg-muted/40 p-2 text-sm">
-          <p className="font-medium">Ideas</p>
+          <p className="font-medium">{t('letters.editor.ideas')}</p>
           <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
             {ideas.map((idea) => (
               <li key={idea}>{idea}</li>
@@ -118,10 +120,10 @@ export function BlockEditor({
       {hasSelection && (
         <div
           role="group"
-          aria-label={`AI actions for ${block.label}`}
+          aria-label={t('letters.editor.ai_actions', { label: block.label })}
           className="flex flex-wrap gap-2"
         >
-          {ACTIONS.map(([action, label]) => (
+          {ACTIONS.map((action) => (
             <Button
               key={action}
               size="sm"
@@ -142,20 +144,20 @@ export function BlockEditor({
                 )
               }
             >
-              {label}
+              {t(`letters.action.${action}`)}
             </Button>
           ))}
         </div>
       )}
       {assist.isPending && (
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner className="size-3.5" /> The AI is rewriting your selection…
+          <Spinner className="size-3.5" /> {t('letters.editor.rewriting')}
         </p>
       )}
       {assist.isError && hasSelection && <ErrorMessage error={assist.error} />}
       {suggestion && (
         <div className="space-y-2 rounded-md border border-primary/50 p-2 text-sm">
-          <p className="font-medium">Suggestion</p>
+          <p className="font-medium">{t('letters.editor.suggestion')}</p>
           <p>{suggestion.text}</p>
           <div className="flex gap-2">
             <Button
@@ -167,10 +169,10 @@ export function BlockEditor({
                 reset()
               }}
             >
-              Use suggestion
+              {t('letters.editor.use')}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setProposed(undefined)}>
-              Dismiss
+              {t('letters.editor.dismiss')}
             </Button>
           </div>
         </div>
@@ -195,10 +197,10 @@ export function BlockEditor({
           size="sm"
           variant="outline"
           disabled={!dirty || saving}
-          aria-label={`Save ${block.label}`}
+          aria-label={t('letters.editor.save_aria', { label: block.label })}
           onClick={onSave}
         >
-          Save
+          {t('letters.editor.save')}
         </Button>
         {onCheck && (
           <Button
@@ -206,10 +208,10 @@ export function BlockEditor({
             variant="outline"
             disabled={checking || checkDisabled || !value.trim()}
             aria-busy={checking}
-            aria-label={`Check spelling of ${block.label}`}
+            aria-label={t('letters.editor.check_aria', { label: block.label })}
             onClick={onCheck}
           >
-            {checking ? 'Checking…' : 'Check spelling'}
+            {checking ? t('letters.editor.checking') : t('letters.editor.check')}
           </Button>
         )}
       </div>

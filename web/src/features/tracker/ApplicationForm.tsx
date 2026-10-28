@@ -1,4 +1,5 @@
 import { useForm } from 'react-hook-form'
+import { useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +47,7 @@ function Field({
  * Edit (`app` given): the same plus contact and interview date, sent as one PATCH.
  */
 export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: () => void }) {
+  const t = useT()
   const create = useCreateApplication()
   const update = useUpdateApplication()
   const mutation = app ? update : create
@@ -107,50 +109,58 @@ export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: (
 
   return (
     <form className="grid gap-3 sm:grid-cols-2" onSubmit={submit} noValidate>
-      <Field id={`${p}company`} label="Company">
+      <Field id={`${p}company`} label={t('tracker.form.company')}>
         <Input
           id={`${p}company`}
           autoComplete="organization"
           {...register('company_name', { required: true })}
         />
       </Field>
-      <Field id={`${p}title`} label="Job title">
+      <Field id={`${p}title`} label={t('tracker.form.title')}>
         <Input id={`${p}title`} {...register('job_title')} />
       </Field>
-      <Field id={`${p}source`} label="Source">
+      <Field id={`${p}source`} label={t('tracker.form.source')}>
         <NativeSelect id={`${p}source`} className="w-full" {...register('source')}>
           {SOURCES.map((s) => (
             <NativeSelectOption key={s} value={s}>
-              {sourceLabel(s)}
+              {sourceLabel(t, s)}
             </NativeSelectOption>
           ))}
         </NativeSelect>
       </Field>
       {!app && (
-        <Field id={`${p}status`} label="Status">
+        <Field id={`${p}status`} label={t('tracker.form.status')}>
           <NativeSelect id={`${p}status`} className="w-full" {...register('status')}>
-            <NativeSelectOption value="to_apply">To apply</NativeSelectOption>
-            <NativeSelectOption value="applied">Applied</NativeSelectOption>
+            <NativeSelectOption value="to_apply">{t('tracker.status.to_apply')}</NativeSelectOption>
+            <NativeSelectOption value="applied">{t('tracker.status.applied')}</NativeSelectOption>
           </NativeSelect>
         </Field>
       )}
-      <Field id={`${p}applied`} label="Applied on">
+      <Field id={`${p}applied`} label={t('tracker.form.applied_on')}>
         <Input id={`${p}applied`} type="date" {...register('applied_at')} />
       </Field>
-      <Field id={`${p}location`} label="Location">
-        <Input id={`${p}location`} placeholder="City, remote…" {...register('location')} />
+      <Field id={`${p}location`} label={t('tracker.form.location')}>
+        <Input
+          id={`${p}location`}
+          placeholder={t('tracker.form.location_ph')}
+          {...register('location')}
+        />
       </Field>
       {app && (
         <>
-          <Field id={`${p}interview`} label="Interview">
+          <Field id={`${p}interview`} label={t('tracker.form.interview')}>
             <Input id={`${p}interview`} type="datetime-local" {...register('interview_at')} />
           </Field>
-          <Field id={`${p}contact`} label="Contact">
-            <Input id={`${p}contact`} placeholder="Name, email or phone" {...register('contact')} />
+          <Field id={`${p}contact`} label={t('tracker.form.contact')}>
+            <Input
+              id={`${p}contact`}
+              placeholder={t('tracker.form.contact_ph')}
+              {...register('contact')}
+            />
           </Field>
         </>
       )}
-      <Field id={`${p}notes`} label="Notes" className="sm:col-span-2">
+      <Field id={`${p}notes`} label={t('tracker.form.notes')} className="sm:col-span-2">
         <Textarea id={`${p}notes`} rows={3} {...register('notes')} />
       </Field>
       {mutation.isError && (
@@ -160,11 +170,15 @@ export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: (
       )}
       <div className="flex gap-2 sm:col-span-2">
         <Button type="submit" disabled={mutation.isPending}>
-          {app ? 'Save' : mutation.isPending ? 'Adding…' : 'Add application'}
+          {app
+            ? t('tracker.form.save')
+            : mutation.isPending
+              ? t('tracker.form.adding')
+              : t('tracker.form.add')}
         </Button>
         {onDone && (
           <Button type="button" variant="outline" onClick={onDone}>
-            Cancel
+            {t('tracker.form.cancel')}
           </Button>
         )}
       </div>

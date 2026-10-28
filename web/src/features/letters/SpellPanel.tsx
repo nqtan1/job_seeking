@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { Button } from '@/components/ui/button'
+import { useT } from '@/i18n'
 import type { SpellIssue } from './spellcheck'
 
 const CONTEXT = 24 // characters of text shown around a correction
@@ -36,6 +37,7 @@ export function SpellPanel({
   onIgnoreIssue,
   onFocusText,
 }: Props) {
+  const t = useT()
   const root = useRef<HTMLDivElement>(null)
   // Applying removes the button that was clicked: keep the keyboard user's place.
   const afterChange = (caret?: number) =>
@@ -46,10 +48,15 @@ export function SpellPanel({
     }, 0)
 
   return (
-    <div ref={root} role="status" aria-live="polite" aria-label={`Spelling of ${label}`}>
+    <div
+      ref={root}
+      role="status"
+      aria-live="polite"
+      aria-label={t('letters.spell.aria', { label })}
+    >
       {stale && (
         <p className="rounded-md border border-dashed p-2 text-sm text-muted-foreground">
-          You edited this paragraph since the last check. Check spelling again.
+          {t('letters.spell.stale')}
         </p>
       )}
       {!stale && issues !== undefined && (
@@ -57,15 +64,15 @@ export function SpellPanel({
           {issues.length === 0 ? (
             <p className={unsaved ? 'font-medium' : 'text-muted-foreground'}>
               {unsaved
-                ? 'Corrections applied. Save this paragraph to keep them.'
+                ? t('letters.spell.applied')
                 : ignored > 0
-                  ? `No more corrections (${ignored} ignored).`
-                  : 'No spelling or grammar issue found.'}
+                  ? t('letters.spell.no_more', { n: ignored })
+                  : t('letters.spell.none')}
             </p>
           ) : (
             <>
               <p className="font-medium">
-                {issues.length} {issues.length === 1 ? 'correction' : 'corrections'} suggested
+                {t('letters.spell.suggested', { count: issues.length })}
               </p>
               <ul className="space-y-3">
                 {issues.map((issue, i) => (
@@ -89,24 +96,33 @@ export function SpellPanel({
                       <Button
                         size="sm"
                         data-apply
-                        aria-label={`Apply ${i + 1} of ${issues.length}: ${issue.wrong} to ${issue.right}`}
+                        aria-label={t('letters.spell.apply_aria', {
+                          i: i + 1,
+                          total: issues.length,
+                          wrong: issue.wrong,
+                          right: issue.right,
+                        })}
                         onClick={() => {
                           onApplyIssue(i)
                           afterChange(issue.start + issue.right.length)
                         }}
                       >
-                        Apply
+                        {t('letters.spell.apply')}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        aria-label={`Ignore ${i + 1} of ${issues.length}: ${issue.wrong}`}
+                        aria-label={t('letters.spell.ignore_aria', {
+                          i: i + 1,
+                          total: issues.length,
+                          wrong: issue.wrong,
+                        })}
                         onClick={() => {
                           onIgnoreIssue(i)
                           afterChange()
                         }}
                       >
-                        Ignore
+                        {t('letters.spell.ignore')}
                       </Button>
                     </div>
                   </li>
@@ -116,13 +132,13 @@ export function SpellPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  aria-label={`Apply all ${issues.length} corrections in ${label}`}
+                  aria-label={t('letters.spell.apply_all_aria', { n: issues.length, label })}
                   onClick={() => {
                     onApplyAll()
                     afterChange()
                   }}
                 >
-                  Apply all {issues.length}
+                  {t('letters.spell.apply_all', { n: issues.length })}
                 </Button>
               )}
             </>

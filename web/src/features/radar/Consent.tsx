@@ -5,6 +5,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMe } from '@/features/settings/api'
+import { useI18n, useT } from '@/i18n'
 import { ensureRecentAuth } from '@/lib/stepup'
 import {
   useConsent,
@@ -16,40 +17,30 @@ import {
 
 /** DRAFT wording: owner/legal review required before release (ADR 0024). */
 export function ConsentText() {
+  const t = useT()
+  const items = [
+    ['radar.c.runs_h', 'radar.c.runs'],
+    ['radar.c.keep_h', 'radar.c.keep'],
+    ['radar.c.email_h', 'radar.c.email'],
+    ['radar.c.limits_h', 'radar.c.limits'],
+    ['radar.c.stop_h', 'radar.c.stop'],
+  ] as const
   return (
     <div className="space-y-2 text-sm">
-      <p>
-        If you switch this on, RecruitAI runs your saved job searches once a day, even when you are
-        not signed in.
-      </p>
+      <p>{t('radar.c.text_intro')}</p>
       <ul className="list-disc space-y-1 pl-5">
-        <li>
-          <strong>What runs:</strong> we query a public job-offer source (France Travail) with your
-          search terms, then an AI model compares each new offer with your profile to give a fit
-          score. The AI receives your profile summary and the offer text, nothing else.
-        </li>
-        <li>
-          <strong>What we keep:</strong> the offers found, their scores, and a log of each run.
-        </li>
-        <li>
-          <strong>What we email you:</strong> a short message with job title, company and a link. No
-          CV content.
-        </li>
-        <li>
-          <strong>Limits:</strong> at most 3 searches, once a day. Everything pauses automatically
-          if you have not signed in for 60 days (we warn you at 53 days) or if a search keeps
-          failing.
-        </li>
-        <li>
-          <strong>Stopping:</strong> switch it off here or with the link in any email, at any time.
-          Withdrawing pauses all searches immediately. We never apply to jobs on your behalf.
-        </li>
+        {items.map(([h, b]) => (
+          <li key={h}>
+            <strong>{t(h)}</strong> {t(b)}
+          </li>
+        ))}
       </ul>
     </div>
   )
 }
 
 function ConsentDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT()
   const consent = useConsent()
   const me = useMe()
   const grant = useGrantConsent()
@@ -69,9 +60,9 @@ function ConsentDialog({ open, onClose }: { open: boolean; onClose: () => void }
     })
   }
   return (
-    <Modal open={open} label="Background job radar" onClose={onClose}>
+    <Modal open={open} label={t('radar.c.dialog_label')} onClose={onClose}>
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Let RecruitAI search for jobs for you</h2>
+        <h2 className="text-lg font-semibold">{t('radar.c.dialog_title')}</h2>
         <ConsentText />
         <label className="flex items-start gap-2 text-sm">
           <input
@@ -80,20 +71,20 @@ function ConsentDialog({ open, onClose }: { open: boolean; onClose: () => void }
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
           />
-          I agree that RecruitAI runs these searches in the background.
+          {t('radar.c.agree')}
         </label>
         {denied && (
           <p role="alert" className="text-sm text-destructive">
-            We could not confirm it is you. Nothing was changed.
+            {t('radar.c.denied')}
           </p>
         )}
         {grant.isError && <ErrorMessage error={grant.error} />}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('radar.c.cancel')}
           </Button>
           <Button disabled={!agreed || grant.isPending || !consent.data} onClick={enable}>
-            Enable background radars
+            {t('radar.c.enable')}
           </Button>
         </div>
       </div>
@@ -103,6 +94,7 @@ function ConsentDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
 /** Top of the radar page: consent state, and a one-click resume after an automatic pause. */
 export function ConsentBanner() {
+  const t = useT()
   const consent = useConsent()
   const searches = useSearches()
   const resume = useResumeRadars()
@@ -117,26 +109,30 @@ export function ConsentBanner() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Background search
+          {t('radar.c.banner_title')}
           <StatusBadge tone="warning">
-            {state === 'granted' ? 'paused' : state === 'needs_reconsent' ? 'needs consent' : 'off'}
+            {state === 'granted'
+              ? t('radar.c.badge_paused')
+              : state === 'needs_reconsent'
+                ? t('radar.c.badge_needs')
+                : t('radar.c.badge_off')}
           </StatusBadge>
         </CardTitle>
         <CardDescription>
           {state === 'granted'
-            ? 'Some radars were paused (no sign-in for a long time, or repeated failures).'
+            ? t('radar.c.desc_granted')
             : state === 'needs_reconsent'
-              ? 'The consent text changed. Radars stay paused until you agree again.'
-              : 'Your radars do not run automatically until you agree to background searches.'}
+              ? t('radar.c.desc_needs')
+              : t('radar.c.desc_off')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {state === 'granted' ? (
           <Button disabled={resume.isPending} onClick={() => resume.mutate()}>
-            Resume radars
+            {t('radar.c.resume')}
           </Button>
         ) : (
-          <Button onClick={() => setOpen(true)}>Review and enable</Button>
+          <Button onClick={() => setOpen(true)}>{t('radar.c.review')}</Button>
         )}
         {resume.isError && <ErrorMessage error={resume.error} />}
         <ConsentDialog open={open} onClose={() => setOpen(false)} />
@@ -147,6 +143,7 @@ export function ConsentBanner() {
 
 /** Settings: current state, history, withdraw. */
 export function ConsentSettings() {
+  const { t, locale } = useI18n()
   const consent = useConsent()
   const withdraw = useWithdrawConsent()
   const [open, setOpen] = useState(false)
@@ -154,19 +151,15 @@ export function ConsentSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Background job radar</CardTitle>
-        <CardDescription>
-          Searches that run without you being signed in need your consent. You can withdraw it at
-          any time.
-        </CardDescription>
+        <CardTitle>{t('radar.c.set_title')}</CardTitle>
+        <CardDescription>{t('radar.c.set_desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {consent.isError && <ErrorMessage error={consent.error} />}
         {c && (
           <>
             <p className="text-sm">
-              Status:{' '}
-              <strong>{c.state === 'needs_reconsent' ? 'needs new consent' : c.state}</strong>
+              {t('radar.c.status')} <strong>{t(`radar.c.state_${c.state}`)}</strong>
             </p>
             {c.state === 'granted' ? (
               <Button
@@ -174,18 +167,22 @@ export function ConsentSettings() {
                 disabled={withdraw.isPending}
                 onClick={() => withdraw.mutate()}
               >
-                Withdraw consent
+                {t('radar.c.withdraw')}
               </Button>
             ) : (
-              <Button onClick={() => setOpen(true)}>Review and enable</Button>
+              <Button onClick={() => setOpen(true)}>{t('radar.c.review')}</Button>
             )}
             {c.history.length > 0 && (
-              <ul className="space-y-1 text-sm text-muted-foreground" aria-label="Consent history">
+              <ul
+                className="space-y-1 text-sm text-muted-foreground"
+                aria-label={t('radar.c.history')}
+              >
                 {c.history.map((h) => (
                   <li key={h.at + h.event}>
-                    {h.event === 'granted' ? 'Granted' : 'Withdrawn'} on{' '}
-                    {new Date(h.at).toLocaleDateString()} (
-                    {h.source === 'ui' ? 'in the app' : 'email link'})
+                    {t(h.event === 'granted' ? 'radar.c.hist_granted' : 'radar.c.hist_withdrawn', {
+                      date: new Date(h.at).toLocaleDateString(locale),
+                      source: t(h.source === 'ui' ? 'radar.c.src_ui' : 'radar.c.src_email'),
+                    })}
                   </li>
                 ))}
               </ul>

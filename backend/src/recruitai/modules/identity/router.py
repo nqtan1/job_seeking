@@ -65,6 +65,7 @@ async def read_me(
         is_admin=is_admin(current, settings),
         email_reminders=result.email_reminders,
         weekly_goal=result.weekly_goal,
+        language=result.language,
         session=SessionPolicyOut(
             idle_minutes=settings.session_idle_minutes,
             idle_minutes_remembered=settings.session_idle_minutes_remembered,

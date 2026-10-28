@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import LLMGateway, TextPart, generate_retrying_invalid
 from recruitai.ai.prompts.fit import PROMPT_VERSION, get_system_prompt_by_company_type
+from recruitai.ai.prompts.language import with_language
 from recruitai.ai.text import compact_json
 from recruitai.core.export import rows_as_dicts
+from recruitai.core.language import Language
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.jobs import service as jobs
 from recruitai.modules.matching import repository
@@ -36,11 +38,12 @@ async def analyze(
     org_id: UUID,
     job_id: UUID,
     company_type: CompanyType = "corporate",
+    language: Language = "en",
 ) -> FitAnalysis:
     # Both lookups are org-scoped and come first, so another org's id costs no model call.
     job = await jobs.get_job(db, org_id=org_id, job_id=job_id)
     profile = await candidates.require_profile(db, org_id=org_id)
-    system = get_system_prompt_by_company_type(company_type)
+    system = with_language(get_system_prompt_by_company_type(company_type), language)
 
     check = await generate_retrying_invalid(
         llm,
@@ -77,6 +80,7 @@ async def latest_or_analyze(
     org_id: UUID,
     job_id: UUID,
     company_type: CompanyType = "corporate",
+    language: Language = "en",
 ) -> FitAnalysis:
     """The newest fit analysis of this job, or a fresh one if the user never ran it. A letter
     argues from it, so it must exist. ponytail: a fit older than the last profile edit is
@@ -87,7 +91,12 @@ async def latest_or_analyze(
     if existing:
         return existing[0]
     return await analyze(
-        db, llm, org_id=org_id, job_id=job_id, company_type=company_type
+        db,
+        llm,
+        org_id=org_id,
+        job_id=job_id,
+        company_type=company_type,
+        language=language,
     )
 
 

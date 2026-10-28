@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useT } from '@/i18n'
 import type { Profile } from './api'
 
 const initials = (name: string) =>
@@ -39,6 +40,7 @@ function Block({ icon, title, children }: { icon: ReactNode; title: string; chil
 
 /** The saved profile as readable blocks; editing is a separate mode (ProfileForm). */
 export function ProfileView({ profile }: { profile: Profile }) {
+  const t = useT()
   const { personal_info: p, summary, experiences, formations, skills } = profile.data
   const references = profile.data.references ?? []
   const contact = [
@@ -86,13 +88,13 @@ export function ProfileView({ profile }: { profile: Profile }) {
       </Card>
 
       {summary && (
-        <Block icon={<Sparkles className="size-4" />} title="About you">
+        <Block icon={<Sparkles className="size-4" />} title={t('candidate.h.about')}>
           <p className="max-w-prose whitespace-pre-line text-sm leading-relaxed">{summary}</p>
         </Block>
       )}
 
       {skills.length > 0 && (
-        <Block icon={<Wrench className="size-4" />} title="Skills">
+        <Block icon={<Wrench className="size-4" />} title={t('candidate.h.skills')}>
           <ul className="flex flex-wrap gap-2">
             {skills.map((s) => (
               <li
@@ -108,7 +110,7 @@ export function ProfileView({ profile }: { profile: Profile }) {
       )}
 
       {experiences.length > 0 && (
-        <Block icon={<Briefcase className="size-4" />} title="Experience">
+        <Block icon={<Briefcase className="size-4" />} title={t('candidate.h.experience')}>
           <ol className="space-y-5 border-l pl-5">
             {experiences.map((e, i) => (
               <li key={i} className="relative space-y-1">
@@ -129,7 +131,7 @@ export function ProfileView({ profile }: { profile: Profile }) {
       )}
 
       {formations.length > 0 && (
-        <Block icon={<GraduationCap className="size-4" />} title="Education">
+        <Block icon={<GraduationCap className="size-4" />} title={t('candidate.h.education')}>
           <ul className="space-y-4">
             {formations.map((f, i) => (
               <li key={i} className="space-y-0.5">
@@ -141,7 +143,7 @@ export function ProfileView({ profile }: { profile: Profile }) {
         </Block>
       )}
       {references.length > 0 && (
-        <Block icon={<UserCheck className="size-4" />} title="References">
+        <Block icon={<UserCheck className="size-4" />} title={t('candidate.h.references')}>
           <ul className="grid gap-4 sm:grid-cols-2">
             {references.map((r, i) => (
               <li key={i} className="space-y-0.5 rounded-lg border bg-muted/30 p-3">

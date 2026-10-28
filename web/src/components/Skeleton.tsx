@@ -1,3 +1,4 @@
+import { useT } from '@/i18n'
 import { cn } from 'cn'
 
 export const Skeleton = ({ className }: { className?: string }) => (
@@ -5,10 +6,13 @@ export const Skeleton = ({ className }: { className?: string }) => (
 )
 
 /** A few card-shaped placeholders while a list loads. */
-export const ListSkeleton = ({ rows = 3 }: { rows?: number }) => (
-  <div role="status" aria-label="Loading" className="space-y-2">
-    {Array.from({ length: rows }, (_, i) => (
-      <Skeleton key={i} className="h-16 w-full" />
-    ))}
-  </div>
-)
+export function ListSkeleton({ rows = 3 }: { rows?: number }) {
+  const t = useT()
+  return (
+    <div role="status" aria-label={t('app.loading').replace('…', '')} className="space-y-2">
+      {Array.from({ length: rows }, (_, i) => (
+        <Skeleton key={i} className="h-16 w-full" />
+      ))}
+    </div>
+  )
+}

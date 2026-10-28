@@ -10,62 +10,120 @@ from typing import Any, Protocol
 
 from recruitai.config import Settings
 
-# subject, text body. ``{placeholders}`` are filled from the context. Bilingual: the account has
-# no language setting yet, and a warning that is not understood is no warning.
-TEMPLATES: dict[str, tuple[str, str]] = {
-    "inactivity_warning": (
-        (
-            "Your RecruitAI account will be deleted in {days_left} days / "
-            "Votre compte RecruitAI sera supprimé dans {days_left} jours"
+# {template: {language: (subject, text body)}}. ``{placeholders}`` are filled from the context;
+# the recipient's language is ``context["language"]`` (their account setting, English if absent).
+# One language per message: never a bilingual one.
+TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
+    "inactivity_warning": {
+        "en": (
+            "Your RecruitAI account will be deleted in {days_left} days",
+            (
+                "Hello,\n\nYou have not signed in for a long time. If you do nothing, your "
+                "RecruitAI account and all its data will be permanently deleted on {delete_on}. "
+                "To keep it, just sign in before that date.\n"
+            ),
         ),
-        (
-            "Hello,\n\nYou have not signed in for a long time. If you do nothing, your "
-            "RecruitAI account and all its data will be permanently deleted on {delete_on}. "
-            "To keep it, just sign in before that date.\n\n"
-            "Bonjour,\n\nVous ne vous êtes pas connecté depuis longtemps. Sans action de votre "
-            "part, votre compte RecruitAI et toutes ses données seront définitivement "
-            "supprimés le {delete_on}. Pour le conserver, connectez-vous avant cette date.\n"
+        "fr": (
+            "Votre compte RecruitAI sera supprimé dans {days_left} jours",
+            (
+                "Bonjour,\n\nVous ne vous êtes pas connecté depuis longtemps. Sans action de votre "
+                "part, votre compte RecruitAI et toutes ses données seront définitivement "
+                "supprimés le {delete_on}. Pour le conserver, connectez-vous avant cette date.\n"
+            ),
         ),
-    ),
-    "radar_inactivity_notice": (
-        "Your RecruitAI radars will pause on {pause_on} / Vos radars RecruitAI seront mis en pause le {pause_on}",
-        (
-            "Hello,\n\nYou have not signed in for a while. To protect your data, your job "
-            "radars will pause automatically on {pause_on}. Sign in before that date to keep "
-            "them running, or resume them later from the Radar page.\n\n"
-            "Bonjour,\n\nVous ne vous êtes pas connecté depuis un moment. Pour protéger vos "
-            "données, vos radars seront mis en pause automatiquement le {pause_on}. Connectez-"
-            "vous avant cette date pour les garder actifs, ou reprenez-les plus tard depuis "
-            "la page Radar.\n"
+        "vi": (
+            "Tài khoản RecruitAI của bạn sẽ bị xóa sau {days_left} ngày",
+            (
+                "Xin chào,\n\nBạn đã lâu không đăng nhập. Nếu không làm gì, tài khoản RecruitAI "
+                "và toàn bộ dữ liệu của bạn sẽ bị xóa vĩnh viễn vào ngày {delete_on}. "
+                "Để giữ lại, chỉ cần đăng nhập trước ngày đó.\n"
+            ),
         ),
-    ),
-    "radar_paused_failures": (
-        "A RecruitAI radar was paused / Un radar RecruitAI a été mis en pause",
-        (
-            'Hello,\n\nYour radar "{name}" failed several days in a row, so it was paused. '
-            "Open the Radar page to check it and resume it.\n\n"
-            "Bonjour,\n\nVotre radar « {name} » a échoué plusieurs jours de suite et a été "
-            "mis en pause. Ouvrez la page Radar pour le vérifier et le reprendre.\n"
+    },
+    "radar_inactivity_notice": {
+        "en": (
+            "Your RecruitAI radars will pause on {pause_on}",
+            (
+                "Hello,\n\nYou have not signed in for a while. To protect your data, your job "
+                "radars will pause automatically on {pause_on}. Sign in before that date to keep "
+                "them running, or resume them later from the Radar page.\n"
+            ),
         ),
-    ),
-    "application_reminders": (
-        ("RecruitAI: {count} to follow up / à suivre"),
-        (
-            "Hello,\n\nHere is what needs your attention today:\n\n{lines}\n\n"
-            "Open RecruitAI to prepare or draft a follow-up. To stop these emails, turn "
-            "them off in Settings.\n\n"
-            "Bonjour,\n\nVoici ce qui demande votre attention aujourd'hui (détails "
-            "ci-dessus). Ouvrez RecruitAI pour vous préparer ou rédiger une relance. Pour "
-            "ne plus recevoir ces e-mails, désactivez-les dans les Paramètres.\n"
+        "fr": (
+            "Vos radars RecruitAI seront mis en pause le {pause_on}",
+            (
+                "Bonjour,\n\nVous ne vous êtes pas connecté depuis un moment. Pour protéger vos "
+                "données, vos radars seront mis en pause automatiquement le {pause_on}. Connectez-"
+                "vous avant cette date pour les garder actifs, ou reprenez-les plus tard depuis "
+                "la page Radar.\n"
+            ),
         ),
-    ),
+        "vi": (
+            "Các radar RecruitAI của bạn sẽ tạm dừng vào ngày {pause_on}",
+            (
+                "Xin chào,\n\nBạn đã một thời gian không đăng nhập. Để bảo vệ dữ liệu, các radar "
+                "việc làm của bạn sẽ tự động tạm dừng vào ngày {pause_on}. Hãy đăng nhập trước "
+                "ngày đó để giữ chúng hoạt động, hoặc tiếp tục sau từ trang Radar.\n"
+            ),
+        ),
+    },
+    "radar_paused_failures": {
+        "en": (
+            "A RecruitAI radar was paused",
+            (
+                'Hello,\n\nYour radar "{name}" failed several days in a row, so it was paused. '
+                "Open the Radar page to check it and resume it.\n"
+            ),
+        ),
+        "fr": (
+            "Un radar RecruitAI a été mis en pause",
+            (
+                "Bonjour,\n\nVotre radar « {name} » a échoué plusieurs jours de suite et a été "
+                "mis en pause. Ouvrez la page Radar pour le vérifier et le reprendre.\n"
+            ),
+        ),
+        "vi": (
+            "Một radar RecruitAI đã bị tạm dừng",
+            (
+                'Xin chào,\n\nRadar "{name}" của bạn đã lỗi nhiều ngày liên tiếp nên đã bị tạm '
+                "dừng. Hãy mở trang Radar để kiểm tra và tiếp tục.\n"
+            ),
+        ),
+    },
+    "application_reminders": {
+        "en": (
+            "RecruitAI: {count} to follow up",
+            (
+                "Hello,\n\nHere is what needs your attention today:\n\n{lines}\n\n"
+                "Open RecruitAI to prepare or draft a follow-up. To stop these emails, turn "
+                "them off in Settings.\n"
+            ),
+        ),
+        "fr": (
+            "RecruitAI : {count} à suivre",
+            (
+                "Bonjour,\n\nVoici ce qui demande votre attention aujourd'hui :\n\n{lines}\n\n"
+                "Ouvrez RecruitAI pour vous préparer ou rédiger une relance. Pour ne plus "
+                "recevoir ces e-mails, désactivez-les dans les Paramètres.\n"
+            ),
+        ),
+        "vi": (
+            "RecruitAI: {count} việc cần theo dõi",
+            (
+                "Xin chào,\n\nHôm nay có những việc cần bạn chú ý:\n\n{lines}\n\n"
+                "Hãy mở RecruitAI để chuẩn bị hoặc soạn thư theo dõi. Để ngừng nhận các email "
+                "này, hãy tắt trong phần Cài đặt.\n"
+            ),
+        ),
+    },
 }
 
 
 def render(template: str, context: dict[str, Any]) -> tuple[str, str]:
-    """``(subject, body)``. An unknown template or a missing placeholder is a programming
-    error, so it raises ``KeyError`` (it must fail in tests, not be sent half-filled)."""
-    subject, body = TEMPLATES[template]
+    """``(subject, body)`` in ``context["language"]``. An unknown template or a missing
+    placeholder is a programming error, so it raises ``KeyError`` (it must fail in tests, not
+    be sent half-filled)."""
+    subject, body = TEMPLATES[template][context.get("language") or "en"]
     return subject.format(**context), body.format(**context)
 
 

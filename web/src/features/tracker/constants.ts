@@ -1,15 +1,21 @@
+import type { Key, useT } from '@/i18n'
 import type { Application, Status } from './api'
 
-export const COLUMNS: [Status, string][] = [
-  ['to_apply', 'To apply'],
-  ['applied', 'Applied'],
-  ['in_review', 'In review'],
-  ['interview', 'Interview'],
-  ['offer', 'Offer'],
-  ['rejected', 'Rejected'],
-  ['ghosted', 'Ghosted'],
+export type T = ReturnType<typeof useT>
+
+/** Board columns in order; the label is looked up with `t(STATUS_KEY[status])`. */
+export const COLUMNS: Status[] = [
+  'to_apply',
+  'applied',
+  'in_review',
+  'interview',
+  'offer',
+  'rejected',
+  'ghosted',
 ]
-export const LABEL = Object.fromEntries(COLUMNS) as Record<Status, string>
+export const STATUS_KEY = Object.fromEntries(
+  COLUMNS.map((s) => [s, `tracker.status.${s}`]),
+) as Record<Status, Key>
 
 export const SOURCES = [
   'linkedin',
@@ -19,7 +25,8 @@ export const SOURCES = [
   'company_site',
   'other',
 ] as const
-export const sourceLabel = (s: string) => s.replace('_', ' ')
+export const sourceLabel = (t: T, s: string) =>
+  (SOURCES as readonly string[]).includes(s) ? t(`tracker.source.${s}` as Key) : s.replace('_', ' ')
 
 export const DOT: Record<Status, string> = {
   to_apply: 'bg-muted-foreground',

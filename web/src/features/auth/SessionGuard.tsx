@@ -5,6 +5,7 @@ import { Modal } from '@/components/Modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useT } from '@/i18n'
 import { useMe } from '@/features/settings/api'
 import { isRemembered, reauthenticate, signOut, usesPassword } from '@/lib/auth'
 import {
@@ -18,6 +19,7 @@ import {
 import { registerReauthDialog } from '@/lib/stepup'
 
 function ReauthDialog() {
+  const t = useT()
   const [done, setDone] = useState<((ok: boolean) => void) | null>(null)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string>()
@@ -43,13 +45,13 @@ function ReauthDialog() {
       await reauthenticate(password)
       finish(true)
     } catch {
-      setError('That did not work. Check your password and try again.')
+      setError(t('auth.reauth_failed'))
     } finally {
       setBusy(false)
     }
   }
   return (
-    <Modal open={done !== null} label="Confirm it is you" onClose={() => finish(false)}>
+    <Modal open={done !== null} label={t('auth.confirm_title')} onClose={() => finish(false)}>
       <form
         className="space-y-4"
         onSubmit={(e) => {
@@ -57,13 +59,11 @@ function ReauthDialog() {
           void confirm()
         }}
       >
-        <h2 className="text-lg font-semibold">Confirm it is you</h2>
-        <p className="text-sm text-muted-foreground">
-          This action is sensitive. Please confirm your identity to continue.
-        </p>
+        <h2 className="text-lg font-semibold">{t('auth.confirm_title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('auth.confirm_text')}</p>
         {usesPassword() && (
           <div className="space-y-1">
-            <Label htmlFor="reauth-password">Password</Label>
+            <Label htmlFor="reauth-password">{t('auth.password')}</Label>
             <Input
               id="reauth-password"
               type="password"
@@ -81,10 +81,10 @@ function ReauthDialog() {
         )}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => finish(false)}>
-            Cancel
+            {t('auth.cancel')}
           </Button>
           <Button type="submit" disabled={busy || (usesPassword() && !password)}>
-            {usesPassword() ? 'Confirm' : 'Continue with Google'}
+            {usesPassword() ? t('auth.confirm') : t('auth.google')}
           </Button>
         </div>
       </form>
@@ -94,6 +94,7 @@ function ReauthDialog() {
 
 /** Mounted once inside the signed-in app: idle timer + warning, tab sync, step-up dialog. */
 export function SessionGuard() {
+  const t = useT()
   const me = useMe()
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -122,22 +123,22 @@ export function SessionGuard() {
   const seconds = String(idle.secondsLeft % 60).padStart(2, '0')
   return (
     <>
-      <Modal open={idle.state === 'warning'} label="Stay signed in?">
+      <Modal open={idle.state === 'warning'} label={t('auth.stay_title')}>
         <div className="space-y-4" role="alertdialog" aria-describedby="idle-text">
-          <h2 className="text-lg font-semibold">Stay signed in?</h2>
+          <h2 className="text-lg font-semibold">{t('auth.stay_title')}</h2>
           <p id="idle-text" className="text-sm text-muted-foreground">
-            For your security you will be signed out in{' '}
+            {t('auth.idle_a')}{' '}
             <span aria-live="polite">
               {minutes}:{seconds}
             </span>{' '}
-            because of inactivity. Anything you have not saved will be lost.
+            {t('auth.idle_b')}
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => void leaveRef.current('idle')}>
-              Sign out now
+              {t('auth.sign_out_now')}
             </Button>
             <Button autoFocus onClick={idle.touch}>
-              Stay signed in
+              {t('auth.stay')}
             </Button>
           </div>
         </div>

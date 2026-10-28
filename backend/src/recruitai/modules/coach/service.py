@@ -37,9 +37,11 @@ from recruitai.ai.prompts.coach import (
     PROMPT_VERSION,
     SYSTEM_PROMPT_CAREER_COACH,
 )
+from recruitai.ai.prompts.language import with_language
 from recruitai.config import Settings
 from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.core.export import rows_as_dicts
+from recruitai.core.language import Language
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.coach import context, repository
 from recruitai.modules.coach import tools as tools_module
@@ -225,6 +227,7 @@ async def _build_prompt(
     history: list[Message],
     dropped: int,
     content: str,
+    language: Language,
 ) -> _Prompt:
     """Everything the model is given this turn, bounded (design §2), and a record of what that
     was (``counts``: lengths and truncation flags, never content)."""
@@ -299,8 +302,10 @@ async def _build_prompt(
             history=context.fence(_transcript(history)),
             message=context.fence(content),
         ),
-        system=SYSTEM_PROMPT_CAREER_COACH
-        + (JOB_FOCUS_OVERLAY if job is not None else ""),
+        system=with_language(
+            SYSTEM_PROMPT_CAREER_COACH + (JOB_FOCUS_OVERLAY if job is not None else ""),
+            language,
+        ),
         job_attached=job is not None,
         job_id=job.id if job is not None else None,
         profile=profile,
@@ -324,6 +329,7 @@ async def stream_reply(
     conversation_id: UUID,
     content: str | None,
     replace_last: bool = False,
+    language: Language = "en",
 ) -> AsyncGenerator[Event]:
     """The coach's turn as events ``(name, data)``: ``context``, ``step``, ``token``,
     ``citations``, ``suggestions``, ``notice``, then ``done``.
@@ -357,7 +363,7 @@ async def stream_reply(
         )
     history = window(recent)
     prompt = await _build_prompt(
-        db, conversation, history, len(recent) - len(history), content
+        db, conversation, history, len(recent) - len(history), content, language
     )
 
     caps = llm.capabilities(PROMPT_VERSION)

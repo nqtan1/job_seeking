@@ -2,14 +2,27 @@ import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
 import { Button } from '@/components/ui/button'
+import { useI18n, type Key } from '@/i18n'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { AdminTabs } from './AdminTabs'
 import { useAiConsole, useResetAiModel, useSetAiModel } from './api'
 
-const num = (n: number) => n.toLocaleString()
+const COLS: (Key | '')[] = [
+  'admin.ai.col.feature',
+  'admin.ai.col.model',
+  'admin.ai.col.prompt',
+  'admin.ai.col.calls',
+  'admin.ai.col.errors',
+  'admin.ai.col.avg',
+  'admin.ai.col.p95',
+  'admin.ai.col.tokens',
+  '',
+]
 
 /** What runs each AI feature and how it has behaved. Models only; prompts stay in code (ADR 0022). */
 export function AdminAiPage() {
+  const { t, locale } = useI18n()
+  const num = (n: number) => n.toLocaleString(locale)
   const console_ = useAiConsole()
   const setModel = useSetAiModel()
   const reset = useResetAiModel()
@@ -17,11 +30,7 @@ export function AdminAiPage() {
     ([provider, models]) => models.map((model) => ({ provider, model })),
   )
   return (
-    <Page
-      title="Admin"
-      description="Which model runs each AI feature, and how it behaved over 30 days. A change applies within about 30 seconds. Counts and timings only."
-      wide
-    >
+    <Page title={t('admin.title')} description={t('admin.ai.description')} wide>
       <AdminTabs />
       {console_.isPending && <ListSkeleton rows={4} />}
       {console_.isError && <ErrorMessage error={console_.error} />}
@@ -34,19 +43,9 @@ export function AdminAiPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                 <tr>
-                  {[
-                    'Feature',
-                    'Model',
-                    'Prompt',
-                    'Calls',
-                    'Errors',
-                    'Avg ms',
-                    'p95 ms',
-                    'Tokens',
-                    '',
-                  ].map((h) => (
-                    <th key={h} className="p-3 font-medium">
-                      {h}
+                  {COLS.map((h, i) => (
+                    <th key={i} className="p-3 font-medium">
+                      {h && t(h)}
                     </th>
                   ))}
                 </tr>
@@ -59,7 +58,7 @@ export function AdminAiPage() {
                       <td className="p-3 font-medium">{f.feature}</td>
                       <td className="p-3">
                         <NativeSelect
-                          aria-label={`Model for ${f.feature}`}
+                          aria-label={t('admin.ai.model_for', { feature: f.feature })}
                           value={value}
                           disabled={setModel.isPending}
                           onChange={(e) => {
@@ -81,7 +80,7 @@ export function AdminAiPage() {
                         </NativeSelect>
                         {f.overridden && (
                           <p className="mt-1 text-xs text-warning">
-                            Overridden · default {f.default}
+                            {t('admin.ai.overridden', { default: f.default })}
                           </p>
                         )}
                       </td>
@@ -96,11 +95,11 @@ export function AdminAiPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            aria-label={`Reset ${f.feature} to default`}
+                            aria-label={t('admin.ai.reset_aria', { feature: f.feature })}
                             disabled={reset.isPending}
                             onClick={() => reset.mutate(f.feature)}
                           >
-                            Reset
+                            {t('admin.ai.reset')}
                           </Button>
                         )}
                       </td>
@@ -110,10 +109,10 @@ export function AdminAiPage() {
               </tbody>
             </table>
           </div>
-          <section aria-label="Recent changes" className="space-y-1">
-            <h2 className="text-sm font-semibold text-muted-foreground">Recent changes</h2>
+          <section aria-label={t('admin.ai.changes')} className="space-y-1">
+            <h2 className="text-sm font-semibold text-muted-foreground">{t('admin.ai.changes')}</h2>
             {console_.data.changes.length === 0 && (
-              <p className="text-sm text-muted-foreground">No changes yet.</p>
+              <p className="text-sm text-muted-foreground">{t('admin.ai.no_changes')}</p>
             )}
             <ul className="space-y-1 text-sm">
               {console_.data.changes.map((c) => (
@@ -122,9 +121,12 @@ export function AdminAiPage() {
                   className="flex flex-wrap justify-between gap-2 border-b py-1"
                 >
                   <span>
-                    {c.feature}: {c.old_value ?? 'default'} → {c.new_value ?? 'default'}
+                    {c.feature}: {c.old_value ?? t('admin.ai.default')} →{' '}
+                    {c.new_value ?? t('admin.ai.default')}
                   </span>
-                  <span className="text-muted-foreground">{new Date(c.at).toLocaleString()}</span>
+                  <span className="text-muted-foreground">
+                    {new Date(c.at).toLocaleString(locale)}
+                  </span>
                 </li>
               ))}
             </ul>

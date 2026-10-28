@@ -9,17 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useT } from '@/i18n'
 import { useExtractProfile, useProfile } from './api'
 import { ProfileForm } from './ProfileForm'
 import { ProfileView } from './ProfileView'
 
-const STEPS = [
-  'Reading your CV…',
-  'Finding your experience and skills…',
-  'Structuring your profile…',
-]
-
 export function ProfilePage() {
+  const t = useT()
+  const steps = [t('candidate.p.step1'), t('candidate.p.step2'), t('candidate.p.step3')]
   const profile = useProfile()
   const extract = useExtractProfile()
   const file = useRef<HTMLInputElement>(null)
@@ -28,17 +25,17 @@ export function ProfilePage() {
 
   if (profile.isPending)
     return (
-      <Page title="Profile">
+      <Page title={t('candidate.p.title')}>
         <ListSkeleton rows={4} />
       </Page>
     )
   if (profile.isError)
     return (
-      <Page title="Profile">
+      <Page title={t('candidate.p.title')}>
         <div className="space-y-2">
           <ErrorMessage error={profile.error} />
           <Button variant="outline" onClick={() => profile.refetch()}>
-            Retry
+            {t('candidate.p.retry')}
           </Button>
         </div>
       </Page>
@@ -47,13 +44,11 @@ export function ProfilePage() {
   const upload = (
     <Card>
       <CardHeader>
-        <CardTitle>{profile.data ? 'Replace your CV' : 'Start with your CV'}</CardTitle>
-        <CardDescription>
-          Upload a PDF, Word file or image. We extract your profile; you review and edit it.
-        </CardDescription>
+        <CardTitle>{profile.data ? t('candidate.p.replace') : t('candidate.p.start')}</CardTitle>
+        <CardDescription>{t('candidate.p.upload_hint')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Label htmlFor="cv">CV file</Label>
+        <Label htmlFor="cv">{t('candidate.p.cv_file')}</Label>
         <Input
           id="cv"
           type="file"
@@ -62,7 +57,7 @@ export function ProfilePage() {
           disabled={extract.isPending}
         />
         {extract.isError && <ErrorMessage error={extract.error} />}
-        {extract.isPending && <StepProgress steps={STEPS} />}
+        {extract.isPending && <StepProgress steps={steps} />}
         <Button
           loading={extract.isPending}
           onClick={() => {
@@ -78,7 +73,7 @@ export function ProfilePage() {
           }}
         >
           {!extract.isPending && <FileUp />}
-          {extract.isPending ? 'Extracting your profile…' : 'Extract profile'}
+          {extract.isPending ? t('candidate.p.extracting') : t('candidate.p.extract')}
         </Button>
       </CardContent>
     </Card>
@@ -86,13 +81,13 @@ export function ProfilePage() {
 
   return (
     <Page
-      title="Profile"
+      title={t('candidate.p.title')}
       description={
         profile.data
           ? editing
-            ? 'Review and edit what we know about you.'
-            : 'This is what we use to match jobs and write your letters.'
-          : 'Let’s build your profile.'
+            ? t('candidate.p.desc_edit')
+            : t('candidate.p.desc_view')
+          : t('candidate.p.desc_new')
       }
     >
       {profile.data ? (
@@ -110,7 +105,7 @@ export function ProfilePage() {
             <div className="flex flex-wrap justify-end gap-2">
               <Button variant="outline" onClick={() => setReplacing((r) => !r)}>
                 <FileUp />
-                Update CV
+                {t('candidate.p.update_cv')}
               </Button>
               <Button
                 onClick={() => {
@@ -119,7 +114,7 @@ export function ProfilePage() {
                 }}
               >
                 <Pencil />
-                Edit profile
+                {t('candidate.p.edit')}
               </Button>
             </div>
             {replacing && upload}
@@ -130,8 +125,8 @@ export function ProfilePage() {
         <div className="mx-auto max-w-xl space-y-6 pt-6">
           <EmptyState
             icon={FileUp}
-            title="No profile yet"
-            description="Your CV powers job matching, letters and coaching."
+            title={t('candidate.p.empty_title')}
+            description={t('candidate.p.empty_desc')}
           />
           {upload}
         </div>

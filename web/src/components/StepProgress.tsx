@@ -1,11 +1,13 @@
 import { Check, Circle } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useT } from '@/i18n'
 import { Spinner } from '@/components/Spinner'
 
 /** Progress for a slow AI task. The API reports no progress, so the steps are a reassurance
  *  that advances with time (the last one stays until the task ends) and the timer is the only
  *  hard fact shown: it never claims a percentage it does not know. */
 export function StepProgress({ steps, every = 7000 }: { steps: string[]; every?: number }) {
+  const t = useT()
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setSeconds((s) => s + 1), 1000)
@@ -39,7 +41,7 @@ export function StepProgress({ steps, every = 7000 }: { steps: string[]; every?:
         <div className="h-full w-1/3 animate-[indeterminate_1.6s_ease-in-out_infinite] rounded-full bg-primary" />
       </div>
       <p aria-hidden className="text-xs text-muted-foreground tabular-nums">
-        {seconds} s · this can take up to a minute
+        {t('ui.progress_hint', { seconds })}
       </p>
     </div>
   )

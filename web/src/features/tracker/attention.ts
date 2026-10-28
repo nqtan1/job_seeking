@@ -1,4 +1,5 @@
 import type { Application } from './api'
+import type { T } from './constants'
 
 export type Attention = { app: Application; kind: 'followup' | 'ghost' | 'interview'; days: number }
 
@@ -25,5 +26,7 @@ export function needsAttention(apps: Application[], now = new Date()): Attention
   return out.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'interview' ? -1 : 1))
 }
 
-export const practicePrompt = (app: Application) =>
-  `Help me prepare for my interview at ${app.company_name}${app.job_title ? ` for the ${app.job_title} role` : ''}. Ask me the first question.`
+export const practicePrompt = (app: Application, t: T) =>
+  app.job_title
+    ? t('tracker.practice_role', { company: app.company_name, title: app.job_title })
+    : t('tracker.practice', { company: app.company_name })

@@ -92,7 +92,7 @@ def _balanced(tex: str) -> bool:
     return stripped.count("{") == stripped.count("}")
 
 
-@pytest.mark.parametrize("language", ["fr", "en"])
+@pytest.mark.parametrize("language", ["fr", "en", "vi"])
 @pytest.mark.parametrize("template", TEMPLATES)
 def test_every_template_renders_a_valid_document_from_sample_content(
     template, language
@@ -107,7 +107,11 @@ def test_every_template_renders_a_valid_document_from_sample_content(
     assert packages <= ALLOWED_PACKAGES
     assert r"Acme \& Fils" in tex and r"Python \& SQL" in tex  # escaped, not raw
     assert "Lucas Martel" in tex and "Développeur Python" in tex
-    expected_date = "2 octobre 2026" if language == "fr" else "2 October 2026"
+    expected_date = {
+        "fr": "2 octobre 2026",
+        "en": "2 October 2026",
+        "vi": "2 tháng 10 năm 2026",
+    }[language]
     assert expected_date in tex
     assert ("french" if language == "fr" else "english") in tex
 

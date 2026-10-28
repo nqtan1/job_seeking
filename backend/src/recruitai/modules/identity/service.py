@@ -1,6 +1,7 @@
 """Business logic for the identity module. No FastAPI imports (import-linter enforced)."""
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -13,6 +14,7 @@ from recruitai.ai import overrides, usage
 from recruitai.config import AGENTS, Settings
 from recruitai.core.email import EmailSender
 from recruitai.core.errors import NotFound, ValidationFailed
+from recruitai.core.language import Language
 from recruitai.core.tenancy import OrgContext
 from recruitai.modules.applications import service as applications
 from recruitai.modules.candidates import service as candidates
@@ -37,6 +39,7 @@ class MeResult:
     has_profile: bool
     email_reminders: bool
     weekly_goal: int | None
+    language: Language
 
 
 async def get_me(db: AsyncSession, ctx: OrgContext) -> MeResult:
@@ -49,6 +52,7 @@ async def get_me(db: AsyncSession, ctx: OrgContext) -> MeResult:
         has_profile=await candidates.has_profile(db, org_id=ctx.org_id),
         email_reminders=user.email_reminders,
         weekly_goal=user.weekly_goal,
+        language=user.language,  # type: ignore[arg-type]
     )
 
 
@@ -114,6 +118,7 @@ class InactiveUser:
     email: str
     last_active: datetime
     warned_at: datetime | None
+    language: Language = "en"
 
 
 async def inactive_users(
@@ -126,7 +131,14 @@ async def inactive_users(
         select(User, active).where(active <= idle_since).order_by(active).limit(limit)
     )
     return [
-        InactiveUser(u.id, u.firebase_uid, u.email, last_active, u.deletion_warned_at)
+        InactiveUser(
+            u.id,
+            u.firebase_uid,
+            u.email,
+            last_active,
+            u.deletion_warned_at,
+            u.language,  # type: ignore[arg-type]
+        )
         for u, last_active in rows.all()
     ]
 
@@ -138,6 +150,7 @@ class IdleOwner:
     email: str
     last_active: datetime
     radar_notice_at: datetime | None
+    language: Language = "en"
 
 
 async def idle_owners(
@@ -155,7 +168,14 @@ async def idle_owners(
         .limit(limit)
     )
     return [
-        IdleOwner(u.id, org_id, u.email, last_active, u.radar_notice_at)
+        IdleOwner(
+            u.id,
+            org_id,
+            u.email,
+            last_active,
+            u.radar_notice_at,
+            u.language,  # type: ignore[arg-type]
+        )
         for u, org_id, last_active in rows.all()
     ]
 
@@ -282,6 +302,14 @@ async def set_blocked(
     return target
 
 
+async def user_language(db: AsyncSession, user_id: UUID) -> Language:
+    """For background work that has no request (the radar's fit analyses)."""
+    value = (
+        await db.execute(select(User.language).where(User.id == user_id))
+    ).scalar_one_or_none()
+    return _lang(value or "en")
+
+
 async def set_preferences(
     db: AsyncSession, *, user_id: UUID, changes: dict[str, Any]
 ) -> None:
@@ -289,23 +317,43 @@ async def set_preferences(
     values = {
         k: v
         for k, v in changes.items()
-        if k in ("email_reminders", "weekly_goal")
-        and not (k == "email_reminders" and v is None)
+        if k in ("email_reminders", "weekly_goal", "language")
+        and not (k in ("email_reminders", "language") and v is None)
     }
     if values:
         await db.execute(update(User).where(User.id == user_id).values(**values))
         await db.commit()
 
 
-def _line(r: applications.Reminder) -> str:
+_INTERVIEW = {
+    "en": lambda c, d: f"- Interview at {c} {'tomorrow' if d == 1 else f'in {d} days'}",
+    "fr": lambda c, d: (
+        f"- Entretien chez {c} {'demain' if d == 1 else f'dans {d} jours'}"
+    ),
+    "vi": lambda c, d: (
+        f"- Phỏng vấn tại {c} {'vào ngày mai' if d == 1 else f'sau {d} ngày nữa'}"
+    ),
+}
+_NO_REPLY = {
+    "en": lambda c, d: f"- {c}: no reply after {d} days",
+    "fr": lambda c, d: f"- {c} : sans réponse depuis {d} jours",
+    "vi": lambda c, d: f"- {c}: chưa có phản hồi sau {d} ngày",
+}
+_GOAL = {
+    "en": lambda n, g: f"- Weekly goal: {n} of {g} applications last week",
+    "fr": lambda n, g: f"- Objectif : {n} sur {g} candidatures la semaine dernière",
+    "vi": lambda n, g: f"- Mục tiêu tuần: {n}/{g} hồ sơ ứng tuyển tuần trước",
+}
+
+
+def _lang(value: str) -> Language:
+    return "fr" if value == "fr" else "vi" if value == "vi" else "en"
+
+
+def _line(r: applications.Reminder, language: Language) -> str:
     if r.kind == "interview":
-        when = (
-            "tomorrow / demain"
-            if r.days == 1
-            else f"in {r.days} days / dans {r.days} jours"
-        )
-        return f"- Interview at {r.company} {when}"
-    return f"- {r.company}: no reply after {r.days} days / sans réponse depuis {r.days} jours"
+        return _INTERVIEW[language](r.company, r.days)
+    return _NO_REPLY[language](r.company, r.days)
 
 
 async def active_owner_ids(
@@ -333,50 +381,55 @@ async def send_application_reminders(
     sender: EmailSender,
     *,
     now: datetime,
-    extra_lines: dict[UUID, list[str]] | None = None,
+    extra_lines: dict[UUID, Callable[[Language], list[str]]] | None = None,
 ) -> int:
-    """One digest email per user: follow-ups and interviews due today, plus ``extra_lines``
-    (e.g. the radar's new matches, per org). Skips users who opted out or are blocked. A failed
-    send is logged by type only and does not stop the rest."""
-    lines_by_org: dict[UUID, list[str]] = {}
+    """One digest email per user, in their language: follow-ups and interviews due today, plus
+    ``extra_lines`` (e.g. the radar's new matches, per org). Skips users who opted out or are
+    blocked. A failed send is logged by type only and does not stop the rest."""
+    due: dict[UUID, list[applications.Reminder]] = {}
     for r in await applications.due_reminders(db, today=now.date()):
-        lines_by_org.setdefault(r.org_id, []).append(_line(r))
-    for org_id, lines in (extra_lines or {}).items():
-        lines_by_org.setdefault(org_id, []).extend(lines)
+        due.setdefault(r.org_id, []).append(r)
+    goals: dict[UUID, tuple[int, int]] = {}
     if now.weekday() == 0:  # Monday: the opt-in weekly goal
-        goals = await db.execute(
+        goal_rows = await db.execute(
             select(Membership.org_id, User.weekly_goal)
             .join(User, User.id == Membership.user_id)
             .where(Membership.role == "owner", User.weekly_goal.is_not(None))
         )
-        for org_id, goal in goals.all():
+        for org_id, goal in goal_rows.all():
+            if goal is None:
+                continue
             sent_last_week = await applications.sent_since(
                 db, org_id=org_id, since=now - timedelta(days=7)
             )
-            lines_by_org.setdefault(org_id, []).append(
-                f"- Weekly goal: {sent_last_week} of {goal} applications last week"
-                f" / objectif : {sent_last_week} sur {goal} candidatures la semaine dernière"
-            )
-    if not lines_by_org:
+            goals[org_id] = (sent_last_week, goal)
+    extra = extra_lines or {}
+    orgs = set(due) | set(goals) | set(extra)
+    if not orgs:
         return 0
-    rows = await db.execute(
-        select(Membership.org_id, User.email)
+    owners = await db.execute(
+        select(Membership.org_id, User.email, User.language)
         .join(User, User.id == Membership.user_id)
         .where(
-            Membership.org_id.in_(set(lines_by_org)),
+            Membership.org_id.in_(orgs),
             Membership.role == "owner",
             User.email_reminders.is_(True),
             User.blocked_at.is_(None),
         )
     )
     sent = 0
-    for org_id, email in rows.all():
-        lines = lines_by_org[org_id]
+    for org_id, email, lang in owners.all():
+        language = _lang(lang)
+        lines = [_line(r, language) for r in due.get(org_id, [])]
+        if org_id in extra:
+            lines += extra[org_id](language)
+        if org_id in goals:
+            lines.append(_GOAL[language](*goals[org_id]))
         try:
             await sender.send(
                 email,
                 "application_reminders",
-                {"count": len(lines), "lines": "\n".join(lines)},
+                {"count": len(lines), "lines": "\n".join(lines), "language": language},
             )
             sent += 1
         except Exception as exc:  # noqa: BLE001  (one bad address must not stop the others)

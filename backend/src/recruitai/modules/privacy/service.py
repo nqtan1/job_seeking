@@ -249,6 +249,7 @@ async def sweep_inactive_accounts(
                 {
                     "days_left": max((due - now).days, 0),
                     "delete_on": due.date().isoformat(),
+                    "language": user.language,
                 },
             )
         except UpstreamUnavailable:

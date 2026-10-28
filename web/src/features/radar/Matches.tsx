@@ -6,6 +6,7 @@ import { ErrorMessage } from '@/components/ErrorMessage'
 import { ListSkeleton } from '@/components/Skeleton'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { useI18n, useT } from '@/i18n'
 import { ApplyActions } from '@/features/pipeline/ApplyActions'
 import { useDecide, useKeepAnyway, useMarkSeen, useResults, type Result } from './api'
 import { foundOn } from './format'
@@ -14,6 +15,7 @@ const tone = (score: number) => (score >= 80 ? 'success' : score >= 65 ? 'warnin
 
 /** Why it matched, in the user's words: two strengths and the main thing to watch. */
 function Why({ r }: { r: Result }) {
+  const t = useT()
   const { strengths, gaps, missing } = r.highlights
   const watch = missing[0] ?? gaps[0]
   if (strengths.length === 0 && !watch) return null
@@ -21,7 +23,7 @@ function Why({ r }: { r: Result }) {
     <div className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
       {strengths.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-success">Why it fits</p>
+          <p className="text-xs font-medium text-success">{t('radar.m.why_fits')}</p>
           <ul className="list-disc space-y-0.5 pl-4 text-muted-foreground">
             {strengths.slice(0, 2).map((s) => (
               <li key={s}>{s}</li>
@@ -31,7 +33,7 @@ function Why({ r }: { r: Result }) {
       )}
       {watch && (
         <div>
-          <p className="text-xs font-medium text-warning">To watch</p>
+          <p className="text-xs font-medium text-warning">{t('radar.m.to_watch')}</p>
           <p className="text-muted-foreground">{watch}</p>
         </div>
       )}
@@ -40,6 +42,7 @@ function Why({ r }: { r: Result }) {
 }
 
 export function NewMatches() {
+  const { t, locale } = useI18n()
   const results = useResults('new')
   const decide = useDecide()
   const navigate = useNavigate()
@@ -54,8 +57,8 @@ export function NewMatches() {
     return (
       <EmptyState
         icon={Radar}
-        title="No new matches"
-        description="They appear here after a run, with the reasons. You decide what happens next: nothing is sent anywhere."
+        title={t('radar.m.empty_title')}
+        description={t('radar.m.empty_desc')}
       />
     )
   return (
@@ -64,13 +67,15 @@ export function NewMatches() {
         <li key={r.id} className="space-y-3 rounded-xl border bg-card p-4 shadow-xs">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate font-medium">{r.title ?? 'Job'}</p>
+              <p className="truncate font-medium">{r.title ?? t('radar.m.job')}</p>
               <p className="truncate text-sm text-muted-foreground">
-                {r.company} · {foundOn(r.found_at)}
-                {r.search_name ? ` · from “${r.search_name}”` : ''}
+                {r.company} · {foundOn(r.found_at, t, locale)}
+                {r.search_name ? ` · ${t('radar.m.from', { name: r.search_name })}` : ''}
               </p>
             </div>
-            <StatusBadge tone={tone(r.score ?? 0)}>Fit {Math.round(r.score ?? 0)}%</StatusBadge>
+            <StatusBadge tone={tone(r.score ?? 0)}>
+              {t('radar.m.fit', { score: Math.round(r.score ?? 0) })}
+            </StatusBadge>
           </div>
           <Why r={r} />
           <div className="flex flex-wrap items-center gap-2">
@@ -84,24 +89,24 @@ export function NewMatches() {
                 )
               }
             >
-              Keep and write a letter
+              {t('radar.m.keep')}
             </Button>
             {r.job_id && (
               <Link
                 to={`/jobs/${r.job_id}/fit`}
                 className={buttonVariants({ variant: 'outline', size: 'sm' })}
               >
-                Job &amp; analysis
+                {t('radar.m.analysis')}
               </Link>
             )}
             <Button
               size="sm"
               variant="ghost"
-              aria-label={`Dismiss ${r.title ?? 'job'}`}
+              aria-label={t('radar.m.dismiss_aria', { title: r.title ?? t('radar.m.job_lc') })}
               disabled={decide.isPending}
               onClick={() => decide.mutate({ id: r.id, action: 'dismiss' })}
             >
-              Not interested
+              {t('radar.m.dismiss')}
             </Button>
           </div>
         </li>
@@ -113,11 +118,12 @@ export function NewMatches() {
 
 /** Matches the user kept: follow each one through to the tracker. */
 export function InProgress() {
+  const t = useT()
   const results = useResults('approved')
   if (!results.data || results.data.length === 0) return null
   return (
-    <section aria-label="Following up" className="space-y-2">
-      <h2 className="text-sm font-semibold text-muted-foreground">Following up</h2>
+    <section aria-label={t('radar.m.following')} className="space-y-2">
+      <h2 className="text-sm font-semibold text-muted-foreground">{t('radar.m.following')}</h2>
       <ul className="space-y-2">
         {results.data.map((r) => (
           <li
@@ -125,9 +131,9 @@ export function InProgress() {
             className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-3"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{r.title ?? 'Job'}</p>
+              <p className="truncate text-sm font-medium">{r.title ?? t('radar.m.job')}</p>
               <p className="truncate text-xs text-muted-foreground">
-                {r.company} · Fit {Math.round(r.score ?? 0)}%
+                {r.company} · {t('radar.m.fit', { score: Math.round(r.score ?? 0) })}
               </p>
             </div>
             {r.job_id && (
@@ -136,7 +142,7 @@ export function InProgress() {
                   to={`/jobs/${r.job_id}/fit`}
                   className={buttonVariants({ variant: 'outline', size: 'sm' })}
                 >
-                  Job &amp; analysis
+                  {t('radar.m.analysis')}
                 </Link>
                 <ApplyActions jobId={r.job_id} jobSource="france_travail" />
               </div>
@@ -150,6 +156,7 @@ export function InProgress() {
 
 /** What the radar looked at and did not shortlist, so nothing is hidden from the user. */
 export function Rejected({ minScore }: { minScore: number | undefined }) {
+  const t = useT()
   const results = useResults('skipped')
   const keep = useKeepAnyway()
   const navigate = useNavigate()
@@ -157,34 +164,36 @@ export function Rejected({ minScore }: { minScore: number | undefined }) {
   return (
     <details className="rounded-xl border bg-card p-4">
       <summary className="cursor-pointer text-sm font-medium">
-        Checked but not shortlisted ({results.data.length})
+        {t('radar.m.rejected', { count: results.data.length })}
       </summary>
       <p className="mt-2 text-xs text-muted-foreground">
-        These scored below your minimum{minScore ? ` of ${minScore}%` : ''}. If you disagree, review
-        one anyway.
+        {minScore ? t('radar.m.rejected_hint_min', { min: minScore }) : t('radar.m.rejected_hint')}
       </p>
       <ul className="mt-2 space-y-2">
         {results.data.map((r) => (
           <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="min-w-0">
               <p className="truncate">
-                {r.title ?? 'Job'} <span className="text-muted-foreground">· {r.company}</span>
+                {r.title ?? t('radar.m.job')}{' '}
+                <span className="text-muted-foreground">· {r.company}</span>
               </p>
               <p className="truncate text-xs text-muted-foreground">
-                Fit {Math.round(r.score ?? 0)}%
-                {r.highlights.missing[0] ? ` · missing: ${r.highlights.missing[0]}` : ''}
+                {t('radar.m.fit', { score: Math.round(r.score ?? 0) })}
+                {r.highlights.missing[0]
+                  ? ` · ${t('radar.m.missing', { text: r.highlights.missing[0] })}`
+                  : ''}
               </p>
             </div>
             <Button
               size="sm"
               variant="outline"
-              aria-label={`Review ${r.title ?? 'job'} anyway`}
+              aria-label={t('radar.m.review_aria', { title: r.title ?? t('radar.m.job_lc') })}
               disabled={keep.isPending}
               onClick={() =>
                 keep.mutate(r.id, { onSuccess: (k) => navigate(`/jobs/${k.job_id}/fit`) })
               }
             >
-              Review anyway
+              {t('radar.m.review')}
             </Button>
           </li>
         ))}
