@@ -67,7 +67,6 @@ export const createConversation = async (jobId?: string) =>
   unwrap(await api.POST('/api/v1/coach/conversations', { body: { job_id: jobId ?? null } }))
 
 export type Citation = components['schemas']['Citation']
-export type Meta = NonNullable<components['schemas']['MessageOut']['meta']>
 export type StreamData = Record<string, unknown>
 export type OnEvent = (name: string, data: StreamData) => void
 

@@ -214,6 +214,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature */
+        get: operations["get_signature_api_v1_signature_get"];
+        /** Put Signature */
+        put: operations["put_signature_api_v1_signature_put"];
+        post?: never;
+        /** Delete Signature */
+        delete: operations["delete_signature_api_v1_signature_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/signature/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Signature */
+        post: operations["rotate_signature_api_v1_signature_rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/profile/extract": {
         parameters: {
             query?: never;
@@ -457,6 +493,23 @@ export interface paths {
         head?: never;
         /** Edit Recipient */
         patch: operations["edit_recipient_api_v1_letters__letter_id__recipient_patch"];
+        trace?: never;
+    };
+    "/api/v1/letters/{letter_id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Signature */
+        patch: operations["set_signature_api_v1_letters__letter_id__signature_patch"];
         trace?: never;
     };
     "/api/v1/letters/{letter_id}/blocks/{block}/regenerate": {
@@ -1682,6 +1735,11 @@ export interface components {
              */
             angle: string;
         };
+        /** Body_put_signature_api_v1_signature_put */
+        Body_put_signature_api_v1_signature_put: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_document_api_v1_documents_post */
         Body_upload_document_api_v1_documents_post: {
             /** Kind */
@@ -2453,6 +2511,7 @@ export interface components {
             closing: string;
             /** Signature */
             signature: string;
+            signature_image?: components["schemas"]["SignatureImage"] | null;
         };
         /**
          * LetterIdeas
@@ -3236,6 +3295,11 @@ export interface components {
             /** Status Url */
             status_url: string;
         };
+        /** RotateIn */
+        RotateIn: {
+            /** Degrees */
+            degrees: number;
+        };
         /** RunAccepted */
         RunAccepted: {
             /**
@@ -3272,6 +3336,55 @@ export interface components {
             absolute_days: number;
             /** Stepup Max Age Seconds */
             stepup_max_age_seconds: number;
+        };
+        /**
+         * SignatureImage
+         * @description The user's signature picture, printed above the typed name. The picture itself is the
+         *     org's one stored signature (documents module); the letter only keeps the wanted width.
+         */
+        SignatureImage: {
+            /** Width Mm */
+            width_mm: number;
+        };
+        /** SignatureLimits */
+        SignatureLimits: {
+            /** Min Width Mm */
+            min_width_mm: number;
+            /** Max Width Mm */
+            max_width_mm: number;
+            /** Max Height Mm */
+            max_height_mm: number;
+            /** Min Dpi */
+            min_dpi: number;
+        };
+        /** SignatureOut */
+        SignatureOut: {
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Url */
+            url: string;
+            /** Width Px */
+            width_px: number;
+            /** Height Px */
+            height_px: number;
+            /** Aspect */
+            aspect: number;
+            /** Issues */
+            issues: ("blank" | "sideways" | "low_resolution" | "too_small" | "too_big")[];
+            /** Recommended Width Mm */
+            recommended_width_mm: number;
+            limits: components["schemas"]["SignatureLimits"];
+        };
+        /** SignatureSettingIn */
+        SignatureSettingIn: {
+            /**
+             * Width Mm
+             * @description None removes the image
+             */
+            width_mm?: number | null;
         };
         /** SourceMeta */
         SourceMeta: {
@@ -4229,6 +4342,187 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_api_v1_signature_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureOut"] | null;
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_signature_api_v1_signature_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_put_signature_api_v1_signature_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    delete_signature_api_v1_signature_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_signature_api_v1_signature_rotate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureOut"];
                 };
             };
             /** @description Authentication is required or the provided credentials are invalid. */
@@ -5343,6 +5637,62 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RecipientPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    set_signature_api_v1_letters__letter_id__signature_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                letter_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignatureSettingIn"];
             };
         };
         responses: {

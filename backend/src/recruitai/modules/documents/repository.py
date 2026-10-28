@@ -64,6 +64,20 @@ async def list_by_kinds(
     return list(rows.scalars())
 
 
+async def get_of_kind(
+    session: AsyncSession, *, org_id: UUID, kind: str
+) -> Document | None:
+    """The org's newest document of ``kind`` (for kinds kept to one per org)."""
+    return (
+        await session.execute(
+            select(Document)
+            .where(Document.org_id == org_id, Document.kind == kind)
+            .order_by(Document.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+
 async def delete_of_kind(
     session: AsyncSession, *, org_id: UUID, kind: str, keep: UUID | None
 ) -> list[str]:

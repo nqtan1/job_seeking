@@ -3,7 +3,7 @@
 Jinja delimiters are ``\\VAR{..}`` / ``\\BLOCK{..}`` so template braces never clash with
 LaTeX. All text is escaped in Python *before* it reaches a template (``escape_value``), so a
 template can't forget to. Templates only use packages the worker image pre-warms
-(``geometry``, ``fontspec`` with the bundled Latin Modern OpenType fonts, ``babel`` in French
+(``geometry``, ``graphicx``, ``fontspec`` with the bundled Latin Modern OpenType fonts, ``babel`` in French
 and English): Tectonic is offline at runtime, and ``docker/sample.tex`` pre-warms exactly this
 set. Fonts via ``fontspec`` (not T1 + ``inputenc``) because Tectonic is XeTeX: it reads UTF-8
 directly, so ``œ``, ``’``, ``«»`` and ``€`` need a Unicode font. The ``latex_override`` mode skips this module entirely (the caller's job).
@@ -18,6 +18,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from recruitai.core.language import Language
 from recruitai.modules.letters.latex_escape import escape_value
 from recruitai.modules.letters.schemas import LetterContent, Template
+
+SIGNATURE_FILENAME = "signature.png"  # the only asset a letter may reference
 
 _LABELS = {
     "fr": {"subject": "Objet :", "babel": "french"},
@@ -69,9 +71,25 @@ def _lines(*values: str | None) -> list[str]:
     return [v for v in values if v]
 
 
+def signature_line(printed_mm: tuple[float, float]) -> str:
+    """The one LaTeX line that includes the signature picture. ``tasks.check_tex_allowed``
+    matches this exact shape; the numbers are ours (``fit_mm``), never user text."""
+    width, height = printed_mm
+    return (
+        f"\\includegraphics[width={width:.1f}mm,height={height:.1f}mm,keepaspectratio]"
+        f"{{{SIGNATURE_FILENAME}}}"
+    )
+
+
 def render_tex(
-    content: LetterContent, *, template: Template, language: Language
+    content: LetterContent,
+    *,
+    template: Template,
+    language: Language,
+    signature: tuple[float, float] | None = None,
 ) -> str:
+    """``signature`` is the printed size in mm (from ``fit_mm``) of the picture to include
+    above the typed name; None prints the name only."""
     c = escape_value(content.model_dump())
     header, recipient = c["header"], c["recipient"]
     date_text = format_date(content.header.date, language)  # digits and letters only
@@ -101,5 +119,6 @@ def render_tex(
         "paragraphs": [c["opening"], *c["body"]],
         "closing": c["closing"],
         "signature": c["signature"],
+        "signature_image": signature_line(signature) if signature else None,
     }
     return _env().get_template(f"{template}.tex.j2").render(context)

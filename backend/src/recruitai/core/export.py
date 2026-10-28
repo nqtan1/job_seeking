@@ -18,10 +18,8 @@ def _json_safe(value: Any) -> Any:
     return value  # str, int, float, bool, None, and JSONB dicts/lists are already JSON
 
 
-def row_as_dict(row: object) -> dict[str, Any]:
-    mapper = inspect(row).mapper  # type: ignore[union-attr]
-    return {a.key: _json_safe(getattr(row, a.key)) for a in mapper.column_attrs}
-
-
 def rows_as_dicts(rows: list[Any]) -> list[dict[str, Any]]:
-    return [row_as_dict(r) for r in rows]
+    return [
+        {a.key: _json_safe(getattr(r, a.key)) for a in inspect(r).mapper.column_attrs}
+        for r in rows
+    ]

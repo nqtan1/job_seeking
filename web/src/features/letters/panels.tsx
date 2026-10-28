@@ -1,3 +1,4 @@
+import { downloadBlob } from '@/lib/download'
 import { useState } from 'react'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Button } from '@/components/ui/button'
@@ -139,11 +140,11 @@ export function ExportButtons({ letterId }: { letterId: string }) {
       const text = out.subject
         ? `${t('letters.export.subject', { subject: out.subject })}\n\n${out.body}`
         : out.body
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
-      a.download = format === 'email' ? 'letter-email.txt' : 'letter.txt'
-      a.click()
-      URL.revokeObjectURL(a.href)
+      downloadBlob(
+        format === 'email' ? 'letter-email.txt' : 'letter.txt',
+        'text/plain;charset=utf-8',
+        text,
+      )
     } catch (e) {
       setError(e)
     }

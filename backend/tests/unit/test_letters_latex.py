@@ -11,7 +11,7 @@ from recruitai.modules.letters.templates import format_date, render_tex
 
 TEMPLATES = ["classic", "modern", "compact", "lettre_fr"]
 # Exactly what docker/sample.tex pre-warms: anything else fails offline in the worker.
-ALLOWED_PACKAGES = {"geometry", "fontspec", "babel"}
+ALLOWED_PACKAGES = {"geometry", "graphicx", "fontspec", "babel"}
 
 
 @pytest.mark.parametrize(

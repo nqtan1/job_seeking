@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 import { useT } from '@/i18n'
+import { askCoachUrl } from '@/features/coach/link'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { useChangeStatus, useFunnel, type Application } from './api'
@@ -66,7 +67,16 @@ export function AttentionPanel({ apps }: { apps: Application[] }) {
                 </Link>
               ) : (
                 <Link
-                  to={`/?${app.job_id ? `job=${app.job_id}&` : ''}ask=${encodeURIComponent(app.job_title ? t('tracker.attn.ask_role', { company: app.company_name, title: app.job_title, days }) : t('tracker.attn.ask', { company: app.company_name, days }))}`}
+                  to={askCoachUrl(
+                    app.job_id,
+                    app.job_title
+                      ? t('tracker.attn.ask_role', {
+                          company: app.company_name,
+                          title: app.job_title,
+                          days,
+                        })
+                      : t('tracker.attn.ask', { company: app.company_name, days }),
+                  )}
                   className={buttonVariants({ size: 'sm', variant: 'outline' })}
                 >
                   {t('tracker.attn.draft')}

@@ -322,3 +322,47 @@ async def test_a_letter_edited_while_compiling_gets_no_stale_pdf(
             .all()
         )
     assert left == []  # the discarded PDF left no row behind
+
+
+async def test_signature_picture_is_passed_to_the_compiler_and_dropped_if_it_vanished(
+    db_engine: AsyncEngine,
+    task_app,
+    committed_letter,
+    fake_storage: LocalStorage,
+    monkeypatch,
+):
+    ctx, letter_id = committed_letter
+    seen: list[tuple[str, dict[str, bytes] | None]] = []
+    stored: list[tuple[bytes, float] | None] = [(b"PNG", 4.0)]
+
+    async def fake_compile(tex: str, assets: dict[str, bytes] | None = None) -> bytes:
+        seen.append((tex, assets))
+        return PDF
+
+    async def signature_for_render(session, storage, *, org_id):
+        return stored[0]
+
+    monkeypatch.setattr(tasks, "compile_tex", fake_compile)
+    monkeypatch.setattr(
+        "recruitai.modules.documents.service.signature_for_render",
+        signature_for_render,
+        raising=False,
+    )
+    monkeypatch.setattr("recruitai.worker.storage", fake_storage)
+    async with AsyncSession(db_engine) as session:
+        letter = (
+            await session.execute(select(Letter).where(Letter.id == letter_id))
+        ).scalar_one()
+        letter.content = {**letter.content, "signature_image": {"width_mm": 60}}
+        await session.commit()
+
+    await _run(db_engine, task_app, ctx, letter_id)
+    tex, assets = seen[-1]
+    assert assets == {"signature.png": b"PNG"}
+    assert "width=60.0mm,height=15.0mm" in tex  # fit_mm: 60 mm wide, aspect 4
+
+    stored[0] = None  # deleted meanwhile: the letter still renders, without it
+    await _run(db_engine, task_app, ctx, letter_id)
+    tex, assets = seen[-1]
+    assert assets is None and "includegraphics" not in tex
+    assert (await _letter(db_engine, letter_id)).render_status == "done"

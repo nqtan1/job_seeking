@@ -219,6 +219,7 @@ def test_documents_columns_constraints_and_indexes(insp):
         "letter_pdf",
         "attachment",
         "export",
+        "signature",
     }
 
     assert {

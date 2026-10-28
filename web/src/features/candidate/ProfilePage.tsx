@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SignatureCard } from '@/features/signature/SignatureCard'
 import { useT } from '@/i18n'
 import { useExtractProfile, useProfile } from './api'
 import { ProfileForm } from './ProfileForm'
@@ -119,6 +120,7 @@ export function ProfilePage() {
             </div>
             {replacing && upload}
             <ProfileView profile={profile.data} />
+            <SignatureCard name={profile.data.data.personal_info.name} />
           </div>
         )
       ) : (

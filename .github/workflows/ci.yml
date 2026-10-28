@@ -105,7 +105,7 @@ jobs:
       - name: Tectonic compiles offline (package bundle pre-warmed at build time, ADR 0010)
         run: |
           docker run --rm --network none recruitai-worker:ci sh -c \
-            "mkdir -p /tmp/out && tectonic --outdir /tmp/out /app/docker/sample.tex && test -s /tmp/out/sample.pdf"
+            "mkdir -p /tmp/out && cp /app/docker/sample.tex /tmp/out/ && cp /app/docker/sample-signature.png /tmp/out/signature.png && tectonic -X compile --untrusted --outdir /tmp/out /tmp/out/sample.tex && test -s /tmp/out/sample.pdf"
       - name: worker image compiles every letter template offline (P2-20)
         run: docker run --rm --network none recruitai-worker:ci python /app/docker/render_check.py
 

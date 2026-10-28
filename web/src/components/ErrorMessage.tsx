@@ -1,8 +1,9 @@
 import { CircleAlert } from 'lucide-react'
 import { describeError } from '@/lib/problem'
 
-/** The one way an API error reaches the user: safe message + request id, announced as an alert. */
-export function ErrorMessage({ error }: { error: unknown }) {
+/** Renders nothing when `error` is empty. The one way an API error reaches the user: safe message + request id, announced as an alert. */
+export function ErrorMessage({ error }: { error: unknown | null | undefined }) {
+  if (!error) return null
   return (
     <p
       role="alert"

@@ -39,6 +39,7 @@ from recruitai.modules.letters.schemas import (
     PdfLinkOut,
     RecipientPatch,
     RenderAccepted,
+    SignatureSettingIn,
     SpellcheckIn,
     SpellcheckOut,
     VersionOut,
@@ -215,6 +216,24 @@ async def edit_recipient(
 ) -> LetterOut:
     letter = await service.edit_recipient(
         db, org_id=ctx.org_id, letter_id=letter_id, patch=body
+    )
+    return _out(letter)
+
+
+@router.patch(
+    "/{letter_id}/signature",
+    response_model=LetterOut,
+    responses=problem_responses(Unauthorized, NotFound, ValidationFailed),
+)
+async def set_signature(
+    letter_id: UUID,
+    body: SignatureSettingIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    storage: Annotated[Storage, Depends(get_storage_dependency)],
+) -> LetterOut:
+    letter = await service.set_signature(
+        db, storage, org_id=ctx.org_id, letter_id=letter_id, width_mm=body.width_mm
     )
     return _out(letter)
 

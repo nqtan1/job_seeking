@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from recruitai.core.language import Language
+from recruitai.modules.documents.signature_spec import MAX_WIDTH_MM, MIN_WIDTH_MM
 
 SCHEMA_VERSION = 1
 
@@ -119,6 +120,19 @@ class Recipient(BaseModel):
     address: str | None = None
 
 
+class SignatureImage(BaseModel):
+    """The user's signature picture, printed above the typed name. The picture itself is the
+    org's one stored signature (documents module); the letter only keeps the wanted width."""
+
+    width_mm: int = Field(ge=MIN_WIDTH_MM, le=MAX_WIDTH_MM)
+
+
+class SignatureSettingIn(BaseModel):
+    width_mm: int | None = Field(
+        None, ge=MIN_WIDTH_MM, le=MAX_WIDTH_MM, description="None removes the image"
+    )
+
+
 class LetterContent(BaseModel):
     header: Header
     recipient: Recipient
@@ -128,6 +142,7 @@ class LetterContent(BaseModel):
     body: list[str]
     closing: str
     signature: str
+    signature_image: SignatureImage | None = None  # old stored letters have none
 
 
 class MotivationQuestion(BaseModel):

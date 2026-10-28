@@ -27,7 +27,8 @@ class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('cv', 'jd', 'letter_pdf', 'attachment', 'export')", name="kind"
+            "kind IN ('cv', 'jd', 'letter_pdf', 'attachment', 'export', 'signature')",
+            name="kind",
         ),
         CheckConstraint("size >= 0", name="size"),
         CheckConstraint("sha256 ~ '^[0-9a-f]{64}$'", name="sha256"),

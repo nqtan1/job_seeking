@@ -55,6 +55,7 @@ from recruitai.modules.letters.schemas import (
     MotivationQuestions,
     Recipient,
     RecipientPatch,
+    SignatureImage,
     SpellFindings,
     SpellIssue,
     SpellItem,
@@ -463,6 +464,30 @@ async def edit_recipient(
         recipient[key] = (value or "").strip() or None
     letter = await repository.save_content(
         db, letter, {**letter.content, "recipient": recipient}
+    )
+    await db.commit()
+    return letter
+
+
+async def set_signature(
+    db: AsyncSession,
+    storage: Storage,
+    *,
+    org_id: UUID,
+    letter_id: UUID,
+    width_mm: int | None,
+) -> Letter:
+    """Turn the signature picture on (at ``width_mm``) or off (None): a new version. The
+    picture is the org's one stored signature, so turning it on needs one to exist."""
+    letter = await _locked(db, org_id=org_id, letter_id=letter_id)
+    if width_mm is None:
+        image = None
+    else:
+        if await documents.signature_for_render(db, storage, org_id=org_id) is None:
+            raise ValidationFailed("Upload your signature first.")
+        image = SignatureImage(width_mm=width_mm).model_dump()  # validates the range
+    letter = await repository.save_content(
+        db, letter, {**letter.content, "signature_image": image}
     )
     await db.commit()
     return letter

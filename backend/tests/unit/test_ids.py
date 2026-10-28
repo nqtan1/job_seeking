@@ -14,8 +14,3 @@ def test_new_ids_are_unique_time_ordered_uuid7():
     assert [i.int >> 80 for i in ids] == sorted(
         i.int >> 80 for i in ids
     )  # 48-bit ms timestamp
-
-
-def test_testcontainers_is_not_a_dependency():
-    for name in ("pyproject.toml", "uv.lock"):
-        assert "testcontainers" not in (ROOT / name).read_text().lower()

@@ -17,6 +17,7 @@ import { useEditBlock, useLetter, usePdfPreview, useRender, useSpellcheck } from
 import { BlockEditor } from './BlockEditor'
 import { editorBlocks, ideasFor } from './blocks'
 import { RecipientPanel } from './RecipientPanel'
+import { SignaturePanel } from '@/features/signature/SignaturePanel'
 import { ExportButtons, QualityPanel, VersionsPanel } from './panels'
 import { activeIssues, applyAll, applyIssue, isStale, type Checked } from './spellcheck'
 
@@ -204,6 +205,7 @@ function LetterEditor({ letterId }: { letterId: string }) {
             key={JSON.stringify(letter.data.content.recipient)}
             letter={letter.data}
           />
+          <SignaturePanel letter={letter.data} />
           {blocks.map((b) => (
             <BlockEditor
               key={b.key}
