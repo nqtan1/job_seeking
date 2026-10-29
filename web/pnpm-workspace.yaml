@@ -6,6 +6,8 @@ overrides:
   '@grpc/grpc-js': '>=1.13.6'
   # fast-uri < 3.1.9 (several advisories), pulled by @hookform/resolvers > ajv
   fast-uri: '>=3.1.9'
+  # re2js 2.2.0-2.8.6 quadratic-time DoS (GHSA-gg6h-894w-4m9c), pulled by firebase > firestore
+  re2js: '>=2.8.7'
 auditConfig:
   ignoreGhsas:
     # braces DoS via deeply nested patterns, no patched version; only reached through the shadcn CLI

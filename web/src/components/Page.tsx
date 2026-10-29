@@ -19,7 +19,7 @@ export function Page({ title, description, back, actions, wide, children }: Prop
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 flex min-h-14 flex-wrap items-center gap-3 border-b bg-background/85 px-6 py-2 backdrop-blur">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 basis-full md:flex-1 md:basis-0">
           {back && (
             <Link
               to={back.to}

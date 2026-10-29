@@ -131,6 +131,7 @@ test('the same text pasted twice says it is already there; a job is deleted afte
     await screen.findByText('Already in your jobs: nothing new was analysed.'),
   ).toBeInTheDocument()
 
+  await user.click(await screen.findByRole('button', { name: /Python Dev/ })) // expand the row
   await user.click(await screen.findByRole('button', { name: 'Delete Python Dev' }))
   expect(mocks.DELETE).not.toHaveBeenCalled()
   expect(screen.getByText(/Your letters and tracked applications stay/)).toBeInTheDocument()
@@ -155,6 +156,7 @@ test('a job missing its company shows a placeholder and a form that PATCHes only
   renderWithApp(<JobsPage />, { at: '/jobs', path: '/jobs' })
 
   expect(await screen.findByText('Company not set')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /Python Dev/ }))
   expect(screen.getByText(/Missing: company \/ address/)).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Add' }))
   await user.type(screen.getByLabelText('Company'), 'Acme')
@@ -166,4 +168,29 @@ test('a job missing its company shows a placeholder and a form that PATCHes only
       body: { company_name: 'Acme', company_address: '', location: 'Lyon' },
     }),
   )
+})
+
+test('jobs of one employer share a header with a count; the Today filter empties the list', async () => {
+  const user = userEvent.setup()
+  const mk = (id: string, name: string) => ({
+    ...job,
+    id,
+    data: { ...job.data, company: { name }, source_meta: { apply_url: null } },
+  })
+  mocks.GET.mockImplementation(async (url: string) =>
+    url === '/api/v1/jobs'
+      ? { data: [mk('a', 'Thales'), mk('b', 'THALES SA'), mk('c', 'Inria')] }
+      : { data: [] },
+  )
+  renderWithApp(<JobsPage />, { at: '/jobs', path: '/jobs' })
+
+  const header = await screen.findByRole('button', { name: /^Thales\s*2/ })
+  expect(header).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.getByText('3 of 3 jobs')).toBeInTheDocument()
+
+  await user.selectOptions(screen.getByLabelText('Added'), 'today')
+  expect(await screen.findByText('No jobs match')).toBeInTheDocument()
+  expect(screen.getByText('0 of 3 jobs')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+  expect(await screen.findByText('3 of 3 jobs')).toBeInTheDocument()
 })

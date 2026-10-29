@@ -48,7 +48,7 @@ export function ContractPicker({
 
   const chip = (on: boolean) =>
     cn(
-      'rounded-full border px-3 py-1 text-xs transition-colors',
+      'rounded-full border px-3 py-1 text-xs transition-colors pointer-coarse:min-h-11 pointer-coarse:px-4 pointer-coarse:text-sm',
       on ? 'border-primary bg-primary text-primary-foreground' : 'bg-card hover:bg-accent',
     )
   return (

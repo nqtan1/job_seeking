@@ -39,7 +39,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await page.getByRole('link', { name: 'New chat' }).click()
   await page.getByRole('button', { name: 'Review my CV' }).click()
   await expect(page.getByText('Votre profil est solide.')).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByRole('region', { name: 'Recent chats' })).toContainText('Review my CV')
+  await expect(page.getByRole('navigation', { name: 'Recent' })).toContainText('Review my CV')
 
   // Jobs: paste a description.
   await nav(page, 'Jobs').click()
@@ -48,6 +48,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page.getByText(/Job added:/)).toBeVisible({ timeout: 120_000 })
 
   // Fit report.
+  await page.locator('button[aria-controls^="job-row-"]').first().click() // open the row
   await page.getByRole('link', { name: 'Check fit' }).first().click()
   await page.getByRole('button', { name: 'Analyse my fit' }).click()
   await expect(page.getByText(/\/100/)).toBeVisible({ timeout: 120_000 })

@@ -64,7 +64,10 @@ function NewLetter() {
         {jobs.data?.length === 0 ? (
           <p className="text-muted-foreground">
             {t('letters.new.no_jobs').split('{link}')[0]}
-            <Link to="/jobs" className="underline">
+            <Link
+              to="/jobs"
+              className="underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+            >
               {t('letters.new.jobs_link')}
             </Link>
             {t('letters.new.no_jobs').split('{link}')[1]}

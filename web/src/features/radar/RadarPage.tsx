@@ -243,9 +243,10 @@ function SearchCard({ search }: { search: Search }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1 text-xs">
+          <label className="flex items-center gap-1 text-xs pointer-coarse:min-h-11">
             <input
               type="checkbox"
+              className="pointer-coarse:size-5"
               checked={search.enabled}
               disabled={toggle.isPending}
               onChange={(e) => toggle.mutate({ id: search.id, enabled: e.target.checked })}

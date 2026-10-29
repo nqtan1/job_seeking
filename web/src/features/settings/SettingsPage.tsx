@@ -60,9 +60,10 @@ function RemindersCard() {
         <CardDescription>{t('settings.rem.desc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm pointer-coarse:min-h-11">
           <input
             type="checkbox"
+            className="pointer-coarse:size-5"
             checked={me.data?.email_reminders ?? true}
             disabled={me.isPending || set.isPending}
             onChange={(e) => set.mutate(e.target.checked)}
@@ -70,9 +71,10 @@ function RemindersCard() {
           {t('settings.rem.send')}
         </label>
         {set.isError && <ErrorMessage error={set.error} />}
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm pointer-coarse:min-h-11">
           <input
             type="checkbox"
+            className="pointer-coarse:size-5"
             checked={me.data?.weekly_goal != null}
             disabled={me.isPending || goal.isPending}
             onChange={(e) => goal.mutate(e.target.checked ? 3 : null)}

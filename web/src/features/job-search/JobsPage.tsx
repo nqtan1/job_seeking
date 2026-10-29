@@ -1,34 +1,22 @@
 import { ContractPicker } from '@/components/ContractPicker'
 import { PlacePicker } from '@/components/PlacePicker'
-import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
-import { ListSkeleton } from '@/components/Skeleton'
-import { StatusBadge } from '@/components/StatusBadge'
 import { StepProgress } from '@/components/StepProgress'
-import { ApplyActions } from '@/features/pipeline/ApplyActions'
-import { usePipeline } from '@/features/pipeline/api'
-import { sourceLabel, STATUS_KEY } from '@/features/tracker/constants'
-import { useRadarJobIds } from '@/features/radar/api'
-import { Briefcase, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
 import { Controller, useForm } from 'react-hook-form'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useI18n, useT } from '@/i18n'
-import { DeleteJobButton } from './DeleteJobButton'
-import { JobDetailsFix } from './JobDetailsFix'
-import { companyOf } from './label'
-import { isStale, postingAgeDays } from './age'
+import { useT } from '@/i18n'
+import { JobList } from './JobList'
 import {
   MAX_FILES,
   useAddJob,
   useAddJobFiles,
-  useJobs,
   useParseQuery,
   useSearchJobs,
   type SearchParams,
@@ -299,125 +287,6 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
         </ul>
       </CardContent>
     </Card>
-  )
-}
-
-const VERDICT_TONE = { go: 'success', maybe: 'warning', no_go: 'danger' } as const
-
-function JobList() {
-  const { t, locale } = useI18n()
-  const jobs = useJobs()
-  const pipeline = usePipeline()
-  const fromRadar = useRadarJobIds()
-  const [bestFirst, setBestFirst] = useState(false)
-  if (jobs.isPending) return <ListSkeleton />
-  if (jobs.isError) return <ErrorMessage error={jobs.error} />
-  if (jobs.data.length === 0)
-    return (
-      <EmptyState
-        icon={Briefcase}
-        title={t('jobs.empty_title')}
-        description={t('jobs.empty_desc')}
-      />
-    )
-  const rows = bestFirst
-    ? [...jobs.data].sort(
-        (a, b) => (pipeline.fit(b.id)?.score ?? -1) - (pipeline.fit(a.id)?.score ?? -1),
-      )
-    : jobs.data
-  return (
-    <div className="space-y-2">
-      <Button
-        size="sm"
-        variant="outline"
-        aria-pressed={bestFirst}
-        onClick={() => setBestFirst(!bestFirst)}
-      >
-        {bestFirst ? t('jobs.newest_first') : t('jobs.best_first')}
-      </Button>
-      <ul
-        className="max-h-[min(28rem,55vh)] xl:max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto rounded-xl border bg-muted/30 p-2"
-        aria-label={t('jobs.your_jobs')}
-      >
-        {rows.map((j) => {
-          const fit = pipeline.fit(j.id)
-          const letters = pipeline.letters(j.id)
-          const app = pipeline.application(j.id)
-          return (
-            <li key={j.id} className="space-y-3 rounded-xl border bg-card p-4 shadow-xs">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-1">
-                  <p className="truncate font-medium">{j.data.title}</p>
-                  <p className="truncate text-sm text-muted-foreground">{companyOf(j)}</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge tone="info">{sourceLabel(t, j.source)}</StatusBadge>
-                    {fromRadar.has(j.id) && (
-                      <StatusBadge tone="success">{t('jobs.from_radar')}</StatusBadge>
-                    )}
-                    {isStale(postingAgeDays(j.data.source_meta.posted_on)) && (
-                      <StatusBadge tone="warning">
-                        {t('jobs.stale', {
-                          days: postingAgeDays(j.data.source_meta.posted_on) ?? 0,
-                        })}
-                      </StatusBadge>
-                    )}
-                    {fit ? (
-                      <StatusBadge
-                        tone={VERDICT_TONE[fit.data.recommendation as keyof typeof VERDICT_TONE]}
-                      >
-                        {t('jobs.fit_pct', { score: Math.round(fit.score) })}
-                      </StatusBadge>
-                    ) : (
-                      <StatusBadge>{t('jobs.fit_unchecked')}</StatusBadge>
-                    )}
-                    <StatusBadge tone={letters.length ? 'success' : 'neutral'}>
-                      {letters.length
-                        ? t('jobs.letters', { count: letters.length })
-                        : t('jobs.no_letter')}
-                    </StatusBadge>
-                    {app && (
-                      <StatusBadge tone="success">
-                        {t('jobs.tracked', { status: t(STATUS_KEY[app.status]) })}
-                      </StatusBadge>
-                    )}
-                  </div>
-                  <JobDetailsFix job={j} />
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {new Date(j.created_at).toLocaleDateString(locale)}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to={`/jobs/${j.id}/fit`}
-                  className={buttonVariants({ variant: fit ? 'outline' : 'default', size: 'sm' })}
-                >
-                  {fit ? t('jobs.fit_report') : t('jobs.check_fit')}
-                </Link>
-                <Link
-                  to={letters[0] ? `/letters/${letters[0].id}` : `/letters?job=${j.id}`}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
-                  {letters[0] ? t('jobs.open_letter') : t('jobs.write_letter')}
-                </Link>
-                <Link
-                  to={`/?job=${j.id}`}
-                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                >
-                  {t('jobs.discuss')}
-                </Link>
-                <ApplyActions
-                  jobId={j.id}
-                  jobSource={j.source}
-                  pdfDocumentId={letters[0]?.pdf_document_id}
-                />
-                <DeleteJobButton id={j.id} title={j.data.title} />
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
   )
 }
 
