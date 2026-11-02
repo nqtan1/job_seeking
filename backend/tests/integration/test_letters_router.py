@@ -39,7 +39,13 @@ async def _letter(
     resp = await client.post(
         "/api/v1/letters",
         headers=who,
-        json={"job_id": job_id, "tone": "warm", "language": "fr", "template": "modern"},
+        json={
+            "job_id": job_id,
+            "tone": "warm",
+            "language": "fr",
+            "template": "modern",
+            "answers": [{"question": "Why us?", "answer": "The mission."}],
+        },
     )
     assert resp.status_code == 201, resp.text
     return resp.json()["id"], job_id

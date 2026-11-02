@@ -96,7 +96,11 @@ async def create_letter(
     db: Annotated[AsyncSession, Depends(get_db)],
     llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
 ) -> LetterOut:
-    fields = body.model_dump() | {"language": body.language or ctx.language}
+    # model_dump() would turn the answers into dicts; the service wants Answer models.
+    fields = body.model_dump() | {
+        "language": body.language or ctx.language,
+        "answers": body.answers,
+    }
     letter = await service.generate(db, llm, org_id=ctx.org_id, **fields)
     return _out(letter)
 
