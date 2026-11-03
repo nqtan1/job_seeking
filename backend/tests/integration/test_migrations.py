@@ -170,6 +170,8 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
 
     assert set(out.split(",")) == {
         "admin_actions",
+        "agent_versions",
+        "agents",
         "ai_setting_changes",
         "ai_settings",
         "ai_calls",
@@ -181,6 +183,12 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "consents",
         "documents",
         "fit_analyses",
+        "flow_run_handoffs",
+        "flow_run_steps",
+        "flow_runs",
+        "flow_schedules",
+        "flow_versions",
+        "flows",
         "job_postings",
         "job_search_cache",
         "letter_versions",

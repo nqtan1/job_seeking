@@ -23,6 +23,8 @@ AGENTS = (
     "letter",
     "letter_assist",
     "coach",
+    "helper",
+    "helper_smart",
 )
 
 
@@ -130,6 +132,9 @@ class Settings(BaseSettings):
     # Job-focused coach (ADR 0023, docs/design/coach-job-focus.md). Off = one plain model call
     # per message, no tools. The turn deadline stays under Firebase Hosting's 60 s rewrite limit.
     coach_job_focus: bool = False
+    # Helpers and flows (ADR 0031): off = every /agents and /flows route answers 404 and the menu
+    # entry is hidden; runs already queued still finish. The rollout switch, one per environment.
+    helpers_enabled: bool = False
     coach_max_steps: int = Field(5, ge=1, le=8)
     coach_turn_timeout_s: float = Field(50.0, gt=0)
 

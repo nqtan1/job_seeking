@@ -28,7 +28,8 @@ ORG_TABLES = (
     "memberships", "documents", "ai_calls", "task_runs", "candidate_profiles",
     "job_postings", "fit_analyses", "letters", "letter_versions", "applications",
     "application_events", "conversations", "messages", "radar_searches", "radar_results",
-    "radar_runs", "consents",
+    "radar_runs", "consents", "agents", "agent_versions", "flows", "flow_versions", "flow_runs",
+    "flow_run_steps", "flow_run_handoffs", "flow_schedules",
 )  # fmt: skip
 
 
@@ -146,6 +147,67 @@ async def _fill_account(
                 "INSERT INTO radar_runs (id, org_id, search_id) VALUES (gen_random_uuid(), :o, :s)"
             ),
             org,
+        )
+        agent_id = uuid4()
+        await conn.execute(
+            text(
+                "INSERT INTO agents (id, org_id, name, avatar, current_version)"
+                " VALUES (:a, :o, 'Mira', '{}', 1)"
+            ),
+            {"a": agent_id, "o": me["active_org_id"]},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO agent_versions (id, org_id, agent_id, version, instructions,"
+                " model_tier, inputs, context_sources, output_spec)"
+                " VALUES (gen_random_uuid(), :o, :a, 1, 'x', 'fast', '[]', '[]', '{}')"
+            ),
+            {"a": agent_id, "o": me["active_org_id"]},
+        )
+        flow_id, version_id, run_id = uuid4(), uuid4(), uuid4()
+        org2 = {"o": me["active_org_id"], "f": flow_id, "v": version_id, "r": run_id}
+        await conn.execute(
+            text(
+                "INSERT INTO flows (id, org_id, name, current_version) VALUES (:f, :o, 'F', 1)"
+            ),
+            org2,
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO flow_versions (id, org_id, flow_id, version, graph, schema_version)"
+                " VALUES (:v, :o, :f, 1, '{}', 1)"
+            ),
+            org2,
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO flow_runs (id, org_id, flow_id, flow_version_id, inputs)"
+                " VALUES (:r, :o, :f, :v, '{}')"
+            ),
+            org2,
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO flow_run_steps (id, org_id, run_id, node_id, position)"
+                " VALUES (gen_random_uuid(), :o, :r, gen_random_uuid(), 0)"
+            ),
+            org2,
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO flow_run_handoffs (id, org_id, run_id, edge_id, from_node, to_node, payload)"
+                " VALUES (gen_random_uuid(), :o, :r, gen_random_uuid(), gen_random_uuid(),"
+                " gen_random_uuid(), '{}')"
+            ),
+            org2,
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO flow_schedules (id, org_id, user_id, flow_id, cadence, timezone,"
+                " inputs, next_run_at) VALUES (gen_random_uuid(), :o, :u, :f,"
+                " 'hourly', 'UTC', '{}', now())"
+            ),
+            {**org2, "u": me["user"]["id"]},
         )
     return me["active_org_id"], me["user"]["id"]
 

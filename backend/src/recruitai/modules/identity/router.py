@@ -66,6 +66,7 @@ async def read_me(
         email_reminders=result.email_reminders,
         weekly_goal=result.weekly_goal,
         language=result.language,
+        helpers_enabled=settings.helpers_enabled,
         session=SessionPolicyOut(
             idle_minutes=settings.session_idle_minutes,
             idle_minutes_remembered=settings.session_idle_minutes_remembered,

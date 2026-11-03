@@ -121,7 +121,8 @@ function Recent() {
 /** The left column: new chat, tools, recent items, account. Shared by desktop and the mobile drawer. */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
   const t = useT()
-  const isAdmin = useMe().data?.is_admin
+  const me = useMe().data
+  const isAdmin = me?.is_admin
   const setLanguage = useSetLanguage()
   return (
     <div className="flex h-full flex-col gap-1 p-2">
@@ -147,13 +148,15 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?
         <Label collapsed={collapsed}>{t('nav.new_chat')}</Label>
       </NavLink>
       <nav aria-label={t('nav.main')} className="space-y-0.5 pt-2">
-        {NAV.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={active} title={t(label)}>
-            <Icon className="size-4 shrink-0" />
-            <Label collapsed={collapsed}>{t(label)}</Label>
-            {to === '/radar' && <RadarBadge collapsed={collapsed} />}
-          </NavLink>
-        ))}
+        {NAV.filter(({ to }) => to !== '/helpers' || me?.helpers_enabled).map(
+          ({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} className={active} title={t(label)}>
+              <Icon className="size-4 shrink-0" />
+              <Label collapsed={collapsed}>{t(label)}</Label>
+              {to === '/radar' && <RadarBadge collapsed={collapsed} />}
+            </NavLink>
+          ),
+        )}
         {isAdmin && (
           <NavLink to="/admin" className={active} title={t('nav.admin')}>
             <LayoutDashboard className="size-4 shrink-0" />

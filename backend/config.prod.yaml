@@ -8,6 +8,9 @@ ai_call_timeout_s: 120
 # Job-focused coach (ADR 0023): off until the owner enables it.
 coach_job_focus: false
 
+# Helpers and flows (ADR 0031): on. Set to false to hide the menu entry and make the API answer 404.
+helpers_enabled: true
+
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
   job_extract: {provider: gemini, model: gemini-3.5-flash-lite}
@@ -20,3 +23,6 @@ agents:
   letter: {provider: gemini, model: gemini-3.8-flash}
   letter_assist: {provider: gemini, model: gemini-3.5-flash-lite}
   coach: {provider: gemini, model: gemini-3.8-flash}
+  # Helpers (ADR 0031): the user's Fast/Careful choice picks the route.
+  helper: {provider: gemini, model: gemini-3.5-flash-lite}
+  helper_smart: {provider: gemini, model: gemini-3.8-flash}

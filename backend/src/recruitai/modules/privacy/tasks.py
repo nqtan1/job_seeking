@@ -91,6 +91,15 @@ async def sweep_radar_runs(timestamp: int) -> None:
         await service.sweep_radar_runs(session, now=datetime.now(UTC))
 
 
+@blueprint.periodic(cron="45 3 * * *")
+@blueprint.task(name="sweep_flow_runs")
+async def sweep_flow_runs(timestamp: int) -> None:
+    from recruitai.worker import session_factory
+
+    async with session_factory() as session:
+        await service.sweep_flow_runs(session, now=datetime.now(UTC))
+
+
 @blueprint.periodic(cron="0 4 * * *")
 @blueprint.task(name="sweep_inactive_accounts")
 async def sweep_inactive_accounts(timestamp: int) -> None:

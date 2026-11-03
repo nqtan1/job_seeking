@@ -9,6 +9,7 @@ from recruitai.core.db import create_engine, create_session_factory
 from recruitai.core.logging import configure_logging
 from recruitai.core.storage import get_storage
 from recruitai.core.tasks import build_app, mark_done, mark_failed
+from recruitai.modules.agents import tasks as agents_tasks
 from recruitai.modules.identity import tasks as identity_tasks
 from recruitai.modules.letters import tasks as letters_tasks
 from recruitai.modules.privacy import tasks as privacy_tasks
@@ -29,6 +30,7 @@ app.add_tasks_from(letters_tasks.blueprint, namespace="letters")
 app.add_tasks_from(privacy_tasks.blueprint, namespace="privacy")
 app.add_tasks_from(identity_tasks.blueprint, namespace="identity")
 app.add_tasks_from(radar_tasks.blueprint, namespace="radar")
+app.add_tasks_from(agents_tasks.blueprint, namespace="agents")
 # Bound to ``app`` now: these are the Task objects API code enqueues.
 render_pdf = letters_tasks.render_pdf
 export_user_data = privacy_tasks.export_user_data

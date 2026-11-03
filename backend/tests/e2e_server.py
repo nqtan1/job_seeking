@@ -15,6 +15,7 @@ from recruitai.ai.dependencies import get_llm_gateway
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.core.app_check import verify_app_check
 from recruitai.main import create_app
+from recruitai.modules.agents.runner import TextResult
 from recruitai.modules.candidates.schemas import (
     CVInformation,
     Experience,
@@ -93,6 +94,7 @@ CANNED: dict[str, Any] = {
         closing="Veuillez agréer mes salutations distinguées.",
     ),
     "BlockText": BlockText(text="Un texte réécrit."),
+    "TextResult": TextResult(text="A canned helper answer."),
 }
 
 

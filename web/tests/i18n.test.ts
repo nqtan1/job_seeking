@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { catalogs, LANGS, translate } from '@/i18n'
+import '@/features/helpers/lib'
+import { LANGS, catalogs, translate } from '@/i18n'
 
 const vars = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
 

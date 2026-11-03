@@ -144,6 +144,206 @@
   }
 }
 
+/* Helper characters (features/helpers). Only transform and opacity move. */
+@layer components {
+  .flow-edge {
+    stroke: var(--el);
+  }
+  .dark .flow-edge {
+    stroke: var(--ed);
+  }
+  /* Step kinds: one accent (--k) per kind, light and dark. Helpers set --kl/--kd from their palette. */
+  .kind {
+    --k: var(--kl);
+  }
+  .dark .kind {
+    --k: var(--kd);
+  }
+  .kind-input {
+    --kl: oklch(0.5 0.14 155);
+    --kd: oklch(0.78 0.15 155);
+  }
+  .kind-output {
+    --kl: oklch(0.48 0.19 277);
+    --kd: oklch(0.78 0.12 277);
+  }
+  .kind-condition {
+    --kl: oklch(0.54 0.14 65);
+    --kd: oklch(0.82 0.14 80);
+  }
+  .kind-transform {
+    --kl: oklch(0.46 0.03 255);
+    --kd: oklch(0.8 0.02 255);
+  }
+  .step-node {
+    transition:
+      box-shadow 0.2s ease-out,
+      opacity 0.2s ease-out;
+  }
+  .step-node[data-selected='true'] {
+    box-shadow:
+      0 0 0 2px var(--card),
+      0 0 0 4px var(--k),
+      0 6px 18px -8px var(--k);
+  }
+  .step-node:hover:not([data-selected='true']) {
+    box-shadow: 0 4px 14px -8px var(--k);
+  }
+  /* React Flow chrome, themed with the app tokens (the library ships its own light/dark values). */
+  .flow-canvas .react-flow {
+    --xy-background-color: transparent;
+    --xy-controls-button-background-color: var(--card);
+    --xy-controls-button-background-color-hover: var(--muted);
+    --xy-controls-button-color: var(--foreground);
+    --xy-controls-button-color-hover: var(--foreground);
+    --xy-controls-button-border-color: var(--border);
+    --xy-controls-box-shadow: 0 1px 2px oklch(0 0 0 / 10%);
+    --xy-minimap-background-color: var(--card);
+    --xy-minimap-mask-background-color: color-mix(in oklch, var(--foreground) 7%, transparent);
+    --xy-minimap-mask-stroke-color: var(--ring);
+    --xy-minimap-mask-stroke-width: 1.5;
+    --xy-attribution-background-color: transparent;
+    --xy-handle-background-color: var(--card);
+    --xy-edge-label-background-color: var(--card);
+    --xy-edge-label-color: var(--muted-foreground);
+    --xy-selection-background-color: color-mix(in oklch, var(--primary) 8%, transparent);
+  }
+  .flow-canvas .react-flow__controls {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+  .flow-canvas .react-flow__controls-button {
+    border-bottom-color: var(--border);
+  }
+  .flow-canvas .react-flow__controls-button svg {
+    fill: currentColor;
+  }
+  .flow-canvas .react-flow__minimap {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 10%);
+  }
+  .flow-canvas .react-flow__attribution {
+    padding: 0 4px;
+    font-size: 9px;
+    opacity: 0.55;
+    color: var(--muted-foreground);
+  }
+  .flow-canvas .react-flow__attribution a {
+    color: inherit;
+  }
+  .flow-canvas .react-flow__handle {
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--k, var(--ring));
+    background: var(--card);
+    opacity: 0.6;
+    transition: opacity 0.15s ease-out;
+  }
+  .flow-canvas .react-flow__node:hover .react-flow__handle,
+  .flow-canvas .react-flow__node:focus-within .react-flow__handle,
+  .flow-canvas .react-flow__handle.connectingto,
+  .flow-canvas .react-flow__handle:hover {
+    opacity: 1;
+  }
+  .flow-canvas .react-flow__handle.connectingto {
+    background: var(--k, var(--ring));
+  }
+  .flow-canvas .react-flow__pane {
+    cursor: grab;
+  }
+  .flow-canvas .react-flow__background pattern circle {
+    opacity: 0.5;
+  }
+}
+.avatar *,
+.avatar {
+  transform-box: fill-box;
+}
+.avatar-body {
+  transform-origin: 50% 90%;
+}
+.avatar-idle .avatar-eyes,
+.avatar-queued .avatar-eyes {
+  transform-origin: center;
+  animation: avatar-blink 4.2s 2; /* two blinks, then still: no endless motion (WCAG 2.2.2) */
+}
+.avatar-queued .avatar-body {
+  animation: avatar-bob 2.4s ease-in-out 2;
+}
+.avatar-thinking .avatar-body {
+  animation: avatar-sway 1.6s ease-in-out infinite;
+}
+.avatar-thinking .avatar-dots circle {
+  animation: avatar-dot 1.2s ease-in-out infinite;
+}
+.avatar-thinking .avatar-dots circle:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.avatar-thinking .avatar-dots circle:nth-child(3) {
+  animation-delay: 0.4s;
+}
+.avatar-done .avatar-body {
+  animation: avatar-hop 0.55s cubic-bezier(0.3, 1.4, 0.5, 1) 1;
+}
+.avatar-failed .avatar-body {
+  animation: avatar-shake 0.45s ease-in-out 1;
+}
+.avatar-skipped {
+  opacity: 0.55;
+  filter: grayscale(0.8);
+}
+@keyframes avatar-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes avatar-bob {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes avatar-sway {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes avatar-dot {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes avatar-hop {
+  40% {
+    transform: translateY(-7px) scale(1.04);
+  }
+}
+@keyframes avatar-shake {
+  20%,
+  60% {
+    transform: translateX(-3px);
+  }
+  40%,
+  80% {
+    transform: translateX(3px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,

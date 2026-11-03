@@ -8,6 +8,9 @@ ai_call_timeout_s: 120
 # Job-focused coach (tools + web research): on for dev, off in config.prod.yaml until enabled.
 coach_job_focus: true
 
+# Helpers and flows (ADR 0031): on for dev, off in config.prod.yaml until the owner enables it.
+helpers_enabled: true
+
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
   job_extract: {provider: gemini, model: gemini-3.5-flash-lite}
@@ -20,3 +23,6 @@ agents:
   letter: {provider: gemini, model: gemini-3.8-flash}
   letter_assist: {provider: gemini, model: gemini-3.5-flash-lite}
   coach: {provider: gemini, model: gemini-3.8-flash}
+  # Helpers (ADR 0031): the user's Fast/Careful choice picks the route.
+  helper: {provider: gemini, model: gemini-3.5-flash-lite}
+  helper_smart: {provider: gemini, model: gemini-3.8-flash}

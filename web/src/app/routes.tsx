@@ -46,6 +46,28 @@ export const routes: RouteObject[] = [
               import('@/features/job-search/JobsPage').then((m) => ({ Component: m.JobsPage })),
           },
           {
+            path: '/helpers',
+            lazy: () =>
+              import('@/features/helpers/HelpersPage').then((m) => ({ Component: m.HelpersPage })),
+          },
+          {
+            path: '/helpers/flows/:flowId',
+            lazy: () =>
+              import('@/features/helpers/FlowEditor').then((m) => ({ Component: m.FlowEditor })),
+          },
+          {
+            path: '/helpers/runs/:runId',
+            lazy: () =>
+              import('@/features/helpers/RunPage').then((m) => ({ Component: m.RunPage })),
+          },
+          {
+            path: '/helpers/:agentId',
+            lazy: () =>
+              import('@/features/helpers/HelperEditor').then((m) => ({
+                Component: m.HelperEditor,
+              })),
+          },
+          {
             path: '/radar',
             lazy: () =>
               import('@/features/radar/RadarPage').then((m) => ({ Component: m.RadarPage })),

@@ -1,0 +1,302 @@
+"""Runs a flow (ADR 0031). ``execute`` is idempotent and resumable: it recomputes where it is from
+the stored step rows, so a repeated delivery, a resume after a failure, or a restart all do the
+same thing. Every state change is committed before the next model call, so no transaction is held
+open across it and a crash leaves an honest record.
+
+Isolation: a step's input is built only from the ``map`` of its incoming, active edges. Steps are
+keyed by node id, so the same helper used twice is two independent steps."""
+
+import logging
+import time
+from typing import Any, NoReturn
+from uuid import UUID
+
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from recruitai.ai.gateway import LLMGateway
+from recruitai.ai.prompts import helper
+from recruitai.core.errors import AppError
+from recruitai.modules.agents import flow_repository as flows
+from recruitai.modules.agents import graph as g
+from recruitai.modules.agents import repository, runner, service
+from recruitai.modules.agents.models import FlowRun, FlowRunStep
+
+logger = logging.getLogger(__name__)
+
+RUN_TIMEOUT_S = 300.0
+
+
+class _Stop(Exception):
+    """The run ended (failed or cancelled) inside a step: unwinds to ``execute``."""
+
+
+async def load_agents(
+    db: AsyncSession, *, org_id: UUID, graph: g.Graph
+) -> dict[UUID, g.AgentInfo]:
+    ids = [n.agent_version_id for n in graph.nodes if isinstance(n, g.AgentNode)]
+    pairs = await repository.versions_by_ids(db, org_id=org_id, version_ids=ids)
+    return {
+        v.id: g.AgentInfo(spec=service.spec_of(v), agent_id=a.id, version=v.version)
+        for v, a in pairs
+    }
+
+
+async def execute(
+    db: AsyncSession, llm: LLMGateway, *, org_id: UUID, run_id: UUID
+) -> None:
+    if not await flows.claim_run(db, org_id=org_id, run_id=run_id):
+        await db.rollback()
+        return  # already running, finished or cancelled: a duplicate delivery does nothing
+    await db.commit()
+    began = time.monotonic()
+    try:
+        result = await _advance(db, llm, org_id=org_id, run_id=run_id)
+    except _Stop:
+        _log_end(run_id, began)
+        return
+    except BaseException as exc:
+        crashed = isinstance(exc, Exception)
+        logger.error("flow run stopped", extra={"error_type": type(exc).__name__})
+        try:
+            await db.rollback()
+            await flows.fail_active_run(
+                db,
+                org_id=org_id,
+                run_id=run_id,
+                code="run_failed" if crashed else "worker_stopped",
+            )
+            await db.commit()
+        except BaseException:  # noqa: BLE001  (best effort; the stale-run sweep is the backstop)
+            logger.error("could not record the stop of a flow run")
+        if not crashed:
+            raise
+        return
+    await flows.finish_run(
+        db, org_id=org_id, run_id=run_id, status="done", result=result
+    )
+    await db.commit()
+    _log_end(run_id, began, "done")
+
+
+def _log_end(run_id: UUID, began: float, status: str | None = None) -> None:
+    """One metadata-only line per run (ids and timing, never content) for dashboards and alerts."""
+    logger.info(
+        "flow_run_ended",
+        extra={
+            "run_id": str(run_id),
+            "outcome": status or "stopped",
+            "duration_ms": int((time.monotonic() - began) * 1000),
+        },
+    )
+
+
+async def _fail(
+    db: AsyncSession,
+    run: FlowRun,
+    step: FlowRunStep | None,
+    code: str,
+) -> NoReturn:
+    org_id, run_id = run.org_id, run.id  # a rollback expires the ORM rows
+    step_id = step.id if step is not None else None
+    await db.rollback()
+    if step_id is not None:
+        await flows.set_step(
+            db,
+            org_id=org_id,
+            step_id=step_id,
+            status="failed",
+            error_code=code,
+        )
+    await flows.finish_run(
+        db, org_id=org_id, run_id=run_id, status="failed", error_code=code
+    )
+    await db.commit()
+    raise _Stop
+
+
+async def _advance(
+    db: AsyncSession, llm: LLMGateway, *, org_id: UUID, run_id: UUID
+) -> dict[str, Any]:
+    run = await flows.get_run(db, org_id=org_id, run_id=run_id)
+    assert run is not None  # claimed a moment ago
+    version = await flows.get_flow_version_by_id(
+        db, org_id=org_id, version_id=run.flow_version_id
+    )
+    assert version is not None
+    graph = g.Graph.model_validate(version.graph)
+    agents = await load_agents(db, org_id=org_id, graph=graph)
+    nodes = {n.id: n for n in graph.nodes}
+    steps = {
+        s.node_id: s for s in await flows.list_steps(db, org_id=org_id, run_id=run_id)
+    }
+    order = g.topological(graph)
+    if order is None or set(steps) != set(nodes):
+        await _fail(db, run, None, "invalid_flow")
+    incoming: dict[UUID, list[g.Edge]] = {n: [] for n in nodes}
+    for e in graph.edges:
+        incoming[e.to].append(e)
+
+    status: dict[UUID, str] = {nid: s.status for nid, s in steps.items()}
+    outputs: dict[UUID, dict[str, Any]] = {
+        nid: s.output or {} for nid, s in steps.items() if s.status == "done"
+    }
+    started = time.monotonic()
+    result: dict[str, Any] = {}
+
+    for nid in order:
+        node, step = nodes[nid], steps[nid]
+        if status[nid] == "done":
+            if isinstance(node, g.OutputNode):
+                result = outputs[nid]
+            continue
+        if status[nid] == "skipped":
+            continue
+        await db.refresh(run)  # a cancel may have landed since the last step
+        if run.status != "running":
+            raise _Stop
+        if time.monotonic() - started > RUN_TIMEOUT_S:
+            await _fail(db, run, None, "run_timeout")
+
+        await flows.touch_run(db, org_id=org_id, run_id=run_id)
+        active = [e for e in incoming[nid] if _is_active(e, status, outputs)]
+        if incoming[nid] and not active:
+            await flows.set_step(db, org_id=org_id, step_id=step.id, status="skipped")
+            status[nid] = "skipped"
+            await db.commit()
+            continue
+
+        values: dict[str, str] = {}
+        for e in active:
+            payload, truncated = g.render_map(e.map, outputs[e.from_.node])
+            for key in payload:
+                if (
+                    key in values
+                ):  # two live edges into one input: never guess which wins
+                    await _fail(db, run, step, "ambiguous_input")
+            values.update(payload)
+            await flows.record_handoff(
+                db,
+                org_id=org_id,
+                values={
+                    "run_id": run_id,
+                    "edge_id": e.id,
+                    "from_node": e.from_.node,
+                    "to_node": nid,
+                    "payload": payload,
+                    "truncated": truncated,
+                },
+            )
+
+        # A step whose required input comes only from a branch that was not taken has nothing to
+        # work on: it is skipped like the branch, not failed.
+        if incoming[nid] and any(
+            req and name not in values for name, req in g.input_names(node, agents)
+        ):
+            await flows.set_step(db, org_id=org_id, step_id=step.id, status="skipped")
+            status[nid] = "skipped"
+            await db.commit()
+            continue
+
+        if not await flows.claim_step(db, org_id=org_id, step_id=step.id):
+            raise _Stop  # another worker holds it
+        await db.commit()
+
+        output, model, latency = await _run_node(
+            db, llm, run, step, node, agents, values
+        )
+        if not await flows.set_step(
+            db,
+            org_id=org_id,
+            step_id=step.id,
+            only_if=(
+                "running",
+            ),  # the run may have been resumed under us: never overwrite it
+            status="done",
+            output=output,
+            model=model,
+            latency_ms=latency,
+            finished_at=func.now(),
+        ):
+            await db.rollback()
+            raise _Stop
+        await flows.touch_run(db, org_id=org_id, run_id=run_id)
+        await db.commit()
+        status[nid], outputs[nid] = "done", output
+        if isinstance(node, g.OutputNode):
+            result = output
+    return result
+
+
+def _is_active(
+    e: g.Edge, status: dict[UUID, str], outputs: dict[UUID, dict[str, Any]]
+) -> bool:
+    if status[e.from_.node] != "done":
+        return False
+    if e.from_.port in ("true", "false"):
+        taken = "true" if outputs[e.from_.node].get("branch") else "false"
+        return e.from_.port == taken
+    return True
+
+
+async def _run_node(
+    db: AsyncSession,
+    llm: LLMGateway,
+    run: FlowRun,
+    step: FlowRunStep,
+    node: Any,
+    agents: dict[UUID, g.AgentInfo],
+    values: dict[str, str],
+) -> tuple[dict[str, Any], str | None, int | None]:
+    match node:
+        case g.InputNode():
+            return (
+                {f.name: str(run.inputs.get(f.name, "")) for f in node.fields},
+                None,
+                None,
+            )
+        case g.OutputNode():
+            return {f.name: values.get(f.name, "") for f in node.fields}, None, None
+        case g.TransformNode():
+            return {"text": g.apply_transform(node, values.get("text", ""))}, None, None
+        case g.ConditionNode():
+            try:
+                holds = g.condition_holds(node, values.get("value", ""))
+            except ValueError:
+                await _fail(db, run, step, "condition_invalid")
+            return {"value": values.get("value", ""), "branch": holds}, None, None
+        case g.AgentNode():
+            return await _run_agent(db, llm, run, step, node, agents, values)
+    await _fail(db, run, step, "unknown_node")
+
+
+async def _run_agent(
+    db: AsyncSession,
+    llm: LLMGateway,
+    run: FlowRun,
+    step: FlowRunStep,
+    node: g.AgentNode,
+    agents: dict[UUID, g.AgentInfo],
+    values: dict[str, str],
+) -> tuple[dict[str, Any], str | None, int | None]:
+    info = agents.get(node.agent_version_id)
+    if info is None or info.agent_id != node.agent_id:
+        await _fail(db, run, step, "agent_unavailable")
+    try:
+        context = await service.context_for(
+            db, org_id=run.org_id, spec=info.spec, job_id=run.job_id
+        )
+        await db.commit()  # nothing held open across the model call
+        outcome = await runner.run(
+            llm,
+            info.spec,
+            values=values,
+            context=context,
+            feature=helper.feature(node.agent_id, info.version, info.spec.model_tier),
+        )
+    except AppError as exc:
+        await _fail(db, run, step, exc.code)
+    except Exception as exc:  # noqa: BLE001  (a safe code, never exception text)
+        logger.error("helper step failed", extra={"error_type": type(exc).__name__})
+        await _fail(db, run, step, "step_failed")
+    return outcome.result, outcome.model, outcome.latency_ms

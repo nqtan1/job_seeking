@@ -17,6 +17,8 @@ from recruitai.core.errors import UpstreamUnavailable
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.storage import Storage
 from recruitai.core.tasks import enqueue, find_queued
+from recruitai.modules.agents import flows as agent_flows
+from recruitai.modules.agents import service as agents
 from recruitai.modules.applications import service as applications
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.coach import service as coach
@@ -76,6 +78,7 @@ async def build_export(
     data: dict[str, Any] = {
         "account": await identity.export_data(db, org_id=org_id, user_id=user_id)
     }
+    data.update(await agent_flows.export_data(db, org_id=org_id))
     for module in (
         candidates,
         jobs,
@@ -85,6 +88,7 @@ async def build_export(
         coach,
         documents,
         radar,
+        agents,
     ):
         data.update(await module.export_data(db, org_id=org_id))
     data["ai_usage"] = rows_as_dicts(await usage.export_rows(db, org_id=org_id))
@@ -162,6 +166,7 @@ MIN_WARNING_LEAD = timedelta(days=7)  # a warning is always followed by >= 7 day
 AI_CALLS_KEPT = timedelta(days=395)  # 13 months
 EXPORT_KEPT = timedelta(hours=24)
 RADAR_RUNS_KEPT = timedelta(days=90)
+FLOW_RUNS_KEPT = timedelta(days=30)  # helper run content (ADR 0031)
 SWEEP_BATCH = 200
 
 
@@ -169,6 +174,10 @@ async def sweep_ai_calls(db: AsyncSession, *, now: datetime) -> int:
     deleted = await usage.delete_older_than(db, cutoff=now - AI_CALLS_KEPT)
     await db.commit()
     return deleted
+
+
+async def sweep_flow_runs(db: AsyncSession, *, now: datetime) -> int:
+    return await agent_flows.sweep_old_runs(db, cutoff=now - FLOW_RUNS_KEPT)
 
 
 async def sweep_radar_runs(db: AsyncSession, *, now: datetime) -> int:

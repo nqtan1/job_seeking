@@ -18,6 +18,8 @@ from recruitai.core.logging import configure_logging
 from recruitai.core.middleware import RequestContextMiddleware
 from recruitai.core.storage_routes import router as local_storage_router
 from recruitai.core.tasks_routes import router as tasks_router
+from recruitai.modules.agents.router import flow_router as flows_router
+from recruitai.modules.agents.router import router as agents_router
 from recruitai.modules.applications.router import router as applications_router
 from recruitai.modules.candidates.router import router as candidates_router
 from recruitai.modules.coach.router import router as coach_router
@@ -67,6 +69,8 @@ def create_app() -> FastAPI:
     app.include_router(coach_router)
     app.include_router(applications_router)
     app.include_router(privacy_router)
+    app.include_router(agents_router)
+    app.include_router(flows_router)
     app.include_router(radar_router)
     app.include_router(radar_public_router)
     app.include_router(tasks_router)

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
+import { useInvalidating } from '@/lib/query'
 
 export type Search = components['schemas']['RadarSearchOut']
 export type SearchIn = components['schemas']['RadarSearchIn']
@@ -85,14 +86,6 @@ export const useRuns = () =>
     queryKey: RUNS,
     queryFn: async () => unwrap(await api.GET('/api/v1/radar/runs')),
   })
-
-function useInvalidating<V, R>(fn: (v: V) => Promise<R>, keys: string[][]) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: fn,
-    onSuccess: () => keys.forEach((queryKey) => qc.invalidateQueries({ queryKey })),
-  })
-}
 
 export const useCreateSearch = () =>
   useInvalidating(

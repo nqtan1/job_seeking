@@ -7,10 +7,11 @@ closes. This keeps "business write + task enqueue" boundaries visible in the ser
 
 import logging
 from collections.abc import AsyncIterator
+from typing import Any, cast
 
 import google.auth
 import google.auth.credentials
-from sqlalchemy import MetaData, event, func, select
+from sqlalchemy import CursorResult, MetaData, Result, event, func, select
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -149,3 +150,8 @@ async def get_db() -> AsyncIterator[AsyncSession]:
 async def count_rows(session: AsyncSession, model: type[Base]) -> int:
     """Row count of a whole table, for platform statistics (admin only, never per tenant)."""
     return (await session.execute(select(func.count()).select_from(model))).scalar_one()
+
+
+def rows_affected(result: Result[Any]) -> int:
+    """Rows an UPDATE/DELETE changed (``rowcount`` lives on CursorResult; execute() is typed Result)."""
+    return cast("CursorResult[Any]", result).rowcount

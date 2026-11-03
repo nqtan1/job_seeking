@@ -35,6 +35,7 @@ class MeResponse(BaseModel):
     email_reminders: bool = True
     weekly_goal: int | None = None
     language: Language = "en"
+    helpers_enabled: bool = False
     session: SessionPolicyOut
 
 

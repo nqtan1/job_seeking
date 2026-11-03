@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { helpers } from './messages/helpers'
 import { admin } from './messages/admin'
 import { candidate } from './messages/candidate'
 import { coach } from './messages/coach'
@@ -30,8 +31,10 @@ const modules = [
   admin,
   signature,
 ]
+/** Messages that load with their feature (see `registerMessages`): typed here, shipped there. */
+type LazyModules = typeof helpers
 const en = Object.assign({}, ...modules.map((m) => m.en)) as UnionToObject
-type UnionToObject = UnionToIntersection<(typeof modules)[number]['en']>
+type UnionToObject = UnionToIntersection<((typeof modules)[number] | LazyModules)['en']>
 type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (
   x: infer I,
 ) => void
@@ -41,6 +44,12 @@ const catalog: Record<Lang, Record<string, string>> = {
   en,
   fr: Object.assign({}, ...modules.map((m) => m.fr)),
   vi: Object.assign({}, ...modules.map((m) => m.vi)),
+}
+
+/** Add a feature's messages once its code is loaded (the feature's pages import the module that
+ *  calls this), so they do not weigh on the first page. Call it before anything renders. */
+export function registerMessages(...mods: Record<Lang, Record<string, string>>[]) {
+  for (const m of mods) for (const l of LANGS) Object.assign(catalog[l], m[l])
 }
 
 export type MessageKey = keyof UnionToObject

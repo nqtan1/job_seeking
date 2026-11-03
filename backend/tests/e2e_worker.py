@@ -12,6 +12,7 @@ from typing import Any
 from recruitai.ai import dependencies
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.core.errors import UpstreamUnavailable
+from recruitai.modules.agents.runner import TextResult
 from recruitai.modules.jobs.providers import factory
 from recruitai.modules.matching.schemas import FitCheck
 from recruitai.worker import app  # noqa: F401  (the CLI reads ``app``)
@@ -29,6 +30,10 @@ class ScriptedFit(FakeLLMGateway):
             raise UpstreamUnavailable(
                 "The AI provider is unavailable.", code="ai_unavailable"
             )
+        if (
+            schema is TextResult
+        ):  # a helper step in a flow (browser test of the helpers)
+            return TextResult(text="A canned helper answer.")
         score = next(SCORES)
         weak = score < 70
         return FitCheck.model_validate(

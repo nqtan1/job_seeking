@@ -1277,6 +1277,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tzdata" },
     { name = "uuid-utils" },
     { name = "uvicorn" },
 ]
@@ -1310,6 +1311,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.26" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.1" },
+    { name = "tzdata", specifier = ">=2026.1" },
     { name = "uuid-utils", specifier = ">=0.14.1" },
     { name = "uvicorn", specifier = ">=0.46.0" },
 ]

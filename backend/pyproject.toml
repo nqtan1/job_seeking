@@ -25,6 +25,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pillow>=13.0.0",
     "pypdfium2>=5.14.0",
+    "tzdata>=2026.1",  # zoneinfo in the slim images (schedules use IANA time zones)
 ]
 
 [build-system]

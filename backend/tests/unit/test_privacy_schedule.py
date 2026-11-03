@@ -11,8 +11,11 @@ def test_the_sweeps_reminders_and_radar_are_scheduled_on_the_worker():
         "privacy:sweep_ai_calls",
         "privacy:sweep_inactive_accounts",
         "privacy:sweep_radar_runs",
+        "privacy:sweep_flow_runs",
         "identity:send_application_reminders",
         "radar:run_all",
         "radar:retry_interrupted",
         "radar:pause_inactive",
+        "agents:fail_stale_runs",
+        "agents:run_due_schedules",
     }
