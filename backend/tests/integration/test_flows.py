@@ -1347,3 +1347,62 @@ async def test_confirmation_mail_cannot_be_farmed_by_removing_and_adding_again(
     assert other.status_code == 409
     assert me["email"] not in mail.sent[0].context["sender_email"]
     assert "block_url" in mail.sent[0].context  # the victim can block it for good
+
+
+async def test_new_offer_hands_out_each_offer_once_and_a_yes_exit_gates_what_follows(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents import tools
+    from tests.e2e_radar_fakes import Provider
+
+    org = await org_of(client, ada)
+    pages: list[str] = []
+
+    async def fetch(url: str) -> str:
+        pages.append(url)
+        return "Full offer text."
+
+    kit = tools.ToolKit(fetch=fetch, jobs=Provider(), mail=FakeEmailSender())
+    i, new, cond, page, track, o = (
+        input_node("q"),
+        tool_node("new_offer"),
+        {"type": "condition", "id": str(uuid4()), "op": "contains", "value": "http"},
+        tool_node("read_page"),
+        tool_node("add_to_tracker"),
+        output_node("page", "left", "card"),
+    )
+    flow = await make_flow(
+        client, ada, [i, new, cond, page, track, o],
+        [
+            edge(i, new, {"query": "{{q}}"}),
+            edge(new, cond, {"value": "{{url}}"}),
+            edge(cond, page, {"url": "{{value}}"}, "true"),
+            edge(cond, track, {}, "true"),  # a gate: no data, only "run me if yes"
+            edge(new, track, {"company": "{{company}}", "title": "{{title}}"}),
+            edge(page, o, {"page": "{{text}}"}), edge(new, o, {"left": "{{remaining}}"}),
+            edge(track, o, {"card": "{{status}}"}),
+        ],
+    )  # fmt: skip
+
+    async def go() -> dict:
+        r = await client.post(
+            f"{BASE}/flows/{flow['id']}/runs",
+            headers=ada,
+            json={"inputs": {"q": "dev"}},
+        )
+        run_id = UUID(r.json()["id"])
+        await engine.execute(db_session, fake_llm, org_id=org, run_id=run_id, kit=kit)
+        return (await client.get(f"{BASE}/flow-runs/{run_id}", headers=ada)).json()
+
+    runs = [await go() for _ in range(4)]
+    assert [r["status"] for r in runs] == ["done"] * 4
+    assert [r["result"].get("left") for r in runs] == ["2", "1", "0", "0"]
+    assert (
+        len(set(pages)) == 3 == len(pages)
+    )  # a different offer each run, then nothing
+    assert len((await client.get("/api/v1/applications", headers=ada)).json()) == 3
+    last = {s["node_id"]: s["status"] for s in runs[3]["steps"]}
+    assert (
+        last[page["id"]] == last[track["id"]] == "skipped"
+    )  # nothing new: both gated off

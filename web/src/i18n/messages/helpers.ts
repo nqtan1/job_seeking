@@ -167,6 +167,10 @@ export const helpers = defineMessages({
     'helpers.tool.job_search.short': 'Job offers',
     'helpers.tool.job_search.about':
       'Looks for job offers on the job board and gives back the first five.',
+    'helpers.tool.new_offer.name': 'New job offer',
+    'helpers.tool.new_offer.short': 'Next unseen offer',
+    'helpers.tool.new_offer.about':
+      'Searches the job board and gives back the first offer you have not been given before, then remembers it. Empty when nothing is new.',
     'helpers.tool.read_page.name': 'Read a web page',
     'helpers.tool.read_page.short': 'Reads a page',
     'helpers.tool.read_page.about': 'Opens a public web page (https only) and gives back its text.',
@@ -200,7 +204,7 @@ export const helpers = defineMessages({
     'helpers.refused.from_output': 'The result step is the end: nothing leaves it.',
     'helpers.refused.to_input': 'The start step takes nothing in.',
     'helpers.refused.cycle': 'That would make the flow loop back on itself.',
-    'helpers.refused.too_many': 'A flow can have up to 10 steps and 30 links.',
+    'helpers.refused.too_many': 'A flow can have up to 15 steps and 30 links.',
     'helpers.refused.missing': 'That step no longer exists.',
     'helpers.refused.loading': 'That helper is still loading. Try again in a moment.',
     'helpers.inspect.input': 'What you will be asked for when you run this flow.',
@@ -624,6 +628,10 @@ export const helpers = defineMessages({
     'helpers.tool.job_search.short': 'Offres d’emploi',
     'helpers.tool.job_search.about':
       'Cherche des offres sur le site d’emploi et renvoie les cinq premières.',
+    'helpers.tool.new_offer.name': 'Nouvelle offre',
+    'helpers.tool.new_offer.short': 'Prochaine offre inédite',
+    'helpers.tool.new_offer.about':
+      'Cherche sur le site d’emploi et renvoie la première offre que vous n’avez pas encore reçue, puis s’en souvient. Vide s’il n’y a rien de nouveau.',
     'helpers.tool.read_page.name': 'Lire une page web',
     'helpers.tool.read_page.short': 'Lit une page',
     'helpers.tool.read_page.about':
@@ -661,7 +669,7 @@ export const helpers = defineMessages({
     'helpers.refused.from_output': 'L’étape de résultat est la fin : rien n’en sort.',
     'helpers.refused.to_input': 'L’étape de départ ne reçoit rien.',
     'helpers.refused.cycle': 'Le flux reboucle sur lui-même.',
-    'helpers.refused.too_many': 'Un flux peut avoir 10 étapes et 30 liens au maximum.',
+    'helpers.refused.too_many': 'Un flux peut avoir 15 étapes et 30 liens au maximum.',
     'helpers.refused.missing': 'Cette étape n’existe plus.',
     'helpers.refused.loading':
       'Cet assistant est encore en cours de chargement. Réessayez dans un instant.',
@@ -1099,6 +1107,10 @@ export const helpers = defineMessages({
     'helpers.tool.job_search.short': 'Tin tuyển dụng',
     'helpers.tool.job_search.about':
       'Tìm tin tuyển dụng trên trang việc làm và trả về năm tin đầu.',
+    'helpers.tool.new_offer.name': 'Tin tuyển dụng mới',
+    'helpers.tool.new_offer.short': 'Tin chưa xem tiếp theo',
+    'helpers.tool.new_offer.about':
+      'Tìm trên trang việc làm và trả về tin đầu tiên bạn chưa nhận, rồi ghi nhớ nó. Để trống nếu không có gì mới.',
     'helpers.tool.read_page.name': 'Đọc một trang web',
     'helpers.tool.read_page.short': 'Đọc trang',
     'helpers.tool.read_page.about':
@@ -1134,7 +1146,7 @@ export const helpers = defineMessages({
     'helpers.refused.from_output': 'Bước kết quả là điểm cuối: không có gì đi ra từ đó.',
     'helpers.refused.to_input': 'Bước bắt đầu không nhận gì vào.',
     'helpers.refused.cycle': 'Như vậy luồng sẽ quay vòng về chính nó.',
-    'helpers.refused.too_many': 'Một luồng có tối đa 10 bước và 30 liên kết.',
+    'helpers.refused.too_many': 'Một luồng có tối đa 15 bước và 30 liên kết.',
     'helpers.refused.missing': 'Bước đó không còn tồn tại.',
     'helpers.refused.loading': 'Trợ lý này vẫn đang tải. Hãy thử lại sau giây lát.',
     'helpers.inspect.input': 'Những gì bạn sẽ được hỏi khi chạy luồng này.',

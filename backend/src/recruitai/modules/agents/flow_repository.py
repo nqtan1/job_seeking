@@ -17,6 +17,7 @@ from recruitai.modules.agents.models import (
     FlowRunStep,
     FlowSchedule,
     FlowVersion,
+    SeenOffer,
 )
 
 ACTIVE = ("queued", "running")
@@ -741,3 +742,66 @@ async def has_waiting_run(session: AsyncSession, *, schedule_id: UUID) -> bool:
             .limit(1)
         )
     ).first() is not None
+
+
+# ---- offers already handed to a user (ADR 0033) ----
+
+
+async def offer_picked_by(
+    session: AsyncSession, *, run_id: UUID, node_id: UUID
+) -> str | None:
+    """The offer this step already took (a resumed step gets the same one back)."""
+    return (
+        await session.execute(
+            select(SeenOffer.url_hash).where(
+                SeenOffer.run_id == run_id, SeenOffer.node_id == node_id
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def seen_hashes(
+    session: AsyncSession, *, user_id: UUID, hashes: list[str]
+) -> set[str]:
+    rows = await session.execute(
+        select(SeenOffer.url_hash).where(
+            SeenOffer.user_id == user_id, SeenOffer.url_hash.in_(hashes)
+        )
+    )
+    return set(rows.scalars())
+
+
+async def take_offer(
+    session: AsyncSession,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    run_id: UUID,
+    node_id: UUID,
+    url_hash: str,
+) -> bool:
+    """Mark an offer as handed out. False if it already was (two runs cannot both get it)."""
+    result = await session.execute(
+        pg_insert(SeenOffer)
+        .values(
+            org_id=org_id,
+            user_id=user_id,
+            run_id=run_id,
+            node_id=node_id,
+            url_hash=url_hash,
+        )
+        .on_conflict_do_nothing(index_elements=["user_id", "url_hash"])
+        .returning(SeenOffer.id)
+    )
+    return result.first() is not None
+
+
+async def forget_old_offers(
+    session: AsyncSession, *, user_id: UUID, cutoff: datetime
+) -> None:
+    """After a quarter an old offer may come back (it may have been republished)."""
+    await session.execute(
+        delete(SeenOffer).where(
+            SeenOffer.user_id == user_id, SeenOffer.created_at < cutoff
+        )
+    )

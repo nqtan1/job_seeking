@@ -125,9 +125,10 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   // Contacts: add someone to email; they stay "waiting for their OK" until they confirm.
   await page.goto('/automations?tab=contacts')
   await expect(page.getByText('You have not added anyone yet.')).toBeVisible()
-  await page.getByLabel('Add a contact').fill('friend@example.com')
+  // a new address each run: a real address may only be mailed 3 times a day
+  await page.getByLabel('Add a contact').fill(`friend-${Date.now()}@example.com`)
   await page.getByRole('button', { name: 'Add', exact: true }).click()
-  await expect(page.getByText('Waiting for their OK')).toBeVisible()
+  await expect(page.getByText('Waiting for their OK')).toBeVisible({ timeout: 15_000 })
   await page.screenshot({
     path: process.env.SHOTS ? `${process.env.SHOTS}/contacts.png` : undefined,
   })

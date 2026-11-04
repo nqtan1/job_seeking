@@ -10,6 +10,7 @@ import {
   connect,
   emptyGraph,
   freeName,
+  MAX_NODES,
   inputsOf,
   moveNode,
   outputsOf,
@@ -55,7 +56,7 @@ test('steps are limited, unique in kind, and removing one removes its connection
   const gone = removeNode(g, 'a')
   expect(gone.edges).toEqual([]) // nothing dangles
   for (let n = 0; n < 20; n++) g = addNode(g, agent('x' + n))
-  expect(g.nodes).toHaveLength(10)
+  expect(g.nodes).toHaveLength(MAX_NODES)
 })
 
 test('a connection is refused with a reason instead of being silently dropped', () => {

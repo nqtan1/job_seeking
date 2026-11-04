@@ -6,12 +6,14 @@ tool step looks to the rest of the engine exactly like any other step. Failures 
 machine goes through ``ToolKit``, so tests inject fakes and never touch the network."""
 
 import asyncio
+import hashlib
 import ipaddress
 import logging
 import re
 import socket
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from html.parser import HTMLParser
 from typing import ClassVar, NamedTuple
@@ -42,6 +44,8 @@ FETCH_TIMEOUT_S = 10.0
 MAX_TEXT = 20_000
 MAX_EMAIL_BODY = 5_000
 SEARCH_RESULTS = 5
+NEW_OFFER_WINDOW = 20  # offers looked at to find one the user has not seen
+SEEN_FOR = timedelta(days=90)
 SEARCH_SYSTEM = (
     "Answer the query with the facts you find on the web, briefly and plainly. "
     "Say so if you find nothing. Never invent a source."
@@ -273,6 +277,8 @@ async def run_tool(
                 for r in found.results[:SEARCH_RESULTS]
             ]
             return {"text": "\n".join(lines), "count": str(len(lines))}
+        case "new_offer":
+            return await _new_offer(db, kit, run, node, values)
         case "read_page":
             return {"text": await kit.fetch(v("url", "").strip())}
         case "job_lookup":
@@ -306,6 +312,60 @@ async def run_tool(
         case "send_email":
             return await _send_email(db, kit, run, node, values)
     raise ToolFailed()
+
+
+async def _new_offer(
+    db: AsyncSession,
+    kit: ToolKit,
+    run: FlowRun,
+    node: g.ToolNode,
+    values: dict[str, str],
+) -> dict[str, str]:
+    """The first offer of the search that this user was not handed before; it is marked as handed
+    out in the same step, so tomorrow's run gets the next one. Nothing new: every field is empty
+    (a Condition on ``url`` then ends the flow quietly). A resumed step gets its own offer back."""
+    if run.user_id is None:
+        raise ToolFailed()
+    user_id, run_id = run.user_id, run.id
+    found = await jobs.search(
+        db,
+        kit.jobs,
+        query=values.get("query") or None,
+        department=values.get("department") or None,
+        limit=NEW_OFFER_WINDOW,
+    )
+    offers = {
+        hashlib.sha256(r.url.encode()).hexdigest(): r for r in found.results if r.url
+    }
+    await flow_repo.forget_old_offers(
+        db, user_id=user_id, cutoff=datetime.now(UTC) - SEEN_FOR
+    )
+    seen = await flow_repo.seen_hashes(db, user_id=user_id, hashes=list(offers))
+    picked = await flow_repo.offer_picked_by(db, run_id=run_id, node_id=node.id)
+    left = len(offers) - len(seen)
+    if picked is None:
+        for digest in offers.keys() - seen:  # a resumed step already has its offer
+            if await flow_repo.take_offer(
+                db,
+                org_id=run.org_id,
+                user_id=user_id,
+                run_id=run_id,
+                node_id=node.id,
+                url_hash=digest,
+            ):
+                picked, left = digest, left - 1
+                break
+    await db.commit()
+    offer = offers.get(picked or "")
+    if offer is None:
+        return dict.fromkeys(g.TOOLS["new_offer"][1], "") | {"remaining": "0"}
+    return {
+        "title": _one_line(offer.title),
+        "company": _one_line(offer.company),
+        "place": _one_line(offer.location),
+        "url": offer.url,
+        "remaining": str(max(left, 0)),
+    }
 
 
 async def release_effect(db: AsyncSession, *, run: FlowRun, node: g.ToolNode) -> None:

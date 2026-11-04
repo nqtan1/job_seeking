@@ -434,3 +434,32 @@ class EmailInvite(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class SeenOffer(Base):
+    """A job offer already handed to a user by a ``new_offer`` step, so the next run moves on to a
+    new one. Only a hash of the offer's address; ``(run_id, node_id)`` lets a resumed step get the
+    same offer back instead of burning another."""
+
+    __tablename__ = "seen_offers"
+    __table_args__ = (
+        UniqueConstraint("user_id", "url_hash"),
+        Index("ix_seen_offers_org_id", "org_id"),
+        Index("ix_seen_offers_run_id_node_id", "run_id", "node_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    url_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        nullable=False
+    )  # no FK: runs are swept at 30 days
+    node_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

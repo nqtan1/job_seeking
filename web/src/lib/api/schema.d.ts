@@ -4710,7 +4710,7 @@ export interface components {
              * Tool
              * @enum {string}
              */
-            tool: "web_search" | "job_search" | "read_page" | "job_lookup" | "add_to_tracker" | "send_email" | "wait";
+            tool: "web_search" | "job_search" | "new_offer" | "read_page" | "job_lookup" | "add_to_tracker" | "send_email" | "wait";
             /** Minutes */
             minutes?: number | null;
         };

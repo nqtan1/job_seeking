@@ -247,7 +247,12 @@ async def _advance(
 
         await flows.touch_run(db, org_id=org_id, run_id=run_id)
         active = [e for e in incoming[nid] if _is_active(e, status, outputs)]
-        if incoming[nid] and not active:
+        # An edge from a Condition's "if yes / if no" exit is a gate: a step with gates runs only
+        # if one of them was taken. Without a gate, a step is skipped when nothing reaches it.
+        gates = [e for e in incoming[nid] if e.from_.port in ("true", "false")]
+        if incoming[nid] and (
+            not active or (gates and not any(e in active for e in gates))
+        ):
             await flows.set_step(db, org_id=org_id, step_id=step.id, status="skipped")
             status[nid] = "skipped"
             await db.commit()

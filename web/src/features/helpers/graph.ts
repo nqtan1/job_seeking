@@ -24,6 +24,13 @@ export const TOOL_IO = {
     ],
     out: ['text', 'count'],
   },
+  new_offer: {
+    in: [
+      ['query', true],
+      ['department', false],
+    ],
+    out: ['title', 'company', 'place', 'url', 'remaining'],
+  },
   read_page: { in: [['url', true]], out: ['text'] },
   job_lookup: { in: [['start', false]], out: ['title', 'company', 'place', 'description', 'url'] },
   add_to_tracker: {
@@ -323,7 +330,7 @@ export const typeKey = (type: GraphNode['type']) =>
 export const MAX_INPUT_CHARS = 20_000
 export const MAX_INPUTS = 6
 export const MAX_FIELDS = 12
-export const MAX_NODES = 10
+export const MAX_NODES = 15
 export const MAX_EDGES = 30
 export const MAX_HELPERS = 20 // backend service.MAX_AGENTS_PER_ORG
 export const MAX_SCHEDULES = 5 // backend schedules.MAX_SCHEDULES_PER_ORG

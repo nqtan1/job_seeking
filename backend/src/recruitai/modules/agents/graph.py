@@ -28,7 +28,7 @@ from recruitai.modules.agents.schemas import (
 )
 
 SCHEMA_VERSION = 1
-MAX_NODES = 10
+MAX_NODES = 15
 MAX_EDGES = 30
 MAX_MAPS = 10
 MAX_TEMPLATE = 2_000
@@ -96,6 +96,7 @@ class TransformNode(_Node):
 ToolKind = Literal[
     "web_search",
     "job_search",
+    "new_offer",
     "read_page",
     "job_lookup",
     "add_to_tracker",
@@ -105,6 +106,11 @@ ToolKind = Literal[
 TOOLS: dict[str, tuple[tuple[tuple[str, bool], ...], tuple[str, ...]]] = {
     "web_search": ((("query", True),), ("text", "sources")),
     "job_search": ((("query", True), ("department", False)), ("text", "count")),
+    # the first offer of the search this user has not been given before (and remembers it)
+    "new_offer": (
+        (("query", True), ("department", False)),
+        ("title", "company", "place", "url", "remaining"),
+    ),
     "read_page": ((("url", True),), ("text",)),
     # reads the run's chosen job; "start" is an optional link so it can hang off the Input step
     "job_lookup": (
