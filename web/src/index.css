@@ -171,6 +171,10 @@
     --kl: oklch(0.54 0.14 65);
     --kd: oklch(0.82 0.14 80);
   }
+  .kind-tool {
+    --kl: oklch(0.5 0.1 190);
+    --kd: oklch(0.8 0.1 190);
+  }
   .kind-transform {
     --kl: oklch(0.46 0.03 255);
     --kd: oklch(0.8 0.02 255);

@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recruitai.config import Settings
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
-from recruitai.core.tasks import enqueue
 from recruitai.modules.agents import engine, service
 from recruitai.modules.agents import flow_repository as repo
 from recruitai.modules.agents import graph as g
+from recruitai.modules.agents import recipients_repository as recipients_repo
 from recruitai.modules.agents.flow_schemas import FlowCreate, FlowVersionCreate, RunIn
 from recruitai.modules.agents.models import (
     Flow,
@@ -29,6 +29,13 @@ from recruitai.modules.jobs import service as jobs
 MAX_FLOWS_PER_ORG = 20
 MAX_FLOWS_EVER = 100  # archived ones count too: archiving is not a way around the cap
 MAX_ACTIVE_RUNS = 2
+WAKE_GRACE = timedelta(
+    minutes=10
+)  # a wake-up job this late is lost: the sweep fails the run
+
+
+class OrgBusy(Conflict):
+    """Too many live runs right now: transient, unlike an archived flow."""
 
 
 def stale_after(settings: Settings) -> timedelta:
@@ -42,7 +49,7 @@ def abandoned_after(settings: Settings) -> timedelta:
     return max(timedelta(minutes=10), 2 * stale_after(settings))
 
 
-RUN_TASK = "agents:run_flow"  # registered by the worker (worker.py, namespace "agents")
+RUN_TASK = engine.RUN_TASK
 # Saving is allowed with open problems (work in progress); these make a graph unreadable.
 UNSAVABLE = {"duplicate_node_id", "duplicate_edge_id"}
 
@@ -52,7 +59,12 @@ def graph_of(version: FlowVersion) -> g.Graph:
 
 
 def ai_calls(graph: g.Graph) -> int:
-    return sum(isinstance(n, g.AgentNode) for n in graph.nodes)
+    """Model calls a run can make: one per helper, and one per web search."""
+    return sum(
+        isinstance(n, g.AgentNode)
+        or (isinstance(n, g.ToolNode) and n.tool == "web_search")
+        for n in graph.nodes
+    )
 
 
 async def check(
@@ -228,7 +240,7 @@ async def prepare_run(
     _check_inputs(graph, data.inputs)
     needs_job = any(
         {"job", "fit"} & set(a.spec.context_sources) for a in agents.values()
-    )
+    ) or any(isinstance(n, g.ToolNode) and n.tool == "job_lookup" for n in graph.nodes)
     if needs_job and data.job_id is None:
         raise ValidationFailed("This flow needs a job: pick one.")
     if data.job_id is not None:
@@ -267,7 +279,7 @@ async def start_run(
     ):
         return _same_request(existing, flow_id, data), False
     if await repo.count_active_runs(db, org_id=org_id) >= MAX_ACTIVE_RUNS:
-        raise Conflict("Two flows are already running. Wait for one to finish.")
+        raise OrgBusy("Two flows are already running. Wait for one to finish.")
 
     try:
         run = await repo.create_run(
@@ -352,17 +364,7 @@ def _same_request(run: FlowRun, flow_id: UUID, data: RunIn) -> FlowRun:
 async def _enqueue(
     db: AsyncSession, *, org_id: UUID, user_id: UUID, run_id: UUID
 ) -> None:
-    await enqueue(
-        db,
-        task=RUN_TASK,
-        org_id=org_id,
-        kind="agents.run_flow",
-        task_kwargs={
-            "org_id": str(org_id),
-            "user_id": str(user_id),
-            "run_id": str(run_id),
-        },
-    )
+    await engine.enqueue_run(db, org_id=org_id, user_id=user_id, run_id=run_id)
 
 
 async def get_run(db: AsyncSession, *, org_id: UUID, run_id: UUID) -> FlowRun:
@@ -406,7 +408,7 @@ async def resume_run(
     if run.status != "failed" and not stale:
         raise Conflict("Only a failed or stuck run can be resumed.")
     if not stale and await repo.count_active_runs(db, org_id=org_id) >= MAX_ACTIVE_RUNS:
-        raise Conflict("Two flows are already running. Wait for one to finish.")
+        raise OrgBusy("Two flows are already running. Wait for one to finish.")
     await repo.reset_unfinished_steps(db, org_id=org_id, run_id=run_id)
     changed = await repo.set_run(
         db, org_id=org_id, run_id=run_id, only_if=("failed", "running"),
@@ -424,8 +426,8 @@ async def resume_run(
 async def cancel_run(db: AsyncSession, *, org_id: UUID, run_id: UUID) -> FlowRun:
     run = await get_run(db, org_id=org_id, run_id=run_id)
     if not await repo.set_run(
-        db, org_id=org_id, run_id=run_id, only_if=repo.ACTIVE,
-        status="cancelled", finished_at=func.now(),
+        db, org_id=org_id, run_id=run_id, only_if=repo.LIVE,
+        status="cancelled", wake_at=None, finished_at=func.now(),
     ):  # fmt: skip
         await db.rollback()
         raise Conflict("This run already ended.")
@@ -447,6 +449,11 @@ async def fail_stale_runs(
             db, org_id=org_id, run_id=run_id, code="worker_stopped", older_than=cutoff
         ):
             n += 1
+    for org_id, run_id in await repo.lost_waiting(db, cutoff=now - WAKE_GRACE):
+        if await repo.fail_lost_waiting(
+            db, org_id=org_id, run_id=run_id, cutoff=now - WAKE_GRACE
+        ):
+            n += 1
     await db.commit()
     return n
 
@@ -464,6 +471,17 @@ async def export_data(
         "flow_schedules": rows_as_dicts(
             await repo.schedules_for_org(db, org_id=org_id)
         ),
+        # the link secrets are not data about the person: never in the export
+        "email_recipients": [
+            {
+                k: v
+                for k, v in row.items()
+                if k not in ("confirm_hash", "unsubscribe_token")
+            }
+            for row in rows_as_dicts(
+                await recipients_repo.all_for_org(db, org_id=org_id)
+            )
+        ],
     }
 
 

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { RouterProvider, createMemoryRouter } from 'react-router'
 import { HelperEditor } from '@/features/helpers/HelperEditor'
+import { AutomationsPage } from '@/features/helpers/AutomationsPage'
 import { HelpersPage } from '@/features/helpers/HelpersPage'
 import { RecentRuns } from '@/features/helpers/RunParts'
 import { RunPage } from '@/features/helpers/RunPage'
@@ -185,7 +186,7 @@ test('a failed run explains itself in plain words and can be resumed; skipped st
     return { data: [] }
   })
   mocks.POST.mockResolvedValueOnce({ data: { ...run, status: 'queued' } })
-  open(<RunPage />, '/helpers/runs/:runId', '/helpers/runs/r1')
+  open(<RunPage />, '/automations/runs/:runId', '/automations/runs/r1')
 
   expect(await screen.findAllByText(/reached today’s AI limit/)).not.toHaveLength(0)
   expect(screen.queryByText('quota_exceeded')).not.toBeInTheDocument() // never the raw code
@@ -276,7 +277,7 @@ test('a finished run leads with its summary and the result, then the steps', asy
     if (url === '/api/v1/agents') return { data: [AGENT] }
     return { data: [] }
   })
-  open(<RunPage />, '/helpers/runs/:runId', '/helpers/runs/r2')
+  open(<RunPage />, '/automations/runs/:runId', '/automations/runs/r2')
 
   expect(await screen.findByText('3 of 3 steps')).toBeInTheDocument()
   expect(screen.getAllByText('Done')[0]).toBeInTheDocument() // the status badge comes first
@@ -313,7 +314,10 @@ test('recent runs link back to their run page, newest first', async () => {
   })
   open(<RecentRuns flowId="f1" />, '/x', '/x')
   const links = await screen.findAllByRole('link')
-  expect(links.map((l) => l.getAttribute('href'))).toEqual(['/helpers/runs/r2', '/helpers/runs/r1'])
+  expect(links.map((l) => l.getAttribute('href'))).toEqual([
+    '/automations/runs/r2',
+    '/automations/runs/r1',
+  ])
   expect(screen.getByText('Failed')).toBeInTheDocument()
 })
 
@@ -349,12 +353,9 @@ describe('the flow editor', () => {
   }
 
   function renderEditor() {
-    const router = createMemoryRouter(
-      [{ path: '/helpers/flows/:flowId', element: <FlowEditor /> }],
-      {
-        initialEntries: ['/helpers/flows/f1'],
-      },
-    )
+    const router = createMemoryRouter([{ path: '/automations/:flowId', element: <FlowEditor /> }], {
+      initialEntries: ['/automations/f1'],
+    })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return render(
       <QueryClientProvider client={client}>
@@ -471,10 +472,10 @@ describe('platform pages', () => {
     mocks.POST.mockResolvedValueOnce({ data: { id: 'new-run' } })
     const router = createMemoryRouter(
       [
-        { path: '/helpers', element: <HelpersPage /> },
-        { path: '/helpers/runs/:runId', element: <div>run page</div> },
+        { path: '/automations', element: <AutomationsPage /> },
+        { path: '/automations/runs/:runId', element: <div>run page</div> },
       ],
-      { initialEntries: ['/helpers?tab=runs'] },
+      { initialEntries: ['/automations?tab=runs'] },
     )
     render(
       <QueryClientProvider
@@ -541,10 +542,10 @@ describe('platform pages', () => {
     )
     const router = createMemoryRouter(
       [
-        { path: '/helpers', element: <HelpersPage /> },
-        { path: '/helpers/flows/:flowId', element: <div>editor</div> },
+        { path: '/automations', element: <AutomationsPage /> },
+        { path: '/automations/:flowId', element: <div>editor</div> },
       ],
-      { initialEntries: ['/helpers?tab=flows'] },
+      { initialEntries: ['/automations'] },
     )
     render(
       <QueryClientProvider
@@ -648,7 +649,7 @@ describe('the live run in the editor', () => {
     expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open full page' })).toHaveAttribute(
       'href',
-      '/helpers/runs/r1',
+      '/automations/runs/r1',
     )
     expect(panel).toHaveTextContent('Running')
 
@@ -667,7 +668,7 @@ describe('the live run in the editor', () => {
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Open full page' })).toHaveAttribute(
         'href',
-        '/helpers/runs/r2',
+        '/automations/runs/r2',
       ),
     )
 
@@ -716,4 +717,29 @@ describe('the live run in the editor', () => {
     expect(await screen.findByLabelText('Notes')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled() // the sample text is required
   })
+})
+
+test('a waiting run says when it wakes up and can be stopped', async () => {
+  const run = {
+    id: 'r3',
+    flow_id: 'f1',
+    flow_version_id: 'fv1',
+    status: 'waiting',
+    error_code: null,
+    wake_at: '2030-01-01T10:00:00Z',
+    created_at: '2026-11-02T10:00:00Z',
+    started_at: '2026-11-02T10:00:00Z',
+    finished_at: null,
+    inputs: {},
+    job_id: null,
+    result: null,
+    handoffs: [],
+    steps: [],
+  }
+  mocks.GET.mockImplementation(async (url: string) =>
+    url === '/api/v1/flow-runs/{run_id}' ? { data: run } : { data: [] },
+  )
+  open(<RunPage />, '/automations/runs/:runId', '/automations/runs/r3')
+  expect(await screen.findByText(/Waiting until/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Stop/ })).toBeInTheDocument()
 })

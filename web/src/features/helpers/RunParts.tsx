@@ -26,7 +26,7 @@ import {
   useRerun,
   useResumeRun,
 } from './api'
-import { relTime, seconds } from './lib'
+import { relTime, seconds, when } from './lib'
 import { Result, RunStatusBadge } from './ui'
 import { Link } from 'react-router'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -130,6 +130,7 @@ const RAIL: Record<Status, { icon: ReactNode; ring: string }> = {
   running: { icon: <Spinner />, ring: 'bg-accent text-accent-foreground' },
   failed: { icon: <X className="size-3.5" />, ring: 'bg-destructive/15 text-destructive' },
   skipped: { icon: <Minus className="size-3.5" />, ring: 'bg-muted text-muted-foreground' },
+  waiting: { icon: <Clock className="size-3.5" />, ring: 'bg-muted text-muted-foreground' },
   pending: { icon: <Circle className="size-2" />, ring: 'bg-muted text-muted-foreground' },
 }
 
@@ -317,7 +318,7 @@ export function RecentRuns({ flowId }: { flowId: string }) {
         {runs.slice(0, 5).map((r) => (
           <li key={r.id}>
             <Link
-              to={`/helpers/runs/${r.id}`}
+              to={`/automations/runs/${r.id}`}
               className="flex items-center justify-between gap-3 rounded py-2 text-sm outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <RunStatusBadge status={r.status} />
@@ -363,7 +364,7 @@ export function LiveRunPanel({
   onFollow: (runId: string) => void
   onClose: () => void
 }) {
-  const t = useT()
+  const { t, locale } = useI18n()
   const errText = useErrText()
   const live = isLive(run.status)
   const cancel = useCancelRun()
@@ -390,6 +391,11 @@ export function LiveRunPanel({
       <div role="status" className="sr-only">
         {t(`helpers.run.status.${run.status}`)}
       </div>
+      {run.status === 'waiting' && (
+        <p className="text-sm text-muted-foreground">
+          {t('helpers.run.waiting_until', { time: when(run.wake_at, locale) })}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {live && (
           <Button
@@ -420,7 +426,7 @@ export function LiveRunPanel({
           </Button>
         )}
         <Link
-          to={`/helpers/runs/${run.id}`}
+          to={`/automations/runs/${run.id}`}
           className="inline-flex h-7 items-center gap-1 rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11"
         >
           <ExternalLink className="size-3.5" aria-hidden />

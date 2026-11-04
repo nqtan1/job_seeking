@@ -128,7 +128,7 @@ resource "google_cloud_run_v2_service" "api" {
     timeout         = "120s"
     scaling {
       min_instance_count = var.api_min_instances
-      max_instance_count = 3
+      max_instance_count = var.api_max_instances
     }
     vpc_access {
       egress = "PRIVATE_RANGES_ONLY"

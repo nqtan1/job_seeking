@@ -18,11 +18,12 @@ from recruitai.core.auth import (
 )
 from recruitai.core.db import get_db
 from recruitai.core.errors import (
+    RateLimited,
     Unauthorized,
     UpstreamUnavailable,
     problem_responses,
 )
-from recruitai.core.ratelimit import RateLimited, limit_sensitive
+from recruitai.core.ratelimit import limit_sensitive
 from recruitai.core.storage import Storage, get_storage_dependency
 from recruitai.core.tenancy import OrgContext, get_org_context
 from recruitai.modules.privacy import service

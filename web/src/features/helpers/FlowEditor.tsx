@@ -47,6 +47,7 @@ import {
   MAX_INPUT_CHARS,
   MAX_NODES,
   type Refusal,
+  TOOL_KINDS,
   type Specs,
   addNode,
   aiCalls,
@@ -76,7 +77,7 @@ export function FlowEditor() {
   return (
     <Page
       title={t('helpers.flow.title')}
-      back={{ to: '/helpers?tab=flows', label: t('helpers.back') }}
+      back={{ to: '/automations', label: t('helpers.back_flows') }}
       wide
     >
       {flow.error ? <ErrorMessage error={flow.error} /> : <ListSkeleton />}
@@ -115,7 +116,10 @@ function Editor({ detail }: { detail: FlowDetail }) {
   // the transform step is "Clean text" to people; the shared labels still say "Tidy text"
   const titles = useMemo(() => {
     const m = new Map(labels.titles)
-    for (const n of graph.nodes) if (n.type === 'transform') m.set(n.id, t(typeKey(n.type)))
+    for (const n of graph.nodes) {
+      if (n.type === 'transform') m.set(n.id, t(typeKey(n.type)))
+      if (n.type === 'tool') m.set(n.id, t(`helpers.tool.${n.tool}.name`))
+    }
     return m
   }, [labels.titles, graph.nodes, t])
   const add = useAddFlowVersion()
@@ -200,7 +204,7 @@ function Editor({ detail }: { detail: FlowDetail }) {
   return (
     <Page
       title={t('helpers.flow.title')}
-      back={{ to: '/helpers?tab=flows', label: t('helpers.back') }}
+      back={{ to: '/automations', label: t('helpers.back_flows') }}
       wide
       actions={
         <div className="flex flex-wrap items-center gap-2">
@@ -305,6 +309,31 @@ function Editor({ detail }: { detail: FlowDetail }) {
               {pickable.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
+                </option>
+              ))}
+            </NativeSelect>
+            <NativeSelect
+              size="sm"
+              aria-label={t('helpers.add_action')}
+              value=""
+              disabled={locked}
+              onChange={(e) => {
+                const tool = TOOL_KINDS.find((k) => k === e.target.value)
+                if (!tool) return
+                const id = newId()
+                insert(id, (n) => ({
+                  type: 'tool',
+                  id,
+                  tool,
+                  position: place(n),
+                  ...(tool === 'wait' && { minutes: 60 }),
+                }))
+              }}
+            >
+              <option value="">{t('helpers.add_action')}</option>
+              {TOOL_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {t(`helpers.tool.${k}.name`)}
                 </option>
               ))}
             </NativeSelect>
@@ -557,10 +586,11 @@ function RunDialog({
   const fields = input?.type === 'input' ? input.fields : []
   const needsJob = graph.nodes.some(
     (n) =>
-      n.type === 'agent' &&
-      (specs.get(n.agent_version_id)?.context_sources ?? []).some(
-        (s) => s === 'job' || s === 'fit',
-      ),
+      (n.type === 'tool' && n.tool === 'job_lookup') ||
+      (n.type === 'agent' &&
+        (specs.get(n.agent_version_id)?.context_sources ?? []).some(
+          (s) => s === 'job' || s === 'fit',
+        )),
   )
   const need = aiCalls(graph)
   const left = use.data ? Math.max(use.data.quota - use.data.used, 0) : null

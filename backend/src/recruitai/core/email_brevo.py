@@ -34,6 +34,7 @@ class BrevoEmailSender:
                     "to": [{"email": to}],
                     "subject": subject,
                     "textContent": body,
+                    **_unsubscribe_headers(context),
                 },
             )
             response.raise_for_status()
@@ -42,3 +43,16 @@ class BrevoEmailSender:
             raise UpstreamUnavailable(
                 "The email service is unavailable.", code="email_unavailable"
             ) from exc
+
+
+def _unsubscribe_headers(context: dict[str, Any]) -> dict[str, Any]:
+    """One-click unsubscribe for mail that carries an unsubscribe link (RFC 8058)."""
+    url = context.get("unsubscribe_url")
+    if not url:
+        return {}
+    return {
+        "headers": {
+            "List-Unsubscribe": f"<{url}>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+    }

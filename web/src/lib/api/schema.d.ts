@@ -1306,6 +1306,83 @@ export interface paths {
         patch: operations["patch_schedule_api_v1_schedules__schedule_id__patch"];
         trace?: never;
     };
+    "/api/v1/email-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Recipients */
+        get: operations["list_recipients_api_v1_email_recipients_get"];
+        put?: never;
+        /**
+         * Add Recipient
+         * @description Adds an address and emails it a confirmation link. Nothing can be sent to it until its owner confirms.
+         */
+        post: operations["add_recipient_api_v1_email_recipients_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/email-recipients/{recipient_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Recipient */
+        delete: operations["remove_recipient_api_v1_email_recipients__recipient_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Confirm Page */
+        get: operations["confirm_page_api_public_email_confirm_get"];
+        put?: never;
+        /** Confirm */
+        post: operations["confirm_api_public_email_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/email/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Unsubscribe Page */
+        get: operations["unsubscribe_page_api_public_email_unsubscribe_get"];
+        put?: never;
+        /**
+         * Unsubscribe
+         * @description Also the target of one-click unsubscribe from mail apps (RFC 8058).
+         */
+        post: operations["unsubscribe_api_public_email_unsubscribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/radar/consent": {
         parameters: {
             query?: never;
@@ -2973,7 +3050,7 @@ export interface components {
              */
             schema_version: 1;
             /** Nodes */
-            nodes: (components["schemas"]["InputNode"] | components["schemas"]["OutputNode"] | components["schemas"]["AgentNode"] | components["schemas"]["ConditionNode"] | components["schemas"]["TransformNode"])[];
+            nodes: (components["schemas"]["InputNode"] | components["schemas"]["OutputNode"] | components["schemas"]["AgentNode"] | components["schemas"]["ConditionNode"] | components["schemas"]["TransformNode"] | components["schemas"]["ToolNode"])[];
             /**
              * Edges
              * @default []
@@ -4085,6 +4162,28 @@ export interface components {
             /** Address */
             address?: string | null;
         };
+        /** RecipientIn */
+        RecipientIn: {
+            /** Email */
+            email: string;
+        };
+        /** RecipientOut */
+        RecipientOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /**
          * RecipientPatch
          * @description Only the fields sent change; an empty or blank string clears the value.
@@ -4201,9 +4300,11 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "done" | "failed" | "cancelled";
+            status: "queued" | "running" | "waiting" | "done" | "failed" | "cancelled";
             /** Error Code */
             error_code: string | null;
+            /** Wake At */
+            wake_at: string | null;
             /**
              * Created At
              * Format: date-time
@@ -4240,9 +4341,11 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "done" | "failed" | "cancelled";
+            status: "queued" | "running" | "waiting" | "done" | "failed" | "cancelled";
             /** Error Code */
             error_code: string | null;
+            /** Wake At */
+            wake_at: string | null;
             /**
              * Created At
              * Format: date-time
@@ -4293,9 +4396,11 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "done" | "failed" | "cancelled";
+            status: "queued" | "running" | "waiting" | "done" | "failed" | "cancelled";
             /** Error Code */
             error_code: string | null;
+            /** Wake At */
+            wake_at: string | null;
             /**
              * Created At
              * Format: date-time
@@ -4545,7 +4650,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "pending" | "running" | "done" | "failed" | "skipped";
+            status: "pending" | "running" | "waiting" | "done" | "failed" | "skipped";
             /** Output */
             output: {
                 [key: string]: unknown;
@@ -4581,6 +4686,33 @@ export interface components {
             error_code: string | null;
             /** Download Url */
             download_url?: string | null;
+        };
+        /** ToolNode */
+        ToolNode: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "x": 0,
+             *       "y": 0
+             *     }
+             */
+            position: components["schemas"]["Position"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool";
+            /**
+             * Tool
+             * @enum {string}
+             */
+            tool: "web_search" | "job_search" | "read_page" | "job_lookup" | "add_to_tracker" | "send_email" | "wait";
+            /** Minutes */
+            minutes?: number | null;
         };
         /** TransformNode */
         TransformNode: {
@@ -10193,6 +10325,293 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_recipients_api_v1_email_recipients_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientOut"][];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_recipient_api_v1_email_recipients_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecipientIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    remove_recipient_api_v1_email_recipients__recipient_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                recipient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_page_api_public_email_confirm_get: {
+        parameters: {
+            query: {
+                t: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_api_public_email_confirm_post: {
+        parameters: {
+            query: {
+                t: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsubscribe_page_api_public_email_unsubscribe_get: {
+        parameters: {
+            query: {
+                t: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unsubscribe_api_public_email_unsubscribe_post: {
+        parameters: {
+            query: {
+                t: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
                 };
             };
             /** @description Validation Error */

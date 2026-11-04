@@ -4,26 +4,17 @@ A sliding window kept in memory, per instance: with N API instances a user gets 
 the limit. That bounds a runaway client or script; the DB-backed daily AI quota
 (``ai/usage.py``) stays the real cost control. Unauthenticated floods are not limited here
 (no trusted client IP behind Hosting + Cloud Run); that belongs to Cloud Run's max instances.
+The window itself lives in ``core/throttle.py`` so the auth dependency can use it too.
 """
 
-import time
-from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends
 
 from recruitai.core.auth import CurrentUser, get_current_user
-from recruitai.core.errors import AppError
-
-_MAX_KEYS = 10_000
-_hits: dict[tuple[str, str], deque[float]] = defaultdict(deque)
-
-
-class RateLimited(AppError):
-    status_code = 429
-    code = "rate_limited"
-    default_detail = "Too many requests. Please slow down and try again shortly."
+from recruitai.core.errors import RateLimited
+from recruitai.core.throttle import hit
 
 
 def rate_limit(
@@ -32,17 +23,9 @@ def rate_limit(
     async def dependency(
         user: Annotated[CurrentUser, Depends(get_current_user)],
     ) -> None:
-        now = time.monotonic()
-        if len(_hits) > _MAX_KEYS:  # drop idle users so the dict cannot grow forever
-            for key in [k for k, q in _hits.items() if not q or q[-1] <= now - per_s]:
-                del _hits[key]
-        window = _hits[(name, user.firebase_uid)]
-        while window and window[0] <= now - per_s:
-            window.popleft()
-        if len(window) >= limit:
-            retry_after = max(1, int(window[0] + per_s - now) + 1)
+        retry_after = hit(name, user.firebase_uid, limit=limit, per_s=per_s)
+        if retry_after is not None:
             raise RateLimited(headers={"Retry-After": str(retry_after)})
-        window.append(now)
 
     return dependency
 
@@ -51,20 +34,12 @@ limit_ai = rate_limit("ai", limit=20)  # every AI route also costs a model call
 limit_sensitive = rate_limit("sensitive", limit=5)  # export, delete account
 
 
-_public_hits: dict[str, deque[float]] = defaultdict(deque)
-
-
 def limit_public(name: str, *, limit: int, per_s: float = 60.0) -> Callable[[], None]:
     """For unauthenticated routes: one *global* window per route. There is no trusted client IP
     behind Hosting + Cloud Run, so this only bounds total abuse, per instance."""
 
     def dependency() -> None:
-        now = time.monotonic()
-        window = _public_hits[name]
-        while window and window[0] <= now - per_s:
-            window.popleft()
-        if len(window) >= limit:
+        if hit("public", name, limit=limit, per_s=per_s) is not None:
             raise RateLimited(headers={"Retry-After": str(int(per_s))})
-        window.append(now)
 
     return dependency

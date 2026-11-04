@@ -121,7 +121,7 @@ class RunIn(Strict):
 class StepOut(BaseModel):
     node_id: UUID
     position: int
-    status: Literal["pending", "running", "done", "failed", "skipped"]
+    status: Literal["pending", "running", "waiting", "done", "failed", "skipped"]
     output: dict[str, Any] | None
     error_code: str | None
     model: str | None
@@ -143,8 +143,9 @@ class RunSummary(BaseModel):
     flow_id: UUID
     flow_version_id: UUID
     trigger: Literal["manual", "schedule"]
-    status: Literal["queued", "running", "done", "failed", "cancelled"]
+    status: Literal["queued", "running", "waiting", "done", "failed", "cancelled"]
     error_code: str | None
+    wake_at: datetime | None
     created_at: datetime
     finished_at: datetime | None
 

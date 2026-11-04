@@ -13,6 +13,7 @@ from sqlalchemy import (
     SmallInteger,
     String,
     UniqueConstraint,
+    false,
     func,
     true,
 )
@@ -44,6 +45,10 @@ class User(Base):
     # UNIQUE: provisioning is an atomic INSERT ... ON CONFLICT (firebase_uid).
     firebase_uid: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     email: Mapped[str] = mapped_column(String, nullable=False)
+    # From the sign-in token: only a verified address may be shown to outsiders (ADR 0032).
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false()
+    )
     display_name: Mapped[str | None] = mapped_column(String)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deletion_warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

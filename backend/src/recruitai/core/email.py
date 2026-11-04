@@ -116,6 +116,59 @@ TEMPLATES: dict[str, dict[str, tuple[str, str]]] = {
             ),
         ),
     },
+    "recipient_confirm": {
+        "en": (
+            "Confirm: {sender_email} wants to email you with RecruitAI",
+            (
+                "Hello,\n\n{sender_email} added your address in RecruitAI so that their "
+                "automations can send you messages. If you know them and agree, confirm here:\n\n"
+                "{link}\n\nIf you do not, ignore this email: nothing will be sent to you. To make sure "
+                "you are never asked again, block it here: {block_url}\n"
+            ),
+        ),
+        "fr": (
+            "Confirmez : {sender_email} souhaite vous écrire via RecruitAI",
+            (
+                "Bonjour,\n\n{sender_email} a ajouté votre adresse dans RecruitAI pour que ses "
+                "automatisations puissent vous envoyer des messages. Si vous le connaissez et "
+                "êtes d'accord, confirmez ici :\n\n{link}\n\nSinon, ignorez cet e-mail : "
+                "rien ne vous sera envoyé. Pour ne plus jamais être sollicité, bloquez ici : "
+                "{block_url}\n"
+            ),
+        ),
+        "vi": (
+            "Xác nhận: {sender_email} muốn gửi email cho bạn qua RecruitAI",
+            (
+                "Xin chào,\n\n{sender_email} đã thêm địa chỉ của bạn trong RecruitAI để các tự "
+                "động hóa của họ có thể gửi thư cho bạn. Nếu bạn quen họ và đồng ý, hãy xác nhận "
+                "tại đây:\n\n{link}\n\nNếu không, hãy bỏ qua email này: sẽ không có gì được "
+                "gửi cho bạn. Để không bao giờ bị hỏi lại, hãy chặn tại đây: {block_url}\n"
+            ),
+        ),
+    },
+    "flow_message": {
+        "en": (
+            "{subject}",
+            (
+                "{body}\n\n--\nSent by {sender_email} with a RecruitAI automation. "
+                "To stop receiving these emails: {unsubscribe_url}\n"
+            ),
+        ),
+        "fr": (
+            "{subject}",
+            (
+                "{body}\n\n--\nEnvoyé par {sender_email} avec une automatisation RecruitAI. "
+                "Pour ne plus recevoir ces e-mails : {unsubscribe_url}\n"
+            ),
+        ),
+        "vi": (
+            "{subject}",
+            (
+                "{body}\n\n--\nGửi bởi {sender_email} bằng một tự động hóa RecruitAI. "
+                "Để ngừng nhận các email này: {unsubscribe_url}\n"
+            ),
+        ),
+    },
 }
 
 

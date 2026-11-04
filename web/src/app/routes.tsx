@@ -51,12 +51,19 @@ export const routes: RouteObject[] = [
               import('@/features/helpers/HelpersPage').then((m) => ({ Component: m.HelpersPage })),
           },
           {
-            path: '/helpers/flows/:flowId',
+            path: '/automations',
+            lazy: () =>
+              import('@/features/helpers/AutomationsPage').then((m) => ({
+                Component: m.AutomationsPage,
+              })),
+          },
+          {
+            path: '/automations/:flowId',
             lazy: () =>
               import('@/features/helpers/FlowEditor').then((m) => ({ Component: m.FlowEditor })),
           },
           {
-            path: '/helpers/runs/:runId',
+            path: '/automations/runs/:runId',
             lazy: () =>
               import('@/features/helpers/RunPage').then((m) => ({ Component: m.RunPage })),
           },

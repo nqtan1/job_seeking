@@ -486,24 +486,35 @@ function Fields({
   )
 }
 
+const MAX_WAIT_MINUTES = 7 * 24 * 60
+
+/** 150 -> "2 h 30 min" */
+const hoursMinutes = (m: number) => {
+  const d = Math.floor(m / 1440)
+  const h = Math.floor((m % 1440) / 60)
+  const r = m % 60
+  return [d && `${d} d`, h && `${h} h`, (r || m === 0) && `${r} min`].filter(Boolean).join(' ')
+}
+
 /** A number box you can clear and retype: the text is kept while typing, clamped when you leave. */
 function LengthInput({
   label,
   value,
+  max = MAX_INPUT_CHARS,
   onChange,
 }: {
   label: string
   value: number
+  max?: number
   onChange: (n: number) => void
 }) {
   const [text, setText] = useState(String(value))
-  const clamp = (raw: string) =>
-    Math.min(Math.max(Math.trunc(Number(raw)) || 1, 1), MAX_INPUT_CHARS)
+  const clamp = (raw: string) => Math.min(Math.max(Math.trunc(Number(raw)) || 1, 1), max)
   return (
     <Input
       type="number"
       min={1}
-      max={MAX_INPUT_CHARS}
+      max={max}
       aria-label={label}
       value={text}
       onChange={(e) => {
@@ -607,6 +618,25 @@ export function NodeInspector({
             maxLength={200}
             onChange={(e) => patch({ value: e.target.value } as Partial<GraphNode>)}
           />
+        </div>
+      )}
+      {node.type === 'tool' && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">{t(`helpers.tool.${node.tool}.about`)}</p>
+          {node.tool === 'wait' && (
+            <div className="space-y-1">
+              <p className="text-sm font-medium">{t('helpers.wait.minutes')}</p>
+              <LengthInput
+                label={t('helpers.wait.minutes')}
+                value={node.minutes ?? 60}
+                max={MAX_WAIT_MINUTES}
+                onChange={(minutes) => patch({ minutes } as Partial<GraphNode>)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t('helpers.wait.hint', { time: hoursMinutes(node.minutes ?? 60) })}
+              </p>
+            </div>
+          )}
         </div>
       )}
       {node.type === 'transform' && (

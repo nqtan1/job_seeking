@@ -824,7 +824,10 @@ async def test_due_schedules_start_once_per_slot_and_stop_when_they_should(
         db_session, org_id=org, run_id=run_id, code="step_failed"
     )
     await repo.update_schedule(
-        db_session, org_id=org, schedule_id=sid, values={"consecutive_failures": 2}
+        db_session,
+        org_id=org,
+        schedule_id=sid,
+        values={"consecutive_failures": 2, "last_run_at": now - timedelta(hours=1)},
     )
     await due()
     assert await schedules.run_due(db_session, now=now) == 0
@@ -956,3 +959,391 @@ async def test_a_schedule_that_cannot_start_pauses_instead_of_retrying_forever(
             f"{BASE}/schedules/{sid}", headers=ada, json={"enabled": True}
         )
     ).status_code == 409
+
+
+def tool_node(kind: str) -> dict:
+    return {"type": "tool", "id": str(uuid4()), "tool": kind}
+
+
+async def test_action_blocks_search_read_look_up_a_job_and_fill_the_tracker_once(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from recruitai.ai.gateway import BackendCapabilities, GroundedAnswer, Source
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents import flow_repository as repo
+    from recruitai.modules.agents import tools
+    from tests.e2e_radar_fakes import Provider
+    from tests.integration.test_matching_router import _add_job
+
+    org = await org_of(client, ada)
+    pages: list[str] = []
+
+    async def fetch(url: str) -> str:
+        pages.append(url)
+        return "A page about Acme."
+
+    kit = tools.ToolKit(fetch=fetch, jobs=Provider(), mail=FakeEmailSender())
+    fake_llm.caps = BackendCapabilities(web_grounding=True)
+    fake_llm._grounded.append(
+        GroundedAnswer(
+            text="Acme hires.",
+            sources=[Source("Acme", "https://acme.test")],
+            queries=[],
+        )
+    )
+    i, web, jobs_, page, look, track, o = (
+        input_node("q"),
+        tool_node("web_search"),
+        tool_node("job_search"),
+        tool_node("read_page"),
+        tool_node("job_lookup"),
+        tool_node("add_to_tracker"),
+        output_node("answer", "offers", "page", "title", "card"),
+    )
+    flow = await make_flow(
+        client, ada, [i, web, jobs_, page, look, track, o],
+        [
+            edge(i, web, {"query": "{{q}}"}), edge(i, jobs_, {"query": "{{q}}"}),
+            edge(i, page, {"url": "https://acme.test/jobs"}), edge(i, look, {"start": "{{q}}"}),
+            edge(web, o, {"answer": "{{text}}"}), edge(jobs_, o, {"offers": "{{text}}"}),
+            edge(page, o, {"page": "{{text}}"}), edge(look, o, {"title": "{{title}}"}),
+            edge(look, track, {"company": "{{company}}", "title": "{{title}}"}),
+            edge(track, o, {"card": "{{status}}"}),
+        ],
+    )  # fmt: skip
+
+    needs_job = await client.post(
+        f"{BASE}/flows/{flow['id']}/runs", headers=ada, json={"inputs": {"q": "dev"}}
+    )
+    assert (
+        needs_job.status_code == 422
+    )  # a job lookup asks for a job before anything runs
+
+    job_id = await _add_job(client, fake_llm, ada)
+    r = await client.post(
+        f"{BASE}/flows/{flow['id']}/runs",
+        headers=ada,
+        json={"inputs": {"q": "dev"}, "job_id": job_id},
+    )
+    run_id = UUID(r.json()["id"])
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=run_id, kit=kit)
+    run = (await client.get(f"{BASE}/flow-runs/{run_id}", headers=ada)).json()
+    assert run["status"] == "done", run
+    out = run["result"]
+    assert out["answer"] == "Acme hires." and "Développeur Python" in out["offers"]
+    assert out["page"] == "A page about Acme." and pages == ["https://acme.test/jobs"]
+    assert out["card"].startswith("added:")
+    cards = (await client.get("/api/v1/applications", headers=ada)).json()
+    assert len(cards) == 1  # one tracker card
+
+    # a step that already did its effect never does it twice; a user stops at the daily cap
+    step_node = UUID(track["id"])
+    me = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]["id"]
+    who = {"org_id": org, "user_id": UUID(me), "run_id": run_id, "node_id": step_node}
+    assert (
+        await repo.claim_effect(db_session, kind="add_to_tracker", daily_cap=50, **who)
+        == "done"
+    )
+    # a repeatable action (reading a page) is only counted: a resumed step just runs again
+    assert (
+        await repo.claim_effect(
+            db_session, kind="add_to_tracker", daily_cap=50, once=False, **who
+        )
+        == "new"
+    )
+    other = {**who, "node_id": uuid4()}
+    assert (
+        await repo.claim_effect(db_session, kind="add_to_tracker", daily_cap=1, **other)
+        == "capped"
+    )
+
+
+async def test_a_wait_step_parks_the_run_without_a_worker_and_wakes_it_later(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from recruitai.modules.agents import flow_repository as repo
+    from recruitai.modules.agents.models import FlowRun
+
+    org = await org_of(client, ada)
+    i, w, o = input_node("v"), tool_node("wait"), output_node("r")
+    w["minutes"] = 1
+    flow = await make_flow(
+        client, ada, [i, w, o], [edge(i, w, {"value": "{{v}}"}), edge(w, o, {"r": "{{value}}"})]
+    )  # fmt: skip
+
+    async def start() -> UUID:
+        r = await client.post(
+            f"{BASE}/flows/{flow['id']}/runs", headers=ada, json={"inputs": {"v": "hi"}}
+        )
+        assert r.status_code == 202, r.text
+        return UUID(r.json()["id"])
+
+    async def view(run_id: UUID) -> dict:
+        return (await client.get(f"{BASE}/flow-runs/{run_id}", headers=ada)).json()
+
+    async def jobs_at() -> list:
+        rows = await db_session.execute(
+            text(
+                "SELECT scheduled_at FROM procrastinate_jobs WHERE task_name = :t AND scheduled_at IS NOT NULL"
+            ),
+            {"t": engine.RUN_TASK},
+        )
+        return [r[0] for r in rows]
+
+    run_id = await start()
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=run_id)
+    parked = await view(run_id)
+    assert parked["status"] == "waiting" and parked["wake_at"]
+    assert [s["status"] for s in parked["steps"]].count("waiting") == 1
+    assert max(await jobs_at()) > datetime.now(UTC)  # a timer, not a held worker
+
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=run_id)  # too early
+    assert (await view(run_id))["status"] == "waiting"
+    assert not await repo.fail_lost_waiting(  # not lost yet either
+        db_session,
+        org_id=org,
+        run_id=run_id,
+        cutoff=datetime.now(UTC) - flows.WAKE_GRACE,
+    )
+    assert (
+        await flows.fail_stale_runs(
+            db_session, now=datetime.now(UTC), abandoned_after=timedelta(0)
+        )
+        == 0
+    )
+    assert (await view(run_id))["status"] == "waiting"
+
+    async def wake_in_past(minutes: int) -> None:
+        await db_session.execute(
+            text("UPDATE flow_runs SET wake_at = now() - make_interval(mins => :m)"),
+            {"m": minutes},
+        )
+        await db_session.commit()
+
+    await wake_in_past(1)
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=run_id)
+    done = await view(run_id)
+    assert done["status"] == "done" and done["result"] == {"r": "hi"}
+    assert next(s for s in done["steps"] if s["node_id"] == w["id"])["output"] == {
+        "value": "hi"
+    }
+
+    # cancel works on a waiting run; a wake-up that fires afterwards does nothing
+    cancelled = await start()
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=cancelled)
+    assert (
+        await client.post(f"{BASE}/flow-runs/{cancelled}/cancel", headers=ada)
+    ).json()["status"] == "cancelled"
+    await wake_in_past(1)
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=cancelled)
+    assert (await view(cancelled))["status"] == "cancelled"
+
+    # a wake-up job that never came: the sweep fails the run (resumable), not before the grace
+    lost = await start()
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=lost)
+    await wake_in_past(20)
+    assert (
+        await flows.fail_stale_runs(
+            db_session, now=datetime.now(UTC), abandoned_after=timedelta(minutes=10)
+        )
+        >= 1
+    )
+    assert (await view(lost))["error_code"] == "wake_lost"
+
+    # waiting runs are capped per org and do not use the live-run slots
+    version_id = (await view(run_id))["flow_version_id"]
+    for _ in range(repo.MAX_WAITING_RUNS_PER_ORG):
+        db_session.add(
+            FlowRun(org_id=org, flow_id=UUID(flow["id"]), flow_version_id=UUID(version_id),
+                    status="waiting", wake_at=datetime.now(UTC) + timedelta(hours=1), inputs={})
+        )  # fmt: skip
+    await db_session.commit()
+    assert await repo.count_active_runs(db_session, org_id=org) == 0
+    over = await start()
+    await engine.execute(db_session, fake_llm, org_id=org, run_id=over)
+    assert (await view(over))["error_code"] == "too_many_waiting"
+    assert (
+        await db_session.execute(select(FlowRun.id).where(FlowRun.id == over))
+    ).first()
+
+
+async def test_email_goes_only_to_confirmed_addresses_and_stops_when_asked(
+    client, app, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
+):
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents import tools
+    from recruitai.modules.agents.recipients_router import get_sender
+
+    org = await org_of(client, ada)
+    mail = FakeEmailSender()
+    app.dependency_overrides[get_sender] = lambda: mail
+    from tests.e2e_radar_fakes import Provider
+
+    async def no_fetch(url: str) -> str:
+        raise AssertionError("an email flow reads no page")
+
+    kit = tools.ToolKit(fetch=no_fetch, jobs=Provider(), mail=mail)
+    from recruitai.modules.agents import flow_repository as repo
+
+    me = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]
+    i, send, o = input_node("to"), tool_node("send_email"), output_node("r")
+    flow = await make_flow(
+        client, ada, [i, send, o],
+        [
+            edge(i, send, {"to": "{{to}}", "subject": "Hello {{to}}", "body": "A note."}),
+            edge(send, o, {"r": "{{status}}"}),
+        ],
+    )  # fmt: skip
+
+    async def run(to: str) -> dict:
+        r = await client.post(
+            f"{BASE}/flows/{flow['id']}/runs", headers=ada, json={"inputs": {"to": to}}
+        )
+        await engine.execute(
+            db_session, fake_llm, org_id=org, run_id=UUID(r.json()["id"]), kit=kit
+        )
+        return (
+            await client.get(f"{BASE}/flow-runs/{r.json()['id']}", headers=ada)
+        ).json()
+
+    # nobody is an exception, not even your own address (an account can be opened with an address
+    # nobody verified): refused before anything is sent
+    assert (await run(me["email"]))["error_code"] == "recipient_not_allowed"
+    refused = await run("Friend@Example.com")
+    assert (
+        refused["status"] == "failed"
+        and refused["error_code"] == "recipient_not_allowed"
+    )
+    for bad in ("a@b.co\nBcc: x@y.co", "two@a.co, three@b.co", "not-an-address"):
+        assert (await run(bad))["error_code"] == "recipient_not_allowed"
+    assert mail.sent == []
+    # everyone together has a daily cap too: a flood of accounts cannot get past it
+    assert (
+        await repo.claim_effect(
+            db_session,
+            org_id=org,
+            user_id=UUID(me["id"]),
+            run_id=uuid4(),
+            node_id=uuid4(),
+            kind="send_email",
+            daily_cap=20,
+            global_cap=0,
+        )
+        == "capped"
+    )
+
+    # add it: only a confirmation link goes out, and a GET on the link changes nothing
+    added = await client.post(
+        f"{BASE}/email-recipients", headers=ada, json={"email": " Friend@Example.com "}
+    )
+    assert added.status_code == 201 and added.json()["status"] == "pending"
+    confirm = mail.sent[-1]
+    assert (
+        confirm.template == "recipient_confirm" and confirm.to == "friend@example.com"
+    )
+    link = confirm.context["link"].split("/api/public", 1)[1]
+    assert "button" in (await client.get("/api/public" + link)).text
+    assert (await run("friend@example.com"))["error_code"] == "recipient_not_allowed"
+    assert "Confirmed" in (await client.post("/api/public" + link)).text
+    assert (await client.post("/api/public" + link)).text.count(
+        "not valid"
+    ) == 1  # single use
+
+    # now it works, with the sender, an unsubscribe link and the one-click header target
+    # a link cannot carry markup into the page
+    page = await client.get(
+        "/api/public/email/confirm", params={"t": "'><script>x()</script>"}
+    )
+    assert "<script>" not in page.text
+
+    # a provider that refuses the mail gives the slot back, so a Resume still sends it later
+    async def down(*a, **k):
+        raise RuntimeError("provider down")
+
+    with monkeypatch.context() as m:
+        m.setattr(mail, "send", down)
+        failed = await run("friend@example.com")
+    assert failed["status"] == "failed" and failed["error_code"] == "tool_failed"
+    slot = {"org_id": org, "user_id": UUID(me["id"]), "run_id": UUID(failed["id"])}
+    assert (
+        await repo.claim_effect(
+            db_session,
+            node_id=UUID(send["id"]),
+            kind="send_email",
+            daily_cap=20,
+            **slot,
+        )
+        == "new"
+    )
+    await db_session.rollback()
+
+    assert (await run("friend@example.com"))["status"] == "done"
+    sent = mail.sent[-1]
+    # an unverified address is never shown to outsiders; a verified one is
+    assert sent.template == "flow_message"
+    assert sent.context["sender_email"] == "a RecruitAI user"
+    from sqlalchemy import text as sql
+
+    from recruitai.modules.agents import recipients
+
+    await db_session.execute(
+        sql("UPDATE users SET email_verified = true WHERE id = :u"), {"u": me["id"]}
+    )
+    assert (
+        await recipients.sender_label(db_session, UUID(me["id"]), "en") == me["email"]
+    )
+    unsub = sent.context["unsubscribe_url"].split("/api/public", 1)[1]
+    assert "Stop these emails" in (await client.get("/api/public" + unsub)).text
+
+    # the address asks to stop: blocked for everyone, gone from the list, cannot be added again
+    assert "Done" in (await client.post("/api/public" + unsub)).text
+    assert (await run("friend@example.com"))["error_code"] == "recipient_not_allowed"
+    listed = (await client.get(f"{BASE}/email-recipients", headers=ada)).json()
+    assert listed == []
+    sent_before = len(mail.sent)
+    again = await client.post(
+        f"{BASE}/email-recipients", headers=ada, json={"email": "friend@example.com"}
+    )
+    # same answer as for any address (no way to learn who opted out), but nothing is sent
+    assert again.status_code == 201 and len(mail.sent) == sent_before
+    token = again.json()["id"]
+    assert (await run("friend@example.com"))["error_code"] == "recipient_not_allowed"
+    assert token  # the row exists but can never be confirmed
+
+
+async def test_confirmation_mail_cannot_be_farmed_by_removing_and_adding_again(
+    client, app, ada, bob
+):
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents.recipients_router import get_sender
+
+    mail = FakeEmailSender()
+    app.dependency_overrides[get_sender] = lambda: mail
+    me = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]
+    for _ in range(
+        3
+    ):  # three mails to one address a day, however it is added and removed
+        added = await client.post(
+            f"{BASE}/email-recipients",
+            headers=ada,
+            json={"email": "victim@example.com"},
+        )
+        assert added.status_code == 201
+        await client.delete(
+            f"{BASE}/email-recipients/{added.json()['id']}", headers=ada
+        )
+    refused = await client.post(
+        f"{BASE}/email-recipients", headers=ada, json={"email": "victim@example.com"}
+    )
+    assert refused.status_code == 409 and len(mail.sent) == 3
+    # ...also from another account, and the mail names no unverified address as the sender
+    other = await client.post(
+        f"{BASE}/email-recipients", headers=bob, json={"email": "victim@example.com"}
+    )
+    assert other.status_code == 409
+    assert me["email"] not in mail.sent[0].context["sender_email"]
+    assert "block_url" in mail.sent[0].context  # the victim can block it for good

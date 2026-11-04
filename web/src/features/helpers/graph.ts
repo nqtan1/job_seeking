@@ -13,6 +13,44 @@ export type Issue = S['IssueOut']
 
 export type Specs = ReadonlyMap<string, VersionSpec> // agent_version_id -> spec
 
+/** What each action block takes and gives (backend graph.TOOLS; backend/tests/unit/test_limits_in_sync.py
+ *  fails if the names drift). Inputs are `[name, required]`. */
+export const TOOL_IO = {
+  web_search: { in: [['query', true]], out: ['text', 'sources'] },
+  job_search: {
+    in: [
+      ['query', true],
+      ['department', false],
+    ],
+    out: ['text', 'count'],
+  },
+  read_page: { in: [['url', true]], out: ['text'] },
+  job_lookup: { in: [['start', false]], out: ['title', 'company', 'place', 'description', 'url'] },
+  add_to_tracker: {
+    in: [
+      ['company', true],
+      ['title', false],
+      ['url', false],
+      ['notes', false],
+    ],
+    out: ['status'],
+  },
+  send_email: {
+    in: [
+      ['to', true],
+      ['subject', true],
+      ['body', true],
+    ],
+    out: ['status'],
+  },
+  wait: { in: [['value', true]], out: ['value'] },
+} as const satisfies Record<
+  string,
+  { in: readonly (readonly [string, boolean])[]; out: readonly string[] }
+>
+type ToolKind = keyof typeof TOOL_IO
+export const TOOL_KINDS = Object.keys(TOOL_IO) as ToolKind[]
+
 export function inputsOf(node: GraphNode, specs: Specs): { name: string; required: boolean }[] {
   switch (node.type) {
     case 'output':
@@ -26,6 +64,8 @@ export function inputsOf(node: GraphNode, specs: Specs): { name: string; require
       return [{ name: 'value', required: true }]
     case 'transform':
       return [{ name: 'text', required: true }]
+    case 'tool':
+      return TOOL_IO[node.tool].in.map(([name, required]) => ({ name, required }))
     default:
       return []
   }
@@ -44,6 +84,8 @@ export function outputsOf(node: GraphNode, specs: Specs): string[] {
       return ['value']
     case 'transform':
       return ['text']
+    case 'tool':
+      return [...TOOL_IO[node.tool].out]
     default:
       return []
   }
@@ -171,7 +213,9 @@ export const setMap = (g: Graph, id: string, map: MapEntry[]): Graph => ({
   edges: g.edges.map((e) => (e.id === id ? { ...e, map } : e)),
 })
 
-export const aiCalls = (g: Graph) => g.nodes.filter((n) => n.type === 'agent').length
+/** Model calls a run can make: one per helper and one per web search (backend flows.ai_calls). */
+export const aiCalls = (g: Graph) =>
+  g.nodes.filter((n) => n.type === 'agent' || (n.type === 'tool' && n.tool === 'web_search')).length
 
 /** Copy steps with fresh ids and the connections between them remapped (paste / duplicate). */
 export function cloneNodes(g: Graph, ids: string[], dx = 40, dy = 40): Graph {

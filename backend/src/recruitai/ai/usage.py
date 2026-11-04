@@ -31,8 +31,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from recruitai.ai.gateway import QuotaExceeded
+from recruitai.config import get_settings
 from recruitai.core.db import Base
 from recruitai.core.ids import new_id
+
+NO_LIMIT = 1_000_000  # the "quota" of a follow-up call: counted, never refused
 
 
 class AiCall(Base):
@@ -44,6 +47,8 @@ class AiCall(Base):
         Index("ix_ai_calls_org_id_created_at", "org_id", "created_at"),
         # The daily quota counts a user's calls since midnight on EVERY model call.
         Index("ix_ai_calls_user_id_created_at", "user_id", "created_at"),
+        # The global daily cap counts every call since midnight.
+        Index("ix_ai_calls_created_at", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
@@ -70,18 +75,17 @@ class AiCall(Base):
     )
 
 
-async def count_calls_today(session: AsyncSession, *, user_id: uuid.UUID) -> int:
-    """Used for the daily per-user quota. "Today" is UTC midnight, matching
-    ``created_at``'s timezone."""
+async def count_calls_today(
+    session: AsyncSession, *, user_id: uuid.UUID | None = None
+) -> int:
+    """Used for the daily quotas: one user's, or (no ``user_id``) everyone's. "Today" is UTC
+    midnight, matching ``created_at``'s timezone."""
     today = datetime.now(UTC).date()
     today_start = datetime.combine(today, datetime.min.time(), tzinfo=UTC)
-    return (
-        await session.execute(
-            select(func.count(AiCall.id)).where(
-                AiCall.user_id == user_id, AiCall.created_at >= today_start
-            )
-        )
-    ).scalar_one()
+    query = select(func.count(AiCall.id)).where(AiCall.created_at >= today_start)
+    if user_id is not None:
+        query = query.where(AiCall.user_id == user_id)
+    return (await session.execute(query)).scalar_one()
 
 
 async def reserve_call(
@@ -104,7 +108,10 @@ async def reserve_call(
     await session.execute(
         select(func.pg_advisory_xact_lock(func.hashtextextended(str(user_id), 0)))
     )
-    if await count_calls_today(session, user_id=user_id) >= quota:
+    if (
+        quota < NO_LIMIT  # a follow-up of a turn already started is never cut in half
+        and await count_calls_today(session) >= get_settings().ai_daily_quota_global
+    ) or await count_calls_today(session, user_id=user_id) >= quota:
         await session.rollback()
         raise QuotaExceeded()
     call = AiCall(

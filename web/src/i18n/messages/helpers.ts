@@ -3,10 +3,30 @@ import { defineMessages } from '../define'
 export const helpers = defineMessages({
   en: {
     'helpers.title': 'Helpers',
-    'helpers.subtitle':
-      'Build your own AI helpers and chain them into automations. You always decide what happens next.',
-    'helpers.tab.helpers': 'My helpers',
+    'helpers.subtitle': 'Build your own AI helpers: give each one a job and try it on real text.',
+    'helpers.auto.title': 'Automations',
+    'helpers.auto.subtitle':
+      'Chain your helpers into an automation, run it and watch it work. You always decide what happens next.',
+    'helpers.auto.hero_title': 'Chain helpers into automations',
+    'helpers.auto.hero_body':
+      'The answer of one helper goes to the next. Run it yourself or let it run on a schedule.',
     'helpers.tab.flows': 'Automations',
+    'helpers.tab.contacts': 'Contacts',
+    'helpers.contacts.intro':
+      'Your automations can email anyone you add who says yes, yourself included: add your own address too. Nobody is emailed without their OK: we first send them a link to confirm, and every message has an unsubscribe link.',
+    'helpers.contacts.pending': 'Waiting for their OK',
+    'helpers.contacts.confirmed': 'Confirmed',
+    'helpers.contacts.remove': 'Remove',
+    'helpers.contacts.remove_for': 'Remove {email}',
+    'helpers.contacts.remove_confirm': 'Yes, remove',
+    'helpers.contacts.remove_confirm_for': 'Yes, remove {email}',
+    'helpers.contacts.empty':
+      'You have not added anyone yet. Your automations can still email you.',
+    'helpers.contacts.add': 'Add a contact',
+    'helpers.contacts.placeholder': 'name@example.com',
+    'helpers.contacts.add_button': 'Add',
+    'helpers.contacts.sent':
+      'We sent {email} a confirmation link. They will be able to receive emails once they click it.',
     'helpers.back': 'Back to helpers',
     'helpers.mine': 'Your helpers',
     'helpers.new': 'New helper',
@@ -119,6 +139,50 @@ export const helpers = defineMessages({
     'helpers.minimap': 'Overview map',
     'helpers.steps': 'Steps of the flow',
     'helpers.add_helper': 'Add a helper…',
+    'helpers.add_action': 'Add an action…',
+    'helpers.node.tool': 'Action',
+    'helpers.tool.web_search.name': 'Search the web',
+    'helpers.tool.web_search.short': 'Google search',
+    'helpers.tool.web_search.about':
+      'Looks the question up on the web and gives back a short answer with its sources. Uses 1 AI use.',
+    'helpers.tool.send_email.name': 'Send an email',
+    'helpers.tool.send_email.short': 'Email',
+    'helpers.tool.send_email.about':
+      'Sends an email. It goes only to contacts who confirmed (add your own address too to get mail yourself), and always has an unsubscribe link.',
+    'helpers.tool.wait.name': 'Wait',
+    'helpers.tool.wait.short': 'Pause',
+    'helpers.tool.wait.about':
+      'Pauses the automation without using anything, then continues later.',
+    'helpers.wait.minutes': 'Wait for (minutes)',
+    'helpers.wait.hint': '= {time}',
+    'helpers.rerr.recipient_not_allowed':
+      'That address is not one you may email. Add it in Contacts and ask its owner to confirm.',
+    'helpers.rerr.email_empty': 'The email needs a subject and some text.',
+    'helpers.rerr.too_many_waiting': 'Too many automations are waiting. Let one finish first.',
+    'helpers.rerr.wake_lost': 'A waiting automation could not wake up. You can resume it.',
+    'helpers.run.status.waiting': 'On hold',
+    'helpers.run.waiting_until': 'Waiting until {time}',
+    'helpers.step.waiting': 'Waiting',
+    'helpers.tool.job_search.name': 'Search jobs',
+    'helpers.tool.job_search.short': 'Job offers',
+    'helpers.tool.job_search.about':
+      'Looks for job offers on the job board and gives back the first five.',
+    'helpers.tool.read_page.name': 'Read a web page',
+    'helpers.tool.read_page.short': 'Reads a page',
+    'helpers.tool.read_page.about': 'Opens a public web page (https only) and gives back its text.',
+    'helpers.tool.job_lookup.name': 'My job',
+    'helpers.tool.job_lookup.short': 'Your saved job',
+    'helpers.tool.job_lookup.about':
+      'Gives back the job you pick when you run the automation: title, company, place, description and link.',
+    'helpers.tool.add_to_tracker.name': 'Add to tracker',
+    'helpers.tool.add_to_tracker.short': 'Tracker card',
+    'helpers.tool.add_to_tracker.about':
+      'Adds a card to your tracker. A step that already added its card is never repeated.',
+    'helpers.rerr.tool_failed': 'An action step could not finish. Try again later.',
+    'helpers.rerr.url_not_allowed': 'This web address cannot be opened. Use a public https page.',
+    'helpers.rerr.no_job': 'This automation needs a job: pick one when you run it.',
+    'helpers.rerr.search_unavailable': 'Web search is not available right now.',
+    'helpers.rerr.daily_limit': 'You reached today’s limit for this action. Try again tomorrow.',
     'helpers.node.input': 'Start',
     'helpers.node.output': 'Result',
     'helpers.node.agent': 'Helper',
@@ -213,7 +277,8 @@ export const helpers = defineMessages({
     'helpers.run.resume': 'Resume from the failed step',
     'helpers.run.no_result':
       'The flow ended without a result: a condition sent it down a path that leads nowhere.',
-    'helpers.back_flows': 'Back to flows',
+    'helpers.back_flows': 'Back to automations',
+    'helpers.auto.sections': 'Automation sections',
     'helpers.st.followup.input': 'Company, role, when I applied',
     'helpers.st.reply.input': 'The recruiter’s message',
     'helpers.blank.input': 'Notes',
@@ -259,7 +324,7 @@ export const helpers = defineMessages({
     'helpers.ui.updated': 'Updated {when}',
     'helpers.ui.hero_title': 'Small AI helpers that do one thing well',
     'helpers.ui.hero_body':
-      'Give a helper a job, try it on real text, then chain several into an automation.',
+      'Give a helper a job and try it on real text. Then use it in an automation.',
     'helpers.ui.templates_hint': 'Ready-made helpers. Use one as it is, or change anything.',
     'helpers.ui.reads': 'Reads',
     'helpers.ui.gives': 'Gives back',
@@ -391,9 +456,30 @@ export const helpers = defineMessages({
   fr: {
     'helpers.title': 'Assistants',
     'helpers.subtitle':
-      'Créez vos propres assistants IA et enchaînez-les en automatisations. Vous décidez toujours de la suite.',
-    'helpers.tab.helpers': 'Mes assistants',
+      'Créez vos propres assistants IA : confiez une mission à chacun et testez-le sur un vrai texte.',
+    'helpers.auto.title': 'Automatisations',
+    'helpers.auto.subtitle':
+      'Enchaînez vos assistants en automatisation, lancez-la et regardez-la travailler. Vous décidez toujours de la suite.',
+    'helpers.auto.hero_title': 'Enchaînez vos assistants en automatisations',
+    'helpers.auto.hero_body':
+      'La réponse d’un assistant passe au suivant. Lancez-la vous-même ou laissez-la tourner selon un horaire.',
     'helpers.tab.flows': 'Automatisations',
+    'helpers.tab.contacts': 'Contacts',
+    'helpers.contacts.intro':
+      'Vos automatisations peuvent écrire aux personnes que vous ajoutez et qui acceptent, vous compris : ajoutez aussi votre propre adresse. Personne ne reçoit d’e-mail sans son accord : nous lui envoyons d’abord un lien de confirmation, et chaque message contient un lien de désinscription.',
+    'helpers.contacts.pending': 'En attente de son accord',
+    'helpers.contacts.confirmed': 'Confirmé',
+    'helpers.contacts.remove': 'Retirer',
+    'helpers.contacts.remove_for': 'Retirer {email}',
+    'helpers.contacts.remove_confirm': 'Oui, retirer',
+    'helpers.contacts.remove_confirm_for': 'Oui, retirer {email}',
+    'helpers.contacts.empty':
+      'Vous n’avez encore ajouté personne. Vos automatisations peuvent toujours vous écrire.',
+    'helpers.contacts.add': 'Ajouter un contact',
+    'helpers.contacts.placeholder': 'nom@exemple.com',
+    'helpers.contacts.add_button': 'Ajouter',
+    'helpers.contacts.sent':
+      'Nous avons envoyé un lien de confirmation à {email}. Cette personne pourra recevoir des e-mails après avoir cliqué dessus.',
     'helpers.back': 'Retour aux assistants',
     'helpers.mine': 'Vos assistants',
     'helpers.new': 'Nouvel assistant',
@@ -508,6 +594,56 @@ export const helpers = defineMessages({
     'helpers.minimap': 'Carte d’ensemble',
     'helpers.steps': 'Étapes du flux',
     'helpers.add_helper': 'Ajouter un assistant…',
+    'helpers.add_action': 'Ajouter une action…',
+    'helpers.node.tool': 'Action',
+    'helpers.tool.web_search.name': 'Rechercher sur le web',
+    'helpers.tool.web_search.short': 'Recherche Google',
+    'helpers.tool.web_search.about':
+      'Cherche la question sur le web et renvoie une courte réponse avec ses sources. Utilise 1 usage d’IA.',
+    'helpers.tool.send_email.name': 'Envoyer un e-mail',
+    'helpers.tool.send_email.short': 'E-mail',
+    'helpers.tool.send_email.about':
+      'Envoie un e-mail. Il part uniquement vers des contacts qui ont confirmé (ajoutez aussi votre adresse pour en recevoir), et contient toujours un lien de désinscription.',
+    'helpers.tool.wait.name': 'Attendre',
+    'helpers.tool.wait.short': 'Pause',
+    'helpers.tool.wait.about':
+      'Met l’automatisation en pause sans rien consommer, puis la reprend plus tard.',
+    'helpers.wait.minutes': 'Attendre (minutes)',
+    'helpers.wait.hint': '= {time}',
+    'helpers.rerr.recipient_not_allowed':
+      'Vous ne pouvez pas écrire à cette adresse. Ajoutez-la dans Contacts et demandez à son propriétaire de confirmer.',
+    'helpers.rerr.email_empty': 'L’e-mail a besoin d’un objet et d’un texte.',
+    'helpers.rerr.too_many_waiting':
+      'Trop d’automatisations sont en attente. Laissez-en finir une d’abord.',
+    'helpers.rerr.wake_lost':
+      'Une automatisation en attente n’a pas pu se réveiller. Vous pouvez la reprendre.',
+    'helpers.run.status.waiting': 'En pause',
+    'helpers.run.waiting_until': 'En attente jusqu’au {time}',
+    'helpers.step.waiting': 'En attente',
+    'helpers.tool.job_search.name': 'Chercher des offres',
+    'helpers.tool.job_search.short': 'Offres d’emploi',
+    'helpers.tool.job_search.about':
+      'Cherche des offres sur le site d’emploi et renvoie les cinq premières.',
+    'helpers.tool.read_page.name': 'Lire une page web',
+    'helpers.tool.read_page.short': 'Lit une page',
+    'helpers.tool.read_page.about':
+      'Ouvre une page web publique (https uniquement) et renvoie son texte.',
+    'helpers.tool.job_lookup.name': 'Mon offre',
+    'helpers.tool.job_lookup.short': 'Votre offre enregistrée',
+    'helpers.tool.job_lookup.about':
+      'Renvoie l’offre choisie au lancement de l’automatisation : titre, entreprise, lieu, description et lien.',
+    'helpers.tool.add_to_tracker.name': 'Ajouter au suivi',
+    'helpers.tool.add_to_tracker.short': 'Carte de suivi',
+    'helpers.tool.add_to_tracker.about':
+      'Ajoute une carte à votre suivi. Une étape qui a déjà ajouté sa carte ne la répète jamais.',
+    'helpers.rerr.tool_failed': 'Une étape d’action n’a pas pu se terminer. Réessayez plus tard.',
+    'helpers.rerr.url_not_allowed':
+      'Cette adresse ne peut pas être ouverte. Utilisez une page publique en https.',
+    'helpers.rerr.no_job':
+      'Cette automatisation a besoin d’une offre : choisissez-en une au lancement.',
+    'helpers.rerr.search_unavailable': 'La recherche web n’est pas disponible pour le moment.',
+    'helpers.rerr.daily_limit':
+      'Vous avez atteint la limite du jour pour cette action. Réessayez demain.',
     'helpers.node.input': 'Départ',
     'helpers.node.output': 'Résultat',
     'helpers.node.agent': 'Assistant',
@@ -605,7 +741,8 @@ export const helpers = defineMessages({
     'helpers.run.resume': 'Reprendre à l’étape en échec',
     'helpers.run.no_result':
       'Le flux s’est terminé sans résultat : une condition l’a dirigé vers un chemin qui ne mène nulle part.',
-    'helpers.back_flows': 'Retour aux flux',
+    'helpers.back_flows': 'Retour aux automatisations',
+    'helpers.auto.sections': 'Sections des automatisations',
     'helpers.st.followup.input': 'Entreprise, poste, date de candidature',
     'helpers.st.reply.input': 'Le message du recruteur',
     'helpers.blank.input': 'Notes',
@@ -656,7 +793,7 @@ export const helpers = defineMessages({
     'helpers.ui.updated': 'Modifié {when}',
     'helpers.ui.hero_title': 'De petits assistants IA qui font une chose, et la font bien',
     'helpers.ui.hero_body':
-      'Confiez une mission à un assistant, testez-le sur un vrai texte, puis enchaînez-en plusieurs dans une automatisation.',
+      'Confiez une mission à un assistant et testez-le sur un vrai texte. Utilisez-le ensuite dans une automatisation.',
     'helpers.ui.templates_hint':
       'Des assistants prêts à l’emploi. Utilisez-les tels quels ou modifiez tout.',
     'helpers.ui.reads': 'Lit',
@@ -798,9 +935,29 @@ export const helpers = defineMessages({
   vi: {
     'helpers.title': 'Trợ lý',
     'helpers.subtitle':
-      'Tạo trợ lý AI của riêng bạn và nối chúng thành tự động hóa. Bạn luôn là người quyết định bước tiếp theo.',
-    'helpers.tab.helpers': 'Trợ lý của tôi',
+      'Tạo trợ lý AI của riêng bạn: giao việc cho từng trợ lý và thử trên văn bản thật.',
+    'helpers.auto.title': 'Tự động hóa',
+    'helpers.auto.subtitle':
+      'Nối các trợ lý thành một tự động hóa, chạy và xem nó làm việc. Bạn luôn là người quyết định bước tiếp theo.',
+    'helpers.auto.hero_title': 'Nối các trợ lý thành tự động hóa',
+    'helpers.auto.hero_body':
+      'Câu trả lời của trợ lý này chuyển sang trợ lý kế tiếp. Tự chạy hoặc đặt lịch cho nó chạy.',
     'helpers.tab.flows': 'Tự động hóa',
+    'helpers.tab.contacts': 'Liên hệ',
+    'helpers.contacts.intro':
+      'Tự động hóa của bạn có thể gửi email cho những người bạn thêm vào mà đồng ý, kể cả chính bạn: hãy thêm cả địa chỉ của bạn. Không ai nhận email nếu chưa đồng ý: trước tiên chúng tôi gửi cho họ một liên kết xác nhận, và mỗi email đều có liên kết hủy đăng ký.',
+    'helpers.contacts.pending': 'Đang chờ họ đồng ý',
+    'helpers.contacts.confirmed': 'Đã xác nhận',
+    'helpers.contacts.remove': 'Xóa',
+    'helpers.contacts.remove_for': 'Xóa {email}',
+    'helpers.contacts.remove_confirm': 'Đồng ý, xóa',
+    'helpers.contacts.remove_confirm_for': 'Đồng ý, xóa {email}',
+    'helpers.contacts.empty': 'Bạn chưa thêm ai. Tự động hóa vẫn có thể gửi email cho bạn.',
+    'helpers.contacts.add': 'Thêm người liên hệ',
+    'helpers.contacts.placeholder': 'ten@vidu.com',
+    'helpers.contacts.add_button': 'Thêm',
+    'helpers.contacts.sent':
+      'Chúng tôi đã gửi liên kết xác nhận tới {email}. Họ sẽ nhận được email sau khi bấm vào liên kết đó.',
     'helpers.back': 'Quay lại trợ lý',
     'helpers.mine': 'Trợ lý của bạn',
     'helpers.new': 'Trợ lý mới',
@@ -914,6 +1071,52 @@ export const helpers = defineMessages({
     'helpers.minimap': 'Bản đồ tổng quan',
     'helpers.steps': 'Các bước của luồng',
     'helpers.add_helper': 'Thêm trợ lý…',
+    'helpers.add_action': 'Thêm một hành động…',
+    'helpers.node.tool': 'Hành động',
+    'helpers.tool.web_search.name': 'Tìm trên web',
+    'helpers.tool.web_search.short': 'Tìm trên Google',
+    'helpers.tool.web_search.about':
+      'Tra cứu câu hỏi trên web và trả về câu trả lời ngắn kèm nguồn. Dùng 1 lượt AI.',
+    'helpers.tool.send_email.name': 'Gửi email',
+    'helpers.tool.send_email.short': 'Email',
+    'helpers.tool.send_email.about':
+      'Gửi một email. Email chỉ đến những liên hệ đã xác nhận (hãy thêm cả địa chỉ của bạn để tự nhận), và luôn có liên kết hủy đăng ký.',
+    'helpers.tool.wait.name': 'Chờ',
+    'helpers.tool.wait.short': 'Tạm dừng',
+    'helpers.tool.wait.about': 'Tạm dừng tự động hóa mà không tốn gì, rồi tiếp tục sau.',
+    'helpers.wait.minutes': 'Chờ trong (phút)',
+    'helpers.wait.hint': '= {time}',
+    'helpers.rerr.recipient_not_allowed':
+      'Bạn không thể gửi email đến địa chỉ này. Hãy thêm vào Liên hệ và nhờ chủ địa chỉ xác nhận.',
+    'helpers.rerr.email_empty': 'Email cần có tiêu đề và nội dung.',
+    'helpers.rerr.too_many_waiting': 'Quá nhiều tự động hóa đang chờ. Hãy để một cái xong trước.',
+    'helpers.rerr.wake_lost':
+      'Một tự động hóa đang chờ không thể thức dậy. Bạn có thể tiếp tục nó.',
+    'helpers.run.status.waiting': 'Tạm hoãn',
+    'helpers.run.waiting_until': 'Đang chờ đến {time}',
+    'helpers.step.waiting': 'Đang chờ',
+    'helpers.tool.job_search.name': 'Tìm việc làm',
+    'helpers.tool.job_search.short': 'Tin tuyển dụng',
+    'helpers.tool.job_search.about':
+      'Tìm tin tuyển dụng trên trang việc làm và trả về năm tin đầu.',
+    'helpers.tool.read_page.name': 'Đọc một trang web',
+    'helpers.tool.read_page.short': 'Đọc trang',
+    'helpers.tool.read_page.about':
+      'Mở một trang web công khai (chỉ https) và trả về nội dung chữ.',
+    'helpers.tool.job_lookup.name': 'Việc của tôi',
+    'helpers.tool.job_lookup.short': 'Việc đã lưu',
+    'helpers.tool.job_lookup.about':
+      'Trả về việc bạn chọn khi chạy tự động hóa: chức danh, công ty, nơi làm, mô tả và liên kết.',
+    'helpers.tool.add_to_tracker.name': 'Thêm vào bảng theo dõi',
+    'helpers.tool.add_to_tracker.short': 'Thẻ theo dõi',
+    'helpers.tool.add_to_tracker.about':
+      'Thêm một thẻ vào bảng theo dõi của bạn. Bước đã thêm thẻ sẽ không bao giờ thêm lại.',
+    'helpers.rerr.tool_failed': 'Một bước hành động không thể hoàn tất. Hãy thử lại sau.',
+    'helpers.rerr.url_not_allowed': 'Không thể mở địa chỉ này. Hãy dùng trang công khai https.',
+    'helpers.rerr.no_job': 'Tự động hóa này cần một việc làm: hãy chọn khi chạy.',
+    'helpers.rerr.search_unavailable': 'Tìm kiếm trên web hiện không khả dụng.',
+    'helpers.rerr.daily_limit':
+      'Bạn đã đạt giới hạn hôm nay cho hành động này. Hãy thử lại vào ngày mai.',
     'helpers.node.input': 'Bắt đầu',
     'helpers.node.output': 'Kết quả',
     'helpers.node.agent': 'Trợ lý',
@@ -1008,7 +1211,8 @@ export const helpers = defineMessages({
     'helpers.run.resume': 'Tiếp tục từ bước bị lỗi',
     'helpers.run.no_result':
       'Luồng kết thúc mà không có kết quả: một điều kiện đã đưa nó vào nhánh không dẫn tới đâu.',
-    'helpers.back_flows': 'Quay lại luồng',
+    'helpers.back_flows': 'Quay lại tự động hóa',
+    'helpers.auto.sections': 'Các mục tự động hóa',
     'helpers.st.followup.input': 'Công ty, vị trí, ngày nộp hồ sơ',
     'helpers.st.reply.input': 'Tin nhắn của nhà tuyển dụng',
     'helpers.blank.input': 'Ghi chú',
@@ -1057,7 +1261,7 @@ export const helpers = defineMessages({
     'helpers.ui.updated': 'Cập nhật {when}',
     'helpers.ui.hero_title': 'Những trợ lý AI nhỏ, làm tốt một việc',
     'helpers.ui.hero_body':
-      'Giao việc cho trợ lý, thử trên văn bản thật, rồi nối nhiều trợ lý thành một tự động hóa.',
+      'Giao việc cho trợ lý và thử trên văn bản thật. Sau đó dùng nó trong một tự động hóa.',
     'helpers.ui.templates_hint': 'Trợ lý làm sẵn. Dùng ngay hoặc chỉnh sửa tuỳ ý.',
     'helpers.ui.reads': 'Đọc',
     'helpers.ui.gives': 'Trả về',

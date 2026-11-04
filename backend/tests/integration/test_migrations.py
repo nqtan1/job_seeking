@@ -57,6 +57,7 @@ def test_identity_tables_columns_constraints_and_indexes(scratch_migration_db):
             "created_at",
             "email_reminders",
             "language",
+            "email_verified",
         }
         assert required(mem) == {"id", "org_id", "user_id", "role", "created_at"}
         assert (
@@ -187,6 +188,10 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "flow_run_steps",
         "flow_runs",
         "flow_schedules",
+        "flow_effects",
+        "email_recipients",
+        "email_suppressions",
+        "email_invites",
         "flow_versions",
         "flows",
         "job_postings",

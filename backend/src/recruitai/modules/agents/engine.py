@@ -8,6 +8,7 @@ keyed by node id, so the same helper used twice is two independent steps."""
 
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any, NoReturn
 from uuid import UUID
 
@@ -17,18 +18,83 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recruitai.ai.gateway import LLMGateway
 from recruitai.ai.prompts import helper
 from recruitai.core.errors import AppError
+from recruitai.core.tasks import enqueue
 from recruitai.modules.agents import flow_repository as flows
 from recruitai.modules.agents import graph as g
-from recruitai.modules.agents import repository, runner, service
+from recruitai.modules.agents import repository, runner, service, tools
 from recruitai.modules.agents.models import FlowRun, FlowRunStep
 
 logger = logging.getLogger(__name__)
 
 RUN_TIMEOUT_S = 300.0
+RUN_TASK = "agents:run_flow"  # registered by the worker (worker.py, namespace "agents")
 
 
 class _Stop(Exception):
-    """The run ended (failed or cancelled) inside a step: unwinds to ``execute``."""
+    """The run ended (failed or cancelled) or parked on a wait step: unwinds to ``execute``."""
+
+
+async def enqueue_run(
+    db: AsyncSession,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    run_id: UUID,
+    schedule_at: datetime | None = None,
+) -> None:
+    await enqueue(
+        db,
+        task=RUN_TASK,
+        org_id=org_id,
+        kind="agents.run_flow",
+        task_kwargs={
+            "org_id": str(org_id),
+            "user_id": str(user_id),
+            "run_id": str(run_id),
+        },
+        schedule_at=schedule_at,
+    )
+
+
+async def _park(
+    db: AsyncSession, run: FlowRun, step: FlowRunStep, node: g.ToolNode, value: str
+) -> NoReturn:
+    """Sleep without a worker or a transaction: the step and the run say "waiting until", and a
+    job scheduled for that moment wakes the run (all in one commit)."""
+    org_id, run_id, user_id = run.org_id, run.id, run.user_id
+    if user_id is None:
+        await _fail(db, run, step, "tool_failed")
+    await flows.lock_org_runs(db, org_id=org_id)
+    if (
+        await flows.count_waiting_runs(db, org_id=org_id)
+        >= flows.MAX_WAITING_RUNS_PER_ORG
+    ):
+        await _fail(db, run, step, "too_many_waiting")
+    assert node.minutes is not None  # validated with the node
+    wake_at = datetime.now(UTC) + timedelta(minutes=node.minutes)
+    await flows.set_step(
+        db,
+        org_id=org_id,
+        step_id=step.id,
+        status="waiting",
+        output={"value": value, "wake_at": wake_at.isoformat()},
+        started_at=func.now(),
+    )
+    if not await flows.set_run(
+        db,
+        org_id=org_id,
+        run_id=run_id,
+        only_if=("running",),
+        status="waiting",
+        wake_at=wake_at,
+    ):
+        await db.rollback()  # a cancel landed first: leave no waiting step behind
+        raise _Stop
+    await enqueue_run(
+        db, org_id=org_id, user_id=user_id, run_id=run_id, schedule_at=wake_at
+    )
+    await db.commit()
+    raise _Stop
 
 
 async def load_agents(
@@ -43,7 +109,12 @@ async def load_agents(
 
 
 async def execute(
-    db: AsyncSession, llm: LLMGateway, *, org_id: UUID, run_id: UUID
+    db: AsyncSession,
+    llm: LLMGateway,
+    *,
+    org_id: UUID,
+    run_id: UUID,
+    kit: tools.ToolKit | None = None,
 ) -> None:
     if not await flows.claim_run(db, org_id=org_id, run_id=run_id):
         await db.rollback()
@@ -51,7 +122,9 @@ async def execute(
     await db.commit()
     began = time.monotonic()
     try:
-        result = await _advance(db, llm, org_id=org_id, run_id=run_id)
+        result = await _advance(
+            db, llm, kit or tools.default_kit(), org_id=org_id, run_id=run_id
+        )
     except _Stop:
         _log_end(run_id, began)
         return
@@ -116,7 +189,12 @@ async def _fail(
 
 
 async def _advance(
-    db: AsyncSession, llm: LLMGateway, *, org_id: UUID, run_id: UUID
+    db: AsyncSession,
+    llm: LLMGateway,
+    kit: tools.ToolKit,
+    *,
+    org_id: UUID,
+    run_id: UUID,
 ) -> dict[str, Any]:
     run = await flows.get_run(db, org_id=org_id, run_id=run_id)
     assert run is not None  # claimed a moment ago
@@ -151,6 +229,15 @@ async def _advance(
                 result = outputs[nid]
             continue
         if status[nid] == "skipped":
+            continue
+        if status[nid] == "waiting":  # the run was woken: this wait is over
+            output = {"value": (step.output or {}).get("value", "")}
+            await flows.set_step(
+                db, org_id=org_id, step_id=step.id, only_if=("waiting",),
+                status="done", output=output, finished_at=func.now(),
+            )  # fmt: skip
+            await db.commit()
+            status[nid], outputs[nid] = "done", output
             continue
         await db.refresh(run)  # a cancel may have landed since the last step
         if run.status != "running":
@@ -198,12 +285,15 @@ async def _advance(
             await db.commit()
             continue
 
+        if isinstance(node, g.ToolNode) and node.tool == "wait":
+            await _park(db, run, step, node, values.get("value", ""))
+
         if not await flows.claim_step(db, org_id=org_id, step_id=step.id):
             raise _Stop  # another worker holds it
         await db.commit()
 
         output, model, latency = await _run_node(
-            db, llm, run, step, node, agents, values
+            db, llm, kit, run, step, node, agents, values
         )
         if not await flows.set_step(
             db,
@@ -242,6 +332,7 @@ def _is_active(
 async def _run_node(
     db: AsyncSession,
     llm: LLMGateway,
+    kit: tools.ToolKit,
     run: FlowRun,
     step: FlowRunStep,
     node: Any,
@@ -267,7 +358,55 @@ async def _run_node(
             return {"value": values.get("value", ""), "branch": holds}, None, None
         case g.AgentNode():
             return await _run_agent(db, llm, run, step, node, agents, values)
+        case g.ToolNode():
+            return await _run_tool(db, llm, kit, run, step, node, values)
     await _fail(db, run, step, "unknown_node")
+
+
+async def _run_tool(
+    db: AsyncSession,
+    llm: LLMGateway,
+    kit: tools.ToolKit,
+    run: FlowRun,
+    step: FlowRunStep,
+    node: g.ToolNode,
+    values: dict[str, str],
+) -> tuple[dict[str, Any], str | None, int | None]:
+    began = time.monotonic()
+    try:
+        caps = tools.EFFECT_CAPS.get(node.tool)
+        if (
+            caps is not None
+        ):  # an outside effect: at most once per step, and capped per day
+            if run.user_id is None:
+                await _fail(db, run, step, "tool_failed")
+            verdict = await flows.claim_effect(
+                db,
+                org_id=run.org_id,
+                user_id=run.user_id,
+                run_id=run.id,
+                node_id=step.node_id,
+                kind=node.tool,
+                daily_cap=caps.user,
+                global_cap=caps.everyone,
+                once=caps.once,
+            )
+            if verdict == "capped":
+                await _fail(db, run, step, "daily_limit")
+            if (
+                verdict == "done"
+            ):  # a resumed step: it already happened, do not repeat it
+                await db.rollback()
+                return {"status": "already done"}, None, 0
+        output = await tools.run_tool(db, llm, kit, run, node, values)
+    except _Stop:
+        raise
+    except AppError as exc:
+        await _fail(db, run, step, exc.code)
+    except Exception as exc:  # noqa: BLE001  (a safe code, never exception text)
+        logger.error("tool step failed", extra={"error_type": type(exc).__name__})
+        await _fail(db, run, step, "tool_failed")
+    return output, None, int((time.monotonic() - began) * 1000)
 
 
 async def _run_agent(

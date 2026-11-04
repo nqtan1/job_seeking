@@ -231,7 +231,8 @@ export const useStartRun = () =>
   )
 
 /** A run that has not ended yet (the pages keep following it). */
-export const isLive = (status: RunSummary['status']) => status === 'queued' || status === 'running'
+export const isLive = (status: RunSummary['status']) =>
+  status === 'queued' || status === 'running' || status === 'waiting'
 
 /** The run page follows a live run, then stops. */
 export const useRun = (id: string | undefined) =>
@@ -243,7 +244,8 @@ export const useRun = (id: string | undefined) =>
     // While a run is live, look every 1.5 s; once it has ended, stop.
     refetchInterval: (q) => {
       const status = q.state.data?.status
-      return status && isLive(status) ? 1_500 : false
+      if (!status || !isLive(status)) return false
+      return status === 'waiting' ? 30_000 : 1_500
     },
   })
 
@@ -389,4 +391,34 @@ export const useDeleteSchedule = () =>
         }),
       ),
     [SCHEDULES],
+  )
+
+// ---- contacts: who an automation may email ----
+
+export type Contact = components['schemas']['RecipientOut']
+
+const CONTACTS = ['email-recipients']
+
+export const useContacts = () =>
+  useQuery({
+    queryKey: CONTACTS,
+    queryFn: async () => unwrap(await api.GET('/api/v1/email-recipients')),
+  })
+
+export const useAddContact = () =>
+  useInvalidating(
+    async (email: string) =>
+      unwrap(await api.POST('/api/v1/email-recipients', { body: { email } })),
+    [CONTACTS],
+  )
+
+export const useRemoveContact = () =>
+  useInvalidating(
+    async (id: string) =>
+      unwrap(
+        await api.DELETE('/api/v1/email-recipients/{recipient_id}', {
+          params: { path: { recipient_id: id } },
+        }),
+      ),
+    [CONTACTS],
   )

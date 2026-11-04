@@ -46,6 +46,10 @@ export function relTime(iso: string, locale: string, now = Date.now()): string {
   return rtf.format(0, 'second')
 }
 
+/** A date and time in the interface language ("" when unknown). */
+export const when = (iso: string | null, locale: string) =>
+  iso ? new Date(iso).toLocaleString(locale) : ''
+
 /** "1.2 s" under a minute, "2 min 5 s" beyond; "< 0.1 s" instead of a misleading "0.0 s". */
 export function seconds(ms: number): string {
   if (ms < 100) return '< 0.1 s'

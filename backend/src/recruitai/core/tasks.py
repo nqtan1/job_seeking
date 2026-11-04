@@ -96,6 +96,8 @@ async def enqueue(
     org_id: uuid.UUID,
     kind: str,
     task_kwargs: dict[str, Any] | None = None,
+    schedule_at: datetime
+    | None = None,  # not before this moment (a timer, no worker held)
 ) -> uuid.UUID:
     """The only correct way to enqueue a task. Writes the ``task_runs`` row and defers the
     job on the same raw connection as the caller's session — both commit or roll back
@@ -107,10 +109,13 @@ async def enqueue(
 
     conn = await session.connection()
     raw = (await conn.get_raw_connection()).driver_connection
+    options: dict[str, Any] = {"connection": raw}
+    if schedule_at is not None:
+        options["schedule_at"] = schedule_at
     deferrer = (
-        _api_app().configure_task(task, connection=raw)
+        _api_app().configure_task(task, **options)
         if isinstance(task, str)
-        else task.configure(connection=raw)
+        else task.configure(**options)
     )
     await deferrer.defer_async(task_run_id=str(task_run_id), **(task_kwargs or {}))
     return task_run_id

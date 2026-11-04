@@ -143,8 +143,12 @@ class LLMGateway(Protocol):
         metered in ``ai_calls`` but not refused by the daily quota mid-turn."""
         ...
 
-    async def ground(self, *, query: str, system: str, feature: str) -> GroundedAnswer:
-        """One web-grounded call (Google Search). Only for backends with ``web_grounding``."""
+    async def ground(
+        self, *, query: str, system: str, feature: str, continuation: bool = True
+    ) -> GroundedAnswer:
+        """One web-grounded call (Google Search). Only for backends with ``web_grounding``.
+        ``continuation`` (the coach's follow-up of a turn) is not refused by the daily quota; a call
+        that starts something (a flow step) passes ``False`` and is quota-checked like any other."""
         ...
 
     def model_name(
@@ -277,7 +281,9 @@ class FakeLLMGateway:
     def queue_ground(self, answer: GroundedAnswer | Exception) -> None:
         self._grounded.append(answer)
 
-    async def ground(self, *, query: str, system: str, feature: str) -> GroundedAnswer:
+    async def ground(
+        self, *, query: str, system: str, feature: str, continuation: bool = True
+    ) -> GroundedAnswer:
         self.ground_calls.append(query)
         if not self._grounded:
             raise AssertionError("FakeLLMGateway has no queued grounded answer")

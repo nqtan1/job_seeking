@@ -509,7 +509,7 @@ async def list_all_runs(
     ctx: Ctx,
     db: Db,
     status: Annotated[
-        str | None, Query(pattern="^(queued|running|done|failed|cancelled)$")
+        str | None, Query(pattern="^(queued|running|waiting|done|failed|cancelled)$")
     ] = None,
     flow_id: UUID | None = None,
     before_id: UUID | None = None,

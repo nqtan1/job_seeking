@@ -61,6 +61,7 @@ const KIND_HEX: Record<GraphNode['type'], [string, string]> = {
   output: ['#4f46e5', '#a5b4fc'],
   condition: ['#b45309', '#fbbf24'],
   transform: ['#64748b', '#cbd5e1'],
+  tool: ['#0f766e', '#5eead4'],
   agent: ['#64748b', '#cbd5e1'],
 }
 const paletteOf = (a?: AvatarSpec) => PALETTES[a?.palette ?? 8] ?? PALETTES[8]
@@ -185,6 +186,8 @@ function subtitleOf(n: GraphNode, t: ReturnType<typeof useT>): string {
       return `${t(`helpers.cond.${n.op}`)} “${n.value}”`
     case 'transform':
       return t(`helpers.transform.${n.op}`)
+    case 'tool':
+      return t(`helpers.tool.${n.tool}.short`)
     default:
       return t('helpers.node.agent')
   }

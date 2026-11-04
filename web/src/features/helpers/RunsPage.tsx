@@ -11,17 +11,19 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { cn } from 'cn'
 import { type RunListItem, type RunSummary, isLive, useAllRuns, useFlows, useRerun } from './api'
-import { relTime } from './lib'
+import { relTime, when } from './lib'
 import { RunStatusBadge } from './ui'
 
-const FILTERS = ['all', 'running', 'done', 'failed'] as const
+const FILTERS = ['all', 'running', 'waiting', 'done', 'failed'] as const
 type Filter = (typeof FILTERS)[number]
 
 /** One plain sentence on what happened, for people who never saw an error code. */
 function useOutcome() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   return (r: RunListItem) => {
     if (r.status === 'queued') return t('helpers.pages.runs.waiting')
+    if (r.status === 'waiting')
+      return t('helpers.run.waiting_until', { time: when(r.wake_at, locale) })
     if (r.status === 'running') return t('helpers.pages.runs.working')
     if (r.status === 'done') return t('helpers.pages.runs.done')
     const key = `helpers.rerr.${r.status === 'cancelled' ? 'cancelled' : r.error_code}`
@@ -41,7 +43,7 @@ function RunRow({ run }: { run: RunListItem }) {
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to={`/helpers/runs/${run.id}`}
+            to={`/automations/runs/${run.id}`}
             aria-label={t('helpers.pages.runs.open', { name: run.flow_name })}
             className="truncate rounded font-semibold outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
           >
@@ -74,7 +76,7 @@ function RunRow({ run }: { run: RunListItem }) {
         disabled={again.isPending || isLive(run.status)}
         aria-label={t('helpers.pages.runs.again_label', { name: run.flow_name })}
         onClick={() =>
-          again.mutate(run.id, { onSuccess: (r) => navigate(`/helpers/runs/${r.id}`) })
+          again.mutate(run.id, { onSuccess: (r) => navigate(`/automations/runs/${r.id}`) })
         }
       >
         {again.isPending ? <Spinner /> : <Play data-icon="inline-start" />}
@@ -143,7 +145,7 @@ export function RunsTab() {
           )}
           description={t('helpers.pages.runs.empty_hint')}
           action={
-            <Link to="/helpers?tab=flows" className={buttonVariants()}>
+            <Link to="/automations" className={buttonVariants()}>
               {t('helpers.pages.runs.go')}
             </Link>
           }

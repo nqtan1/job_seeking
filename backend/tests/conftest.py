@@ -38,7 +38,6 @@ import pytest
 @pytest.fixture(autouse=True)
 def _fresh_rate_limits():
     """Tests reuse the same uids: no test may inherit another's request counts."""
-    from recruitai.core import ratelimit
+    from recruitai.core import throttle
 
-    ratelimit._hits.clear()
-    ratelimit._public_hits.clear()
+    throttle._hits.clear()

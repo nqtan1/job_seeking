@@ -46,4 +46,4 @@ RUN mkdir -p /tmp/tectonic-warmup \
     && tectonic -X compile --untrusted --outdir /tmp/tectonic-warmup /tmp/tectonic-warmup/sample.tex \
     && rm -rf /tmp/tectonic-warmup
 
-CMD ["procrastinate", "--app=recruitai.worker.app", "worker"]
+CMD ["procrastinate", "--app=recruitai.worker.app", "worker", "--concurrency=6"]

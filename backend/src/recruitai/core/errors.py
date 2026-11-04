@@ -92,6 +92,12 @@ class Conflict(AppError):
     default_detail = "The request conflicts with the current state."
 
 
+class RateLimited(AppError):
+    status_code = 429
+    code = "rate_limited"
+    default_detail = "Too many requests. Please slow down and try again shortly."
+
+
 class ValidationFailed(AppError):
     status_code = HTTPStatus.UNPROCESSABLE_ENTITY
     code = "validation_failed"

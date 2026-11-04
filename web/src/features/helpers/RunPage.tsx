@@ -3,7 +3,7 @@ import { Ban, ChevronRight, Pause, Play, RotateCcw } from 'lucide-react'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { cn } from 'cn'
-import { useT } from '@/i18n'
+import { useI18n, useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
@@ -22,7 +22,7 @@ import {
 } from './api'
 import { DataFlowTable, EdgeInspector } from './FlowPanels'
 import { type Graph, orderOf } from './graph'
-import { useLabels } from './lib'
+import { useLabels, when } from './lib'
 import { ResultHero, RunSummary, StepTimeline } from './RunParts'
 import { StepsList } from './StepsList'
 import type { Selection } from './Canvas'
@@ -36,7 +36,7 @@ export function RunPage() {
   return (
     <Page
       title={t('helpers.run.title')}
-      back={{ to: '/helpers?tab=flows', label: t('helpers.back_flows') }}
+      back={{ to: '/automations?tab=runs', label: t('helpers.back_flows') }}
       wide
     >
       {run.isPending ? (
@@ -51,7 +51,7 @@ export function RunPage() {
 }
 
 function View({ run }: { run: Run }) {
-  const t = useT()
+  const { t, locale } = useI18n()
   const versions = useFlowVersions(run.flow_id)
   const graph: Graph | undefined = versions.data?.find((v) => v.id === run.flow_version_id)?.graph
   const agents = useAgents()
@@ -155,6 +155,11 @@ function View({ run }: { run: Run }) {
       <div role="status" className="sr-only" aria-live="polite">
         {t(`helpers.run.status.${run.status}`)}
       </div>
+      {run.status === 'waiting' && (
+        <p className="text-sm text-muted-foreground">
+          {t('helpers.run.waiting_until', { time: when(run.wake_at, locale) })}
+        </p>
+      )}
       {frame !== null && (
         <input
           type="range"

@@ -22,3 +22,12 @@ terraform apply -var-file=envs/dev.tfvars    # dev only; prod = envs/prod.* once
 
 ## Secrets (values are never in Terraform)
 `gcloud secrets versions add recruitai-<name> --data-file=- --project <project>`
+
+## Capacity and abuse (ADR-less notes)
+
+- Traffic reaches Cloud Run through Firebase Hosting rewrites, not a load balancer, so Cloud Armor cannot be attached
+  without changing that architecture. The protections are: App Check, per-user and global limits in the app,
+  `api_max_instances` (cost ceiling under a flood) and Hosting's own edge.
+- Connection budget: `api_max_instances x 10 + 10` (worker) must stay under the Cloud SQL `max_connections` of `sql_tier`.
+  `db-f1-micro` is the tightest; raise `sql_tier` before raising `api_max_instances` or the worker's `--concurrency`.
+- Suggested prod values (plan only, by hand): `api_min_instances = 1`, `sql_tier` one step above `db-f1-micro`.

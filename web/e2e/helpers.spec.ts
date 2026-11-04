@@ -33,14 +33,18 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(page.getByText('Saved.')).toBeVisible()
 
   // A flow: Start → Mira → Result, built in the Steps view.
-  await page.goto('/helpers?tab=flows')
+  await page.goto('/automations')
   await page.getByRole('button', { name: 'New automation' }).first().click()
   await page.getByLabel('Name').fill('Follow-up flow')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await page.getByRole('button', { name: 'Steps', exact: true }).click()
   await page.getByLabel('Add a helper…').selectOption({ label: 'Mira' })
   await expect(page.getByRole('button', { name: 'Mira Helper' })).toBeVisible()
-  await page.getByLabel('Send to…').first().selectOption({ label: 'Mira' }) // Start → Mira
+  // A just-added helper refuses links until its details have loaded ("still loading"): retry.
+  await expect(async () => {
+    await page.getByLabel('Send to…').first().selectOption({ label: 'Mira' }) // Start → Mira
+    await expect(page.getByText('still loading')).toHaveCount(0, { timeout: 500 })
+  }).toPass()
   await page.getByLabel('Send to…').nth(1).selectOption({ label: 'Result' }) // Mira → Result
   await expect(page.getByText('Ready to run')).toBeVisible()
   await expect(page.getByRole('region', { name: 'Data between steps' })).toContainText('notes')
@@ -59,7 +63,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.getByRole('dialog').getByRole('button', { name: 'Watch it run' }).click()
 
   // The run happens in place: the editor stays, the canvas lights up, the result appears beside it.
-  await expect(page).toHaveURL(/\/helpers\/flows\//)
+  await expect(page).toHaveURL(/\/automations\//)
   const live = page.getByRole('region', { name: 'Live run' })
   await expect(live.getByText('Done', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
   await expect(live.getByRole('region', { name: 'Result' })).toContainText(
@@ -71,7 +75,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await live.getByRole('button', { name: 'Run again' }).click()
   await expect(live.getByText('Done', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
   await live.getByRole('link', { name: 'Open full page' }).click()
-  await expect(page).toHaveURL(/\/helpers\/runs\//)
+  await expect(page).toHaveURL(/\/automations\/runs\//)
   await expect(page.getByText('Done', { exact: true }).first()).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('region', { name: 'Result' })).toContainText(
     'A canned helper answer.',
@@ -82,7 +86,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(page.getByRole('slider', { name: 'Replay' })).toBeVisible()
 
   // The Runs page lists both runs; filters work and "Run again" opens a new run.
-  await page.goto('/helpers?tab=runs')
+  await page.goto('/automations?tab=runs')
   await expect(page.getByRole('list', { name: 'Your runs' }).getByRole('listitem')).toHaveCount(2)
   await page.getByRole('button', { name: 'Failed' }).click()
   await expect(page.getByText('No run matches this filter')).toBeVisible()
@@ -90,7 +94,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(page.getByRole('list', { name: 'Your runs' }).getByRole('listitem')).toHaveCount(2)
 
   // A schedule: pick "every day", it is saved and can be paused.
-  await page.goto('/helpers?tab=flows')
+  await page.goto('/automations')
   await page
     .getByRole('link', { name: /Follow-up flow/ })
     .first()
@@ -108,10 +112,25 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(sched.getByRole('button', { name: /^Resume/ })).toBeVisible()
 
   // A ready-made automation creates its helpers and the flow in one click.
-  await page.goto('/helpers?tab=flows')
+  await page.goto('/automations')
   await page.getByRole('button', { name: 'Create this automation' }).first().click()
-  await expect(page).toHaveURL(/\/helpers\/flows\//, { timeout: 30_000 })
+  await expect(page).toHaveURL(/\/automations\//, { timeout: 30_000 })
   await expect(page.getByText('Ready to run')).toBeVisible()
+
+  // Action blocks: add "Search jobs"; it appears as a step that still needs its input wired.
+  await page.getByLabel('Add an action…').selectOption({ label: 'Search jobs' })
+  await expect(page.getByRole('button', { name: /Search jobs/ }).first()).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: /to fix/ })).toBeVisible()
+
+  // Contacts: add someone to email; they stay "waiting for their OK" until they confirm.
+  await page.goto('/automations?tab=contacts')
+  await expect(page.getByText('You have not added anyone yet.')).toBeVisible()
+  await page.getByLabel('Add a contact').fill('friend@example.com')
+  await page.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(page.getByText('Waiting for their OK')).toBeVisible()
+  await page.screenshot({
+    path: process.env.SHOTS ? `${process.env.SHOTS}/contacts.png` : undefined,
+  })
 
   expect(problems).toEqual([])
 })

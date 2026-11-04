@@ -18,7 +18,8 @@ from firebase_admin import auth as firebase_auth
 from starlette.concurrency import run_in_threadpool
 
 from recruitai.config import Settings, get_settings
-from recruitai.core.errors import Forbidden, ReauthRequired, Unauthorized
+from recruitai.core.errors import Forbidden, RateLimited, ReauthRequired, Unauthorized
+from recruitai.core.throttle import hit
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +83,11 @@ async def _verify(
         email_verified=bool(claims.get("email_verified")),
         auth_time=int(claims.get("auth_time") or 0),
     )
+    wait = hit("api", user.firebase_uid, limit=settings.api_rate_limit_per_min)
+    if (
+        wait is not None
+    ):  # a script hammering the API: every route is covered, not only AI ones
+        raise RateLimited(headers={"Retry-After": str(wait)})
     leeway = settings.auth_time_leeway_seconds
     age = time.time() - user.auth_time
     if age < -leeway or age > settings.session_absolute_days * 86400 + leeway:

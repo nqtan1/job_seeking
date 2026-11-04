@@ -45,9 +45,15 @@ async def _provision_user(
     row: Row[UUID, bool] = (
         await session.execute(
             pg_insert(User)
-            .values(id=new_id(), firebase_uid=current.firebase_uid, email=current.email)
+            .values(
+                id=new_id(),
+                firebase_uid=current.firebase_uid,
+                email=current.email,
+                email_verified=current.email_verified,
+            )
             .on_conflict_do_update(
-                index_elements=[User.firebase_uid], set_={"email": current.email}
+                index_elements=[User.firebase_uid],
+                set_={"email": current.email, "email_verified": current.email_verified},
             )
             .returning(
                 User.id, literal_column("(xmax = 0)", type_=Boolean).label("inserted")
@@ -132,7 +138,7 @@ async def _member_org(
     return org_id, role
 
 
-_UserRow = Row[UUID, str, datetime | None, datetime | None, str, UUID]
+_UserRow = Row[UUID, str, datetime | None, datetime | None, str, bool, UUID]
 
 
 async def _lookup(session: AsyncSession, firebase_uid: str) -> _UserRow | None:
@@ -152,6 +158,7 @@ async def _lookup(session: AsyncSession, firebase_uid: str) -> _UserRow | None:
                 User.blocked_at,
                 User.last_active_at,
                 User.language,
+                User.email_verified,
                 personal.label("personal_org_id"),
             ).where(User.firebase_uid == firebase_uid)
         )
@@ -166,6 +173,7 @@ def _needs_write(
     request does not write at all (a write per request was the cost of every API call)."""
     return (
         row.email != current.email
+        or row.email_verified != current.email_verified
         or row.last_active_at is None
         or row.last_active_at
         < datetime.now(UTC) - timedelta(seconds=LAST_ACTIVE_MIN_INTERVAL_S)
@@ -186,7 +194,12 @@ async def get_org_context(
         user_id = row.id
         if _needs_write(row, current_user):
             await db.execute(
-                update(User).where(User.id == user_id).values(email=current_user.email)
+                update(User)
+                .where(User.id == user_id)
+                .values(
+                    email=current_user.email,
+                    email_verified=current_user.email_verified,
+                )
             )
             await _touch_last_active(db, user_id)
         if x_org_id is None:

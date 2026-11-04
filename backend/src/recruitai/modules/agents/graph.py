@@ -91,8 +91,49 @@ class TransformNode(_Node):
         return self
 
 
+# ADR 0032: a closed list of actions. Each has fixed inputs ``(name, required)`` and outputs; the user
+# only chooses which one and wires the edges. There is no config a user could put a URL or code in.
+ToolKind = Literal[
+    "web_search",
+    "job_search",
+    "read_page",
+    "job_lookup",
+    "add_to_tracker",
+    "send_email",
+    "wait",
+]
+TOOLS: dict[str, tuple[tuple[tuple[str, bool], ...], tuple[str, ...]]] = {
+    "web_search": ((("query", True),), ("text", "sources")),
+    "job_search": ((("query", True), ("department", False)), ("text", "count")),
+    "read_page": ((("url", True),), ("text",)),
+    # reads the run's chosen job; "start" is an optional link so it can hang off the Input step
+    "job_lookup": (
+        (("start", False),),
+        ("title", "company", "place", "description", "url"),
+    ),
+    "add_to_tracker": (
+        (("company", True), ("title", False), ("url", False), ("notes", False)),
+        ("status",),
+    ),
+    "send_email": ((("to", True), ("subject", True), ("body", True)), ("status",)),
+    "wait": ((("value", True),), ("value",)),  # passes its input on, later (see engine)
+}
+
+
+class ToolNode(_Node):
+    type: Literal["tool"] = "tool"
+    tool: ToolKind
+    minutes: int | None = Field(None, ge=1, le=7 * 24 * 60)  # wait only
+
+    @model_validator(mode="after")
+    def _minutes(self) -> "ToolNode":
+        if (self.tool == "wait") != (self.minutes is not None):
+            raise ValueError("only wait takes minutes, and it needs them")
+        return self
+
+
 Node = Annotated[
-    InputNode | OutputNode | AgentNode | ConditionNode | TransformNode,
+    InputNode | OutputNode | AgentNode | ConditionNode | TransformNode | ToolNode,
     Field(discriminator="type"),
 ]
 
@@ -156,6 +197,8 @@ def input_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[tuple[str, boo
             return [("value", True)]
         case TransformNode():
             return [("text", True)]
+        case ToolNode():
+            return list(TOOLS[node.tool][0])
     return []
 
 
@@ -173,6 +216,8 @@ def output_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[str]:
             return ["value"]
         case TransformNode():
             return ["text"]
+        case ToolNode():
+            return list(TOOLS[node.tool][1])
     return []  # an output node is a sink
 
 
@@ -358,7 +403,11 @@ def _reachability(graph: Graph, nodes: dict[UUID, Any]) -> list[Issue]:
                     stack.append(m)
         return seen
 
-    entry = [n.id for n in graph.nodes if n.type == "input"]
+    entry = [
+        n.id
+        for n in graph.nodes
+        if n.type == "input" or (isinstance(n, ToolNode) and n.tool == "job_lookup")
+    ]
     exit_ = [n.id for n in graph.nodes if n.type == "output"]
     from_input, to_output = reach(entry, fwd), reach(exit_, back)
     issues = []

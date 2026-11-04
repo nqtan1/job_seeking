@@ -11,6 +11,8 @@ import { useJobs } from '@/features/job-search/api'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { RunSummary } from './api'
+import { Avatar } from './Avatar'
+import { avatarFromSeed } from './avatar'
 import { Modal } from '@/components/Modal'
 
 /** One step of the editor: an icon, a title, one line saying what it is for, then the controls. */
@@ -274,6 +276,7 @@ const TONE = {
   done: 'success',
   failed: 'danger',
   cancelled: 'warning',
+  waiting: 'neutral',
 } as const
 
 type Status = RunSummary['status']
@@ -331,5 +334,32 @@ export function LeaveGuard({ dirty, leaving }: { dirty: boolean; leaving: RefObj
         </Button>
       </div>
     </Modal>
+  )
+}
+
+/** A few characters that overlap, so an empty page still feels inhabited. */
+export function Trio({ size }: { size: number }) {
+  return (
+    <div className="flex items-end -space-x-3" aria-hidden>
+      {['followup', 'pitch', 'reply'].map((id, i) => (
+        <span key={id} className={cn(i === 1 && '-translate-y-2')}>
+          <Avatar spec={avatarFromSeed(id)} size={size} />
+        </span>
+      ))}
+    </div>
+  )
+}
+
+export function Hero({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="relative flex items-center justify-between gap-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-accent/40 to-transparent px-6 py-6 sm:px-8">
+      <div className="max-w-xl space-y-1.5">
+        <h2 className="text-xl font-semibold tracking-tight text-balance sm:text-2xl">{title}</h2>
+        <p className="text-sm text-muted-foreground sm:text-base">{body}</p>
+      </div>
+      <div className="hidden shrink-0 sm:block">
+        <Trio size={64} />
+      </div>
+    </div>
   )
 }

@@ -99,6 +99,12 @@ class Settings(BaseSettings):
     gemini_flash_lite: str = "gemini-2.5-flash-lite"
     gemini_flash: str = "gemini-2.5-flash"
     ai_daily_quota_per_user: int = 50
+    # All users together, per UTC day. The real stop for account farming: many fresh accounts at
+    # 50 calls each cannot spend more than this. Refused calls say "daily limit reached".
+    ai_daily_quota_global: int = 5000
+    # Every authenticated request, per user and per minute and per instance: bounds a script that
+    # hammers cheap routes (reads, writes) that have no limit of their own.
+    api_rate_limit_per_min: int = 300
     ai_call_timeout_s: float = 30.0
     ai_max_retries: int = 3
     # config.yaml `agents:`; every name in AGENTS must be present.

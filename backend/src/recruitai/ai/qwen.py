@@ -288,7 +288,9 @@ class QwenGateway:
         ):
             yield TextDelta(chunk)
 
-    async def ground(self, *, query: str, system: str, feature: str) -> GroundedAnswer:
+    async def ground(
+        self, *, query: str, system: str, feature: str, continuation: bool = True
+    ) -> GroundedAnswer:
         raise UpstreamUnavailable(
             "Web research is not available with this model.", code="web_unavailable"
         )

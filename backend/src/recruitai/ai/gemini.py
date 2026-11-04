@@ -38,14 +38,13 @@ from recruitai.ai.gateway import (
     provider_errors,
     without_nul,
 )
-from recruitai.ai.usage import CallStats, tracked_call
+from recruitai.ai.usage import NO_LIMIT, CallStats, tracked_call
 from recruitai.config import Settings
 from recruitai.core.errors import UpstreamUnavailable
 
 _RETRYABLE_CODES = frozenset({429, 500, 502, 503, 504})
 # What this SDK (and its HTTP layer) raises: all of it becomes a clean ``ai_unavailable``.
 _SDK_ERRORS = (ClientError, ServerError, httpx.HTTPError)
-_NO_LIMIT = 1_000_000
 
 
 def _contents(turns: list[Turn]) -> list[types.Content]:
@@ -165,7 +164,7 @@ class GeminiGateway:
             feature=feature,
             model=model_name,
             # A follow-up call of a turn the user already started is counted, not refused.
-            quota=_NO_LIMIT if continuation else self._settings.ai_daily_quota_per_user,
+            quota=NO_LIMIT if continuation else self._settings.ai_daily_quota_per_user,
         )
 
     async def generate(
@@ -325,13 +324,17 @@ class GeminiGateway:
         if calls:
             yield ToolCalls(calls=calls, raw=types.Content(role="model", parts=parts))
 
-    async def ground(self, *, query: str, system: str, feature: str) -> GroundedAnswer:
+    async def ground(
+        self, *, query: str, system: str, feature: str, continuation: bool = True
+    ) -> GroundedAnswer:
         model_name = _model_name(self._settings, "smart", feature)
         config = types.GenerateContentConfig(
             system_instruction=system,
             tools=[types.Tool(google_search=types.GoogleSearch())],
         )
-        async with self._tracked(feature, model_name, continuation=True) as call:
+        async with self._tracked(
+            feature, model_name, continuation=continuation
+        ) as call:
             with provider_errors(*_SDK_ERRORS):
                 response = await self._call_with_retries(
                     model_name=model_name,

@@ -188,6 +188,15 @@ async def email_of(db: AsyncSession, *, user_id: UUID) -> str | None:
     ).scalar_one_or_none()
 
 
+async def verified_email_of(db: AsyncSession, *, user_id: UUID) -> str | None:
+    """The address, only if the sign-in provider said its owner verified it."""
+    return (
+        await db.execute(
+            select(User.email).where(User.id == user_id, User.email_verified.is_(True))
+        )
+    ).scalar_one_or_none()
+
+
 async def mark_warned(db: AsyncSession, *, user_id: UUID, at: datetime) -> None:
     await db.execute(
         update(User).where(User.id == user_id).values(deletion_warned_at=at)

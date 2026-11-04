@@ -9,6 +9,8 @@ PUBLIC = {
     "/ready",
     "/api/ping",
     "/api/public/radar-link",
+    "/api/public/email/confirm",
+    "/api/public/email/unsubscribe",
 }  # the link token is the credential
 
 
