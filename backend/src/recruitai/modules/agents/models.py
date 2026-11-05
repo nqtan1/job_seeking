@@ -60,7 +60,11 @@ class AgentVersion(Base):
         UniqueConstraint("agent_id", "version"),
         CheckConstraint("version >= 1", name="version"),
         CheckConstraint(
-            "char_length(instructions) BETWEEN 1 AND 4000", name="instructions"
+            "char_length(instructions) <= 4000 AND (role <> 'custom' OR char_length(instructions) >= 1)",
+            name="instructions",
+        ),
+        CheckConstraint(
+            "role IN ('custom', 'letter', 'interview', 'cv_advice')", name="role"
         ),
         CheckConstraint("model_tier IN ('fast', 'smart')", name="model_tier"),
         Index("ix_agent_versions_org_id", "org_id"),
@@ -74,6 +78,9 @@ class AgentVersion(Base):
         ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="custom"
+    )
     instructions: Mapped[str] = mapped_column(String, nullable=False)
     model_tier: Mapped[str] = mapped_column(String(8), nullable=False)
     inputs: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
@@ -209,7 +216,8 @@ class FlowRun(Base):
             "status IN ('queued', 'running', 'waiting', 'done', 'failed', 'cancelled')",
             name="status",
         ),
-        CheckConstraint("trigger IN ('manual', 'schedule')", name="trigger"),
+        CheckConstraint("trigger IN ('manual', 'schedule', 'flow')", name="trigger"),
+        Index("ix_flow_runs_parent_run_id", "parent_run_id"),
         Index("ix_flow_runs_org_id_created_at", "org_id", "created_at"),
         Index("ix_flow_runs_flow_id_created_at", "flow_id", "created_at"),
         Index("ix_flow_runs_schedule_id_created_at", "schedule_id", "created_at"),
@@ -264,6 +272,10 @@ class FlowRun(Base):
     )
     schedule_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("flow_schedules.id", ondelete="SET NULL")
+    )
+    # Set on a run started by another run's for_each step (one level only, ADR 0034).
+    parent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("flow_runs.id", ondelete="SET NULL")
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -431,35 +443,6 @@ class EmailInvite(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     email_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
-
-class SeenOffer(Base):
-    """A job offer already handed to a user by a ``new_offer`` step, so the next run moves on to a
-    new one. Only a hash of the offer's address; ``(run_id, node_id)`` lets a resumed step get the
-    same offer back instead of burning another."""
-
-    __tablename__ = "seen_offers"
-    __table_args__ = (
-        UniqueConstraint("user_id", "url_hash"),
-        Index("ix_seen_offers_org_id", "org_id"),
-        Index("ix_seen_offers_run_id_node_id", "run_id", "node_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    url_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    run_id: Mapped[uuid.UUID] = mapped_column(
-        nullable=False
-    )  # no FK: runs are swept at 30 days
-    node_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

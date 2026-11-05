@@ -4295,7 +4295,9 @@ export interface components {
              * Trigger
              * @enum {string}
              */
-            trigger: "manual" | "schedule";
+            trigger: "manual" | "schedule" | "flow";
+            /** Parent Run Id */
+            parent_run_id: string | null;
             /**
              * Status
              * @enum {string}
@@ -4336,7 +4338,9 @@ export interface components {
              * Trigger
              * @enum {string}
              */
-            trigger: "manual" | "schedule";
+            trigger: "manual" | "schedule" | "flow";
+            /** Parent Run Id */
+            parent_run_id: string | null;
             /**
              * Status
              * @enum {string}
@@ -4391,7 +4395,9 @@ export interface components {
              * Trigger
              * @enum {string}
              */
-            trigger: "manual" | "schedule";
+            trigger: "manual" | "schedule" | "flow";
+            /** Parent Run Id */
+            parent_run_id: string | null;
             /**
              * Status
              * @enum {string}
@@ -4710,9 +4716,11 @@ export interface components {
              * Tool
              * @enum {string}
              */
-            tool: "web_search" | "job_search" | "new_offer" | "read_page" | "job_lookup" | "add_to_tracker" | "send_email" | "wait";
+            tool: "web_search" | "job_search" | "find_offers" | "fit_check" | "for_each" | "read_page" | "job_lookup" | "add_to_tracker" | "send_email" | "wait";
             /** Minutes */
             minutes?: number | null;
+            /** Flow Id */
+            flow_id?: string | null;
         };
         /** TransformNode */
         TransformNode: {
@@ -4952,10 +4960,21 @@ export interface components {
         };
         /**
          * VersionSpec
-         * @description What a version is: the part a user edits and a run pins.
+         * @description What a version is: the part a user edits and a run pins. A built-in ``role`` brings its own
+         *     tested prompt, inputs, context and output format (set here, not editable); ``instructions``
+         *     are then only preferences added after it.
          */
         VersionSpec: {
-            /** Instructions */
+            /**
+             * Role
+             * @default custom
+             * @enum {string}
+             */
+            role: "custom" | "letter" | "interview" | "cv_advice";
+            /**
+             * Instructions
+             * @default
+             */
             instructions: string;
             /**
              * Model Tier

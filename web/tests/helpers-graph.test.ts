@@ -26,6 +26,7 @@ import {
 import { avatarFromSeed, safe } from '@/features/helpers/avatar'
 
 const spec: VersionSpec = {
+  role: 'custom',
   instructions: 'x',
   model_tier: 'fast',
   inputs: [
@@ -80,9 +81,11 @@ test('obvious mappings are filled in, ambiguous ones are left to the user', () =
   // one output into the one required input
   const t = agent('t')
   expect(autoMap(t, a, specs, new Set())).toEqual([{ input: 'notes', value: '{{text}}' }])
-  // nothing sensible to guess when the input is already fed
-  expect(autoMap(t, a, specs, new Set(['notes']))).toEqual([])
-  expect(inputsOf(a, specs).map((x) => x.name)).toEqual(['notes', 'extra'])
+  // the declared input is already fed: the rest goes through the optional "info" input
+  expect(autoMap(t, a, specs, new Set(['notes']))).toEqual([
+    { input: 'info', value: 'text: {{text}}' },
+  ])
+  expect(inputsOf(a, specs).map((x) => x.name)).toEqual(['notes', 'extra', 'info'])
   expect(outputsOf(a, specs)).toEqual(['text'])
 })
 

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, create_model
 from recruitai.ai.gateway import LLMGateway, Part, TextPart, generate_retrying_invalid
 from recruitai.ai.prompts import helper
 from recruitai.core.errors import ValidationFailed
+from recruitai.modules.agents.graph import EXTRA_INPUT
 from recruitai.modules.agents.schemas import OutputSpec, VersionSpec
 
 MAX_TEXT = 20_000
@@ -61,7 +62,7 @@ def data_block(name: str, text: str) -> TextPart:
 
 
 def check_inputs(spec: VersionSpec, values: dict[str, str]) -> None:
-    declared = {i.name for i in spec.inputs}
+    declared = {i.name for i in spec.inputs} | {EXTRA_INPUT}
     if extra := set(values) - declared:
         raise ValidationFailed(f"Unknown input: {min(extra)}.")
     for i in spec.inputs:
@@ -98,10 +99,13 @@ async def run(
     """``values`` are the declared inputs, ``context`` the attached sources (name → text). A step
     sees only these two: there is nowhere else for data to come from (ADR 0031, no shared memory)."""
     check_inputs(spec, values)
+    names = [i.name for i in spec.inputs]
+    if EXTRA_INPUT not in names:
+        names.append(
+            EXTRA_INPUT
+        )  # what other steps handed over beyond the declared inputs
     parts: list[Part] = [
-        data_block(i.name, values.get(i.name, ""))
-        for i in spec.inputs
-        if values.get(i.name, "").strip()
+        data_block(n, values[n]) for n in names if values.get(n, "").strip()
     ]
     parts += [data_block(name, text) for name, text in context.items()]
     parts.append(
@@ -111,7 +115,7 @@ async def run(
     out = await generate_retrying_invalid(
         llm,
         schema=output_model(spec.output),
-        system=helper.system_prompt(spec.instructions),
+        system=helper.system_prompt(spec.instructions, spec.role),
         parts=parts,
         feature=feature,
         model=spec.model_tier,

@@ -6,14 +6,13 @@ tool step looks to the rest of the engine exactly like any other step. Failures 
 machine goes through ``ToolKit``, so tests inject fakes and never touch the network."""
 
 import asyncio
-import hashlib
 import ipaddress
+import json
 import logging
 import re
 import socket
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from html.parser import HTMLParser
 from typing import ClassVar, NamedTuple
@@ -35,6 +34,8 @@ from recruitai.modules.applications.schemas import ApplicationIn
 from recruitai.modules.identity import service as identity
 from recruitai.modules.jobs import service as jobs
 from recruitai.modules.jobs.providers.base import JobProvider
+from recruitai.modules.matching import schemas as matching_schemas
+from recruitai.modules.matching import service as matching
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +45,8 @@ FETCH_TIMEOUT_S = 10.0
 MAX_TEXT = 20_000
 MAX_EMAIL_BODY = 5_000
 SEARCH_RESULTS = 5
-NEW_OFFER_WINDOW = 20  # offers looked at to find one the user has not seen
-SEEN_FOR = timedelta(days=90)
+MAX_FAN_OUT = 5  # items one step may hand on, and runs one for_each may start
+FIND_WINDOW = 20  # offers looked at to find new ones
 SEARCH_SYSTEM = (
     "Answer the query with the facts you find on the web, briefly and plainly. "
     "Say so if you find nothing. Never invent a source."
@@ -78,6 +79,11 @@ class EmailEmpty(ToolFailed):
     default_detail = "The email has no subject or no text."
 
 
+class DailyLimit(ToolFailed):
+    code = "daily_limit"
+    default_detail = "You reached today's limit for this action."
+
+
 class SearchUnavailable(ToolFailed):
     code = "search_unavailable"
     default_detail = "Web search is not available right now."
@@ -94,6 +100,12 @@ class Cap(NamedTuple):
 EFFECT_CAPS: dict[str, Cap] = {
     "add_to_tracker": Cap(50),
     "send_email": Cap(20, 500),
+    # steps a day, each starting at most MAX_FAN_OUT runs; repeatable: a resumed step starts the
+    # runs that are still missing (their idempotency keys stop any duplicate)
+    "for_each": Cap(20, once=False),
+    "find_offers": Cap(
+        30, once=False
+    ),  # searches a day: each fetches up to 5 full offers
     "read_page": Cap(200, once=False),  # not a free proxy for scanning
 }
 
@@ -277,8 +289,10 @@ async def run_tool(
                 for r in found.results[:SEARCH_RESULTS]
             ]
             return {"text": "\n".join(lines), "count": str(len(lines))}
-        case "new_offer":
-            return await _new_offer(db, kit, run, node, values)
+        case "find_offers":
+            return await _find_offers(db, kit, run, values)
+        case "fit_check":
+            return await _fit_check(db, llm, run, values)
         case "read_page":
             return {"text": await kit.fetch(v("url", "").strip())}
         case "job_lookup":
@@ -300,7 +314,10 @@ async def run_tool(
                 data=ApplicationIn(
                     job_id=None,
                     location=None,
-                    company_name=_one_line(v("company"))[:200],
+                    company_name=(_one_line(v("company")) or _one_line(v("title")))[
+                        :200
+                    ]
+                    or None,  # an offer without an employer is filed under its title
                     job_title=_one_line(v("title"))[:200] or None,
                     notes="\n".join(
                         x for x in (v("url", "").strip(), v("notes", "").strip()) if x
@@ -314,57 +331,96 @@ async def run_tool(
     raise ToolFailed()
 
 
-async def _new_offer(
-    db: AsyncSession,
-    kit: ToolKit,
-    run: FlowRun,
-    node: g.ToolNode,
-    values: dict[str, str],
+async def _find_offers(
+    db: AsyncSession, kit: ToolKit, run: FlowRun, values: dict[str, str]
 ) -> dict[str, str]:
-    """The first offer of the search that this user was not handed before; it is marked as handed
-    out in the same step, so tomorrow's run gets the next one. Nothing new: every field is empty
-    (a Condition on ``url`` then ends the flow quietly). A resumed step gets its own offer back."""
-    if run.user_id is None:
-        raise ToolFailed()
-    user_id, run_id = run.user_id, run.id
+    """New offers of a search: those this account has not saved as a Job yet (the same memory as
+    Radar and the Jobs page). Each of up to MAX_FAN_OUT is fetched in full and saved, so every
+    later step reads the real offer. An offer that cannot be fetched is skipped (it comes back
+    next time) and never costs the others."""
+    org_id = run.org_id  # a rollback below expires `run`: read what is needed first
     found = await jobs.search(
         db,
         kit.jobs,
         query=values.get("query") or None,
         department=values.get("department") or None,
-        limit=NEW_OFFER_WINDOW,
+        limit=FIND_WINDOW,
     )
-    offers = {
-        hashlib.sha256(r.url.encode()).hexdigest(): r for r in found.results if r.url
-    }
-    await flow_repo.forget_old_offers(
-        db, user_id=user_id, cutoff=datetime.now(UTC) - SEEN_FOR
+    known = await jobs.known_external_ids(
+        db,
+        org_id=org_id,
+        source=kit.jobs.name,
+        external_ids=[r.id for r in found.results],
     )
-    seen = await flow_repo.seen_hashes(db, user_id=user_id, hashes=list(offers))
-    picked = await flow_repo.offer_picked_by(db, run_id=run_id, node_id=node.id)
-    left = len(offers) - len(seen)
-    if picked is None:
-        for digest in offers.keys() - seen:  # a resumed step already has its offer
-            if await flow_repo.take_offer(
-                db,
-                org_id=run.org_id,
-                user_id=user_id,
-                run_id=run_id,
-                node_id=node.id,
-                url_hash=digest,
-            ):
-                picked, left = digest, left - 1
-                break
-    await db.commit()
-    offer = offers.get(picked or "")
-    if offer is None:
-        return dict.fromkeys(g.TOOLS["new_offer"][1], "") | {"remaining": "0"}
+    fresh = [r for r in found.results if r.id not in known and r.url]
+    items: list[dict[str, str]] = []
+    for r in fresh[:MAX_FAN_OUT]:
+        try:
+            posting = await jobs.save_new_search_result(
+                db, kit.jobs, org_id=org_id, external_id=r.id
+            )
+        except Exception:  # noqa: BLE001  (one unreadable offer must not cost the others)
+            await db.rollback()
+            continue
+        if posting is not None:
+            items.append(
+                {
+                    "job_id": str(posting.id),
+                    "title": _one_line(r.title),
+                    "company": _one_line(r.company),
+                    "place": _one_line(r.location),
+                    "url": r.url,
+                }
+            )
     return {
-        "title": _one_line(offer.title),
-        "company": _one_line(offer.company),
-        "place": _one_line(offer.location),
-        "url": offer.url,
-        "remaining": str(max(left, 0)),
+        "items": json.dumps(items, ensure_ascii=False),
+        "text": "\n".join(
+            f"{i['title']} · {i['company']} · {i['place']} · {i['url']}" for i in items
+        ),
+        "count": str(len(items)),
+        "remaining": str(max(len(fresh) - len(items), 0)),
+    }
+
+
+EMPLOYERS = ("corporate", "startup", "phd")
+
+
+async def _fit_check(
+    db: AsyncSession, llm: LLMGateway, run: FlowRun, values: dict[str, str]
+) -> dict[str, str]:
+    """The app's own fit analysis (tested prompts, one persona per employer type) of the run's
+    job against the account's profile. An existing analysis of the job is reused."""
+    if run.job_id is None or run.user_id is None:
+        raise NoJob()
+    employer = values.get("employer", "").strip().lower()
+    company_type: matching_schemas.CompanyType = (
+        "startup"
+        if employer == "startup"
+        else "phd"
+        if employer == "phd"
+        else "corporate"
+    )
+    language = await identity.user_language(db, run.user_id)
+    await db.commit()  # nothing held open across the model call
+    row = await matching.latest_or_analyze(
+        db,
+        llm,
+        org_id=run.org_id,
+        job_id=run.job_id,
+        company_type=company_type,
+        language=language,
+    )
+
+    def bullets(key: str) -> str:
+        return "\n".join(f"- {x}" for x in row.data.get(key) or [])
+
+    return {
+        "score": str(row.score),
+        "verdict": row.verdict,
+        "strengths": bullets("strengths"),
+        "gaps": bullets("gaps"),
+        "missing": bullets("key_missing_requirements"),
+        "reasons": bullets("reasons"),
     }
 
 

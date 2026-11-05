@@ -12,6 +12,7 @@ import { LanguageSelect } from '@/components/LanguageSelect'
 import { useI18n, useT } from '@/i18n'
 import { useTask } from '@/lib/api/tasks'
 import { signOut } from '@/lib/auth'
+import { SignInMethods } from '@/features/auth/SignInMethods'
 import { ConsentSettings } from '@/features/radar/Consent'
 import { ensureRecentAuth } from '@/lib/stepup'
 import {
@@ -261,6 +262,7 @@ export function SettingsPage() {
             {me.data && <p>{t('settings.signed_in_as', { email: me.data.user.email })}</p>}
           </CardContent>
         </Card>
+        <SignInMethods />
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

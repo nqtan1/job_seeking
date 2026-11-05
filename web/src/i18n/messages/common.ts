@@ -77,7 +77,6 @@ export const common = defineMessages({
     'auth.email_invalid': 'Enter a valid email address.',
     'auth.password_min': 'At least 8 characters.',
     'auth.err.credentials': 'Wrong email or password.',
-    'auth.err.exists': 'An account with this email already exists.',
     'auth.err.cancelled': 'Sign-in cancelled.',
     'auth.err.popup': 'The sign-in popup was blocked. Allow popups for this site and retry.',
     'auth.err.network': 'Network error. Check your connection and retry.',
@@ -144,6 +143,44 @@ export const common = defineMessages({
     'privacy.rights':
       'In Settings you can export all your data as a ZIP at any time, and delete your account: your data and files are then deleted immediately. You also have the right of access, rectification, objection and complaint to the CNIL (cnil.fr).',
     'privacy.back': 'Back',
+    'auth.err.exists':
+      'An account with this email already exists. Sign in instead. If you used Google, choose “Continue with Google”.',
+    'auth.password_required': 'Enter your password.',
+    'auth.password_confirm': 'Confirm password',
+    'auth.password_match': 'The two passwords are not the same.',
+    'auth.err.weak': 'That password is too easy to guess. Use at least 8 characters.',
+    'auth.err.too_many': 'Too many attempts. Wait a few minutes and try again.',
+    'auth.err.disabled': 'This account has been disabled. Contact support.',
+    'auth.err.other_method':
+      'This email already belongs to an account that signs in another way. Sign in with it first, then connect Google in Settings.',
+    'auth.err.other_account': 'That sign-in already belongs to another account.',
+    'auth.err.linked': 'This sign-in method is already connected.',
+    'auth.forgot': 'Forgot your password?',
+    'auth.reset_title': 'Reset your password',
+    'auth.reset_send': 'Send the reset link',
+    'auth.reset_sent':
+      'If this email has a password account, we sent a reset link. Check your spam folder too.',
+    'auth.hint_google':
+      'Signed up with Google? Use “Continue with Google”, and add a password later in Settings. Otherwise try “Forgot your password?”.',
+    'auth.methods.title': 'How you sign in',
+    'auth.methods.desc':
+      'Use Google, a password, or both. It is always the same account and the same data.',
+    'auth.methods.on': 'connected',
+    'auth.methods.off': 'not connected',
+    'auth.methods.connect_google': 'Connect Google',
+    'auth.methods.google_added': 'Google is connected. You can now sign in with it.',
+    'auth.methods.password': 'Email and password',
+    'auth.methods.change_password': 'Email me a password reset link',
+    'auth.methods.resend_verification': 'Resend the verification email',
+    'auth.methods.verify_sent': 'Verification email sent. Check your inbox.',
+    'auth.methods.add_hint':
+      'You signed in with Google. Add a password to sign in with your email too.',
+    'auth.methods.new_password': 'New password',
+    'auth.methods.add_password': 'Add a password',
+    'auth.methods.password_added':
+      'Password added. You can now sign in with your email and password.',
+    'auth.err.reauth': 'Please sign in again, then retry.',
+    'auth.methods.reset_sent': 'Reset link sent. Check your inbox and spam folder.',
   },
   fr: {
     'lang.label': 'Langue',
@@ -226,7 +263,6 @@ export const common = defineMessages({
     'auth.email_invalid': 'Saisissez une adresse e-mail valide.',
     'auth.password_min': 'Au moins 8 caractères.',
     'auth.err.credentials': 'E-mail ou mot de passe incorrect.',
-    'auth.err.exists': 'Un compte existe déjà avec cet e-mail.',
     'auth.err.cancelled': 'Connexion annulée.',
     'auth.err.popup':
       'La fenêtre de connexion a été bloquée. Autorisez les fenêtres contextuelles pour ce site puis réessayez.',
@@ -300,6 +336,45 @@ export const common = defineMessages({
     'privacy.rights':
       'Dans les Paramètres, vous pouvez à tout moment exporter toutes vos données au format ZIP et supprimer votre compte : vos données et fichiers sont alors supprimés immédiatement. Vous disposez aussi des droits d’accès, de rectification, d’opposition et de réclamation auprès de la CNIL (cnil.fr).',
     'privacy.back': 'Retour',
+    'auth.err.exists':
+      'Un compte existe déjà avec cet e-mail. Connectez-vous. Si vous avez utilisé Google, choisissez « Continuer avec Google ».',
+    'auth.password_required': 'Saisissez votre mot de passe.',
+    'auth.password_confirm': 'Confirmer le mot de passe',
+    'auth.password_match': 'Les deux mots de passe ne sont pas identiques.',
+    'auth.err.weak': 'Ce mot de passe est trop facile à deviner. Utilisez au moins 8 caractères.',
+    'auth.err.too_many': 'Trop de tentatives. Patientez quelques minutes puis réessayez.',
+    'auth.err.disabled': 'Ce compte a été désactivé. Contactez le support.',
+    'auth.err.other_method':
+      'Cet e-mail appartient déjà à un compte qui se connecte autrement. Connectez-vous avec, puis reliez Google dans les paramètres.',
+    'auth.err.other_account': 'Cette connexion appartient déjà à un autre compte.',
+    'auth.err.linked': 'Ce mode de connexion est déjà relié.',
+    'auth.forgot': 'Mot de passe oublié ?',
+    'auth.reset_title': 'Réinitialiser votre mot de passe',
+    'auth.reset_send': 'Envoyer le lien',
+    'auth.reset_sent':
+      'Si cet e-mail a un compte avec mot de passe, nous avons envoyé un lien de réinitialisation. Pensez à vérifier vos spams.',
+    'auth.hint_google':
+      'Inscrit avec Google ? Utilisez « Continuer avec Google » et ajoutez un mot de passe plus tard dans les paramètres. Sinon, essayez « Mot de passe oublié ? ».',
+    'auth.methods.title': 'Votre façon de vous connecter',
+    'auth.methods.desc':
+      'Google, un mot de passe, ou les deux. C’est toujours le même compte et les mêmes données.',
+    'auth.methods.on': 'relié',
+    'auth.methods.off': 'non relié',
+    'auth.methods.connect_google': 'Relier Google',
+    'auth.methods.google_added': 'Google est relié. Vous pouvez maintenant vous connecter avec.',
+    'auth.methods.password': 'E-mail et mot de passe',
+    'auth.methods.change_password': 'M’envoyer un lien de réinitialisation',
+    'auth.methods.resend_verification': 'Renvoyer l’e-mail de vérification',
+    'auth.methods.verify_sent':
+      'E-mail de vérification envoyé. Consultez votre boîte de réception.',
+    'auth.methods.add_hint':
+      'Vous vous êtes connecté avec Google. Ajoutez un mot de passe pour vous connecter aussi avec votre e-mail.',
+    'auth.methods.new_password': 'Nouveau mot de passe',
+    'auth.methods.add_password': 'Ajouter un mot de passe',
+    'auth.methods.password_added':
+      'Mot de passe ajouté. Vous pouvez maintenant vous connecter avec votre e-mail et votre mot de passe.',
+    'auth.err.reauth': 'Veuillez vous reconnecter, puis réessayer.',
+    'auth.methods.reset_sent': 'Lien envoyé. Consultez votre boîte de réception et vos spams.',
   },
   vi: {
     'lang.label': 'Ngôn ngữ',
@@ -378,7 +453,6 @@ export const common = defineMessages({
     'auth.email_invalid': 'Nhập địa chỉ email hợp lệ.',
     'auth.password_min': 'Tối thiểu 8 ký tự.',
     'auth.err.credentials': 'Email hoặc mật khẩu không đúng.',
-    'auth.err.exists': 'Đã có tài khoản dùng email này.',
     'auth.err.cancelled': 'Đã hủy đăng nhập.',
     'auth.err.popup':
       'Cửa sổ đăng nhập bị chặn. Hãy cho phép cửa sổ bật lên cho trang này rồi thử lại.',
@@ -448,5 +522,42 @@ export const common = defineMessages({
     'privacy.rights':
       'Trong Cài đặt, bạn có thể xuất toàn bộ dữ liệu dạng ZIP bất cứ lúc nào và xóa tài khoản: dữ liệu và tệp của bạn sẽ bị xóa ngay lập tức. Bạn cũng có quyền truy cập, chỉnh sửa, phản đối và khiếu nại tới CNIL (cnil.fr).',
     'privacy.back': 'Quay lại',
+    'auth.err.exists':
+      'Đã có tài khoản với email này. Hãy đăng nhập. Nếu bạn đã dùng Google, chọn “Tiếp tục với Google”.',
+    'auth.password_required': 'Nhập mật khẩu của bạn.',
+    'auth.password_confirm': 'Xác nhận mật khẩu',
+    'auth.password_match': 'Hai mật khẩu không giống nhau.',
+    'auth.err.weak': 'Mật khẩu này quá dễ đoán. Dùng ít nhất 8 ký tự.',
+    'auth.err.too_many': 'Quá nhiều lần thử. Chờ vài phút rồi thử lại.',
+    'auth.err.disabled': 'Tài khoản này đã bị vô hiệu hóa. Hãy liên hệ hỗ trợ.',
+    'auth.err.other_method':
+      'Email này đã thuộc về một tài khoản đăng nhập theo cách khác. Hãy đăng nhập bằng cách đó trước, rồi kết nối Google trong Cài đặt.',
+    'auth.err.other_account': 'Cách đăng nhập này đã thuộc về một tài khoản khác.',
+    'auth.err.linked': 'Cách đăng nhập này đã được kết nối.',
+    'auth.forgot': 'Quên mật khẩu?',
+    'auth.reset_title': 'Đặt lại mật khẩu',
+    'auth.reset_send': 'Gửi liên kết đặt lại',
+    'auth.reset_sent':
+      'Nếu email này có tài khoản mật khẩu, chúng tôi đã gửi liên kết đặt lại. Hãy kiểm tra cả thư rác.',
+    'auth.hint_google':
+      'Đã đăng ký bằng Google? Dùng “Tiếp tục với Google” và thêm mật khẩu sau trong Cài đặt. Nếu không, thử “Quên mật khẩu?”.',
+    'auth.methods.title': 'Cách bạn đăng nhập',
+    'auth.methods.desc':
+      'Dùng Google, mật khẩu hoặc cả hai. Luôn là cùng một tài khoản và cùng dữ liệu.',
+    'auth.methods.on': 'đã kết nối',
+    'auth.methods.off': 'chưa kết nối',
+    'auth.methods.connect_google': 'Kết nối Google',
+    'auth.methods.google_added': 'Đã kết nối Google. Bây giờ bạn có thể đăng nhập bằng Google.',
+    'auth.methods.password': 'Email và mật khẩu',
+    'auth.methods.change_password': 'Gửi cho tôi liên kết đặt lại mật khẩu',
+    'auth.methods.resend_verification': 'Gửi lại email xác minh',
+    'auth.methods.verify_sent': 'Đã gửi email xác minh. Hãy kiểm tra hộp thư.',
+    'auth.methods.add_hint': 'Bạn đã đăng nhập bằng Google. Thêm mật khẩu để đăng nhập bằng email.',
+    'auth.methods.new_password': 'Mật khẩu mới',
+    'auth.methods.add_password': 'Thêm mật khẩu',
+    'auth.methods.password_added':
+      'Đã thêm mật khẩu. Bây giờ bạn có thể đăng nhập bằng email và mật khẩu.',
+    'auth.err.reauth': 'Vui lòng đăng nhập lại rồi thử lại.',
+    'auth.methods.reset_sent': 'Đã gửi liên kết. Hãy kiểm tra hộp thư và thư rác.',
   },
 })

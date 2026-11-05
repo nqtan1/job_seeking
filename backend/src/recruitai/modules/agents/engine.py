@@ -6,6 +6,7 @@ open across it and a crash leaves an honest record.
 Isolation: a step's input is built only from the ``map`` of its incoming, active edges. Steps are
 keyed by node id, so the same helper used twice is two independent steps."""
 
+import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import LLMGateway
 from recruitai.ai.prompts import helper
+from recruitai.config import get_settings
 from recruitai.core.errors import AppError
 from recruitai.core.tasks import enqueue
 from recruitai.modules.agents import flow_repository as flows
@@ -41,6 +43,7 @@ async def enqueue_run(
     user_id: UUID,
     run_id: UUID,
     schedule_at: datetime | None = None,
+    lock: str | None = None,
 ) -> None:
     await enqueue(
         db,
@@ -53,6 +56,7 @@ async def enqueue_run(
             "run_id": str(run_id),
         },
         schedule_at=schedule_at,
+        lock=lock,
     )
 
 
@@ -379,6 +383,10 @@ async def _run_tool(
 ) -> tuple[dict[str, Any], str | None, int | None]:
     began = time.monotonic()
     try:
+        if node.tool == "for_each" and run.trigger == "flow":
+            await _fail(
+                db, run, step, "nested_not_allowed"
+            )  # one level only, before any cap use
         caps = tools.EFFECT_CAPS.get(node.tool)
         if (
             caps is not None
@@ -403,7 +411,11 @@ async def _run_tool(
             ):  # a resumed step: it already happened, do not repeat it
                 await db.rollback()
                 return {"status": "already done"}, None, 0
-        output = await tools.run_tool(db, llm, kit, run, node, values)
+        output = (
+            await _fan_out(db, run, node, values)
+            if node.tool == "for_each"
+            else await tools.run_tool(db, llm, kit, run, node, values)
+        )
     except _Stop:
         raise
     except AppError as exc:
@@ -412,6 +424,39 @@ async def _run_tool(
         logger.error("tool step failed", extra={"error_type": type(exc).__name__})
         await _fail(db, run, step, "tool_failed")
     return output, None, int((time.monotonic() - began) * 1000)
+
+
+async def _fan_out(
+    db: AsyncSession, run: FlowRun, node: g.ToolNode, values: dict[str, str]
+) -> dict[str, str]:
+    """Start one run of another flow per item; this step is done once they are queued."""
+    from recruitai.modules.agents import flows  # flows imports this module
+
+    if node.flow_id is None:
+        raise tools.ToolFailed()
+    try:
+        items = json.loads(values.get("items") or "[]")
+    except ValueError as exc:
+        raise tools.ToolFailed() from exc
+    if not (
+        isinstance(items, list)
+        and len(items) <= tools.MAX_FAN_OUT
+        and all(
+            isinstance(i, dict)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in i.items())
+            for i in items
+        )
+    ):
+        raise tools.ToolFailed()
+    await db.commit()  # nothing held open while the runs are queued
+    runs = await flows.fan_out(
+        db,
+        parent=run,
+        flow_id=node.flow_id,
+        items=items,
+        daily_quota=get_settings().ai_daily_quota_per_user,
+    )
+    return {"started": str(len(runs)), "text": "\n".join(str(r.id) for r in runs)}
 
 
 async def _run_agent(

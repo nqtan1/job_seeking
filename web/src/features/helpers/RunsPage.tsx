@@ -1,4 +1,4 @@
-import { CalendarClock, Play, Rows3, UserRound } from 'lucide-react'
+import { type LucideIcon, CalendarClock, GitBranch, Play, Rows3, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { type Key, catalogs, useI18n } from '@/i18n'
@@ -31,13 +31,18 @@ function useOutcome() {
   }
 }
 
+const TRIGGER = {
+  manual: { Icon: UserRound, label: 'helpers.pages.runs.by_you' },
+  schedule: { Icon: CalendarClock, label: 'helpers.pages.runs.by_schedule' },
+  flow: { Icon: GitBranch, label: 'helpers.pages.runs.by_flow' },
+} as const satisfies Record<string, { Icon: LucideIcon; label: Key }>
+
 function RunRow({ run }: { run: RunListItem }) {
   const { t, locale } = useI18n()
   const navigate = useNavigate()
   const again = useRerun()
   const outcome = useOutcome()
-  const scheduled = run.trigger === 'schedule'
-  const Icon = scheduled ? CalendarClock : UserRound
+  const { Icon, label } = TRIGGER[run.trigger]
   return (
     <li className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1 space-y-1.5">
@@ -52,7 +57,7 @@ function RunRow({ run }: { run: RunListItem }) {
           <RunStatusBadge status={run.status} />
           <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             <Icon className="size-3" aria-hidden />
-            {t(scheduled ? 'helpers.pages.runs.by_schedule' : 'helpers.pages.runs.by_you')}
+            {t(label)}
           </span>
         </div>
         <p

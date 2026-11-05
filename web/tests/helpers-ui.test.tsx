@@ -24,6 +24,7 @@ vi.mock('@/features/helpers/Canvas', () => ({ default: () => <div>canvas</div> }
 
 const AVATAR = { seed: 'a1', body: 0, palette: 0, eyes: 0, accessory: 0 }
 const SPEC = {
+  role: 'custom',
   instructions: 'Write a polite follow-up.',
   model_tier: 'fast',
   inputs: [{ name: 'notes', label: 'Notes', required: true }],
@@ -323,6 +324,7 @@ test('recent runs link back to their run page, newest first', async () => {
 
 describe('the flow editor', () => {
   const FSPEC = {
+    role: 'custom',
     instructions: 'x',
     model_tier: 'fast',
     inputs: [{ name: 'notes', label: 'Notes', required: true }],
@@ -681,6 +683,7 @@ describe('the live run in the editor', () => {
     const user = userEvent.setup()
     mocks.GET.mockResolvedValue({ data: { used: 1, quota: 50, radar_stops_at: 40 } })
     const spec = {
+      role: 'custom' as const,
       instructions: 'x',
       model_tier: 'fast' as const,
       inputs: [{ name: 'notes', label: 'Notes', required: true }],

@@ -32,6 +32,9 @@ MAX_NODES = 15
 MAX_EDGES = 30
 MAX_MAPS = 10
 MAX_TEMPLATE = 2_000
+# Every helper step also takes this optional input, so anything can be handed to any helper (a helper
+# that declares no input of its own would otherwise have nothing to receive).
+EXTRA_INPUT = "info"
 TOKEN = re.compile(r"\{\{\s*([a-z][a-z0-9_]{0,31})\s*\}\}")
 ANY_BRACES = re.compile(r"\{\{|\}\}")
 Template = Annotated[str, StringConstraints(max_length=MAX_TEMPLATE)]
@@ -96,7 +99,9 @@ class TransformNode(_Node):
 ToolKind = Literal[
     "web_search",
     "job_search",
-    "new_offer",
+    "find_offers",
+    "fit_check",
+    "for_each",
     "read_page",
     "job_lookup",
     "add_to_tracker",
@@ -106,11 +111,19 @@ ToolKind = Literal[
 TOOLS: dict[str, tuple[tuple[tuple[str, bool], ...], tuple[str, ...]]] = {
     "web_search": ((("query", True),), ("text", "sources")),
     "job_search": ((("query", True), ("department", False)), ("text", "count")),
-    # the first offer of the search this user has not been given before (and remembers it)
-    "new_offer": (
+    # new offers of a search (not yet saved as Jobs), saved with their full text; ``items`` is JSON,
+    # one object per offer (job_id, title, company, place, url) for for_each
+    "find_offers": (
         (("query", True), ("department", False)),
-        ("title", "company", "place", "url", "remaining"),
+        ("items", "text", "count", "remaining"),
     ),
+    # the fit analysis of the run's job (the app's tested fit prompts); "start" hangs it off Start
+    "fit_check": (
+        (("start", False), ("employer", False)),
+        ("score", "verdict", "strengths", "gaps", "missing", "reasons"),
+    ),
+    # starts one run of another automation per item (ADR 0034); the items' keys fill its Start step
+    "for_each": ((("items", True),), ("started", "text")),
     "read_page": ((("url", True),), ("text",)),
     # reads the run's chosen job; "start" is an optional link so it can hang off the Input step
     "job_lookup": (
@@ -130,11 +143,14 @@ class ToolNode(_Node):
     type: Literal["tool"] = "tool"
     tool: ToolKind
     minutes: int | None = Field(None, ge=1, le=7 * 24 * 60)  # wait only
+    flow_id: UUID | None = None  # for_each only: the automation started for each item
 
     @model_validator(mode="after")
-    def _minutes(self) -> "ToolNode":
+    def _config(self) -> "ToolNode":
         if (self.tool == "wait") != (self.minutes is not None):
             raise ValueError("only wait takes minutes, and it needs them")
+        if self.flow_id is not None and self.tool != "for_each":
+            raise ValueError("only for_each takes a flow")
         return self
 
 
@@ -198,7 +214,10 @@ def input_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[tuple[str, boo
             return [(f.name, False) for f in node.fields]
         case AgentNode():
             info = agents.get(node.agent_version_id)
-            return [(i.name, i.required) for i in info.spec.inputs] if info else []
+            if info is None:
+                return []
+            own = [(i.name, i.required) for i in info.spec.inputs]
+            return own if EXTRA_INPUT in dict(own) else [*own, (EXTRA_INPUT, False)]
         case ConditionNode():
             return [("value", True)]
         case TransformNode():

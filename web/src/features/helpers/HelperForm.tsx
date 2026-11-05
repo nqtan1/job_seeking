@@ -82,6 +82,8 @@ function OptionsInput({
 }
 const TYPES = ['text', 'number', 'boolean', 'choice', 'list'] as const
 
+const ROLES = ['custom', 'letter', 'interview', 'cv_advice'] as const
+
 const SOURCE_ICON = { profile: UserRound, job: Briefcase, fit: Target } as const
 
 /** The editable part of a helper: instructions, inputs, sources, result shape, quality. Each is a
@@ -98,6 +100,8 @@ export function SpecForm({
   const inputs = spec.inputs ?? []
   const fields = spec.output.fields ?? []
   const sources = spec.context_sources ?? []
+  const role = spec.role ?? 'custom'
+  const built = role !== 'custom' // a built-in role: tested prompt and format, only preferences are ours
   const setField = (i: number, patch: Partial<Field>) =>
     set({
       output: { kind: 'fields', fields: fields.map((f, k) => (k === i ? { ...f, ...patch } : f)) },
@@ -107,10 +111,34 @@ export function SpecForm({
 
   return (
     <>
+      <SectionCard icon={Sparkles} title={t('helpers.role.title')} help={t('helpers.role.help')}>
+        <NativeSelect
+          aria-label={t('helpers.role.title')}
+          value={role}
+          onChange={(e) => {
+            const next = ROLES.find((r) => r === e.target.value) ?? 'custom'
+            set(
+              next === 'custom'
+                ? { role: next }
+                : { role: next, inputs: [], context_sources: ['profile', 'job', 'fit'] },
+            )
+          }}
+        >
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {t(`helpers.role.${r}`)}
+            </option>
+          ))}
+        </NativeSelect>
+        {built && (
+          <p className="text-sm text-muted-foreground">{t(`helpers.role.${role}.about`)}</p>
+        )}
+      </SectionCard>
+
       <SectionCard
         icon={PenLine}
-        title={t('helpers.ui.sec.instructions')}
-        help={t('helpers.ui.sec.instructions_help')}
+        title={built ? t('helpers.role.prefs_title') : t('helpers.ui.sec.instructions')}
+        help={built ? t('helpers.role.prefs_help') : t('helpers.ui.sec.instructions_help')}
       >
         <div className="space-y-1.5">
           <Label htmlFor="h-instructions" className="sr-only">
@@ -118,8 +146,8 @@ export function SpecForm({
           </Label>
           <Textarea
             id="h-instructions"
-            rows={9}
-            maxLength={4000}
+            rows={built ? 4 : 9}
+            maxLength={built ? 1000 : 4000}
             className="leading-relaxed"
             value={spec.instructions}
             onChange={(e) => set({ instructions: e.target.value })}
@@ -129,223 +157,235 @@ export function SpecForm({
             id="h-instructions-help"
             className="flex justify-between gap-3 text-xs text-muted-foreground"
           >
-            <span>{t('helpers.instructions_help')}</span>
-            <span className="shrink-0 tabular-nums">{spec.instructions.length} / 4000</span>
+            <span>{built ? '' : t('helpers.instructions_help')}</span>
+            <span className="shrink-0 tabular-nums">
+              {spec.instructions.length} / {built ? 1000 : 4000}
+            </span>
           </p>
         </div>
       </SectionCard>
 
-      <SectionCard
-        icon={TextCursorInput}
-        title={t('helpers.inputs')}
-        help={t('helpers.inputs_help')}
-      >
-        <fieldset tabIndex={-1} className="space-y-2 outline-none">
-          {inputs.map((inp, i) => (
-            <div
-              key={i}
-              className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-2"
-            >
-              <Input
-                aria-label={`${t('helpers.input_label')} ${i + 1}`}
-                className="min-w-40 flex-1 bg-background"
-                value={inp.label}
-                maxLength={60}
-                onChange={(e) =>
-                  setInput(i, {
-                    label: e.target.value,
-                    name: inp.name || toName(e.target.value) || 'notes',
-                  })
-                }
-              />
-              <Input
-                aria-label={`${t('helpers.input_name')} ${i + 1}`}
-                className="w-32 bg-background font-mono text-xs"
-                value={inp.name}
-                maxLength={32}
-                onChange={(e) => setInput(i, { name: toName(e.target.value) })}
-              />
-              <label className="flex items-center gap-1.5 px-1 text-sm">
-                <input
-                  type="checkbox"
-                  checked={inp.required ?? true}
-                  onChange={(e) => setInput(i, { required: e.target.checked })}
-                />
-                {t('helpers.required')}
-              </label>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`${t('helpers.remove')}: ${inp.label || inp.name}`}
-                onClick={(e) => {
-                  e.currentTarget.closest('fieldset')?.focus()
-                  set({ inputs: inputs.filter((_, k) => k !== i) })
-                }}
-              >
-                <X />
-              </Button>
-            </div>
-          ))}
-          {inputs.length < MAX_INPUTS && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                set({
-                  inputs: [
-                    ...inputs,
-                    {
-                      name: freeName(
-                        'input',
-                        inputs.map((x) => x.name),
-                      ),
-                      label: t('helpers.new_input'),
-                      required: true,
-                    },
-                  ],
-                })
-              }
-            >
-              <Plus data-icon="inline-start" />
-              {t('helpers.add_input')}
-            </Button>
-          )}
-        </fieldset>
-      </SectionCard>
-
-      <SectionCard icon={FileText} title={t('helpers.sources')} help={t('helpers.sources_help')}>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {(['profile', 'job', 'fit'] as const).map((s) => (
-            <ChoiceCard
-              key={s}
-              type="checkbox"
-              icon={SOURCE_ICON[s]}
-              title={t(`helpers.source.${s}`)}
-              checked={sources.includes(s)}
-              onChange={(on) =>
-                set({
-                  context_sources: on ? [...sources, s] : sources.filter((x) => x !== s),
-                })
-              }
-            />
-          ))}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        icon={ListChecks}
-        title={t('helpers.result')}
-        help={t('helpers.ui.sec.result_help')}
-      >
-        <fieldset tabIndex={-1} className="space-y-3 outline-none">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(['text', 'fields'] as const).map((k) => (
-              <ChoiceCard
-                key={k}
-                type="radio"
-                name="result-kind"
-                icon={k === 'text' ? FileText : Rows3}
-                title={t(`helpers.result.${k}`)}
-                hint={t(`helpers.ui.${k}_hint`)}
-                checked={spec.output.kind === k}
-                onChange={() =>
-                  set({
-                    output:
-                      k === 'text'
-                        ? { kind: 'text', fields: [] }
-                        : {
-                            kind: 'fields',
-                            fields: fields.length
-                              ? fields
-                              : [{ name: 'answer', type: 'text', options: [] }],
-                          },
-                  })
-                }
-              />
-            ))}
-          </div>
-          {spec.output.kind === 'fields' &&
-            fields.map((f, i) => (
-              <div
-                key={i}
-                className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-2"
-              >
-                <Input
-                  aria-label={`${t('helpers.field_name')} ${i + 1}`}
-                  className="w-36 bg-background font-mono text-xs"
-                  value={f.name}
-                  maxLength={32}
-                  onChange={(e) => setField(i, { name: toName(e.target.value) })}
-                />
-                <NativeSelect
-                  aria-label={t('helpers.field_type')}
-                  size="sm"
-                  value={f.type}
-                  onChange={(e) =>
-                    setField(i, {
-                      type: e.target.value as Field['type'],
-                      options: e.target.value === 'choice' ? ['yes', 'no'] : [],
-                    })
-                  }
+      {!built && (
+        <>
+          <SectionCard
+            icon={TextCursorInput}
+            title={t('helpers.inputs')}
+            help={t('helpers.inputs_help')}
+          >
+            <fieldset tabIndex={-1} className="space-y-2 outline-none">
+              {inputs.map((inp, i) => (
+                <div
+                  key={i}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-2"
                 >
-                  {TYPES.map((x) => (
-                    <option key={x} value={x}>
-                      {t(`helpers.type.${x}`)}
-                    </option>
-                  ))}
-                </NativeSelect>
-                {f.type === 'choice' && (
-                  <OptionsInput
-                    key={`${i}-${f.type}`}
-                    label={t('helpers.field_options')}
-                    options={f.options ?? []}
-                    onChange={(options) => setField(i, { options })}
+                  <Input
+                    aria-label={`${t('helpers.input_label')} ${i + 1}`}
+                    className="min-w-40 flex-1 bg-background"
+                    value={inp.label}
+                    maxLength={60}
+                    onChange={(e) =>
+                      setInput(i, {
+                        label: e.target.value,
+                        name: inp.name || toName(e.target.value) || 'notes',
+                      })
+                    }
                   />
-                )}
-                {fields.length > 1 && (
+                  <Input
+                    aria-label={`${t('helpers.input_name')} ${i + 1}`}
+                    className="w-32 bg-background font-mono text-xs"
+                    value={inp.name}
+                    maxLength={32}
+                    onChange={(e) => setInput(i, { name: toName(e.target.value) })}
+                  />
+                  <label className="flex items-center gap-1.5 px-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={inp.required ?? true}
+                      onChange={(e) => setInput(i, { required: e.target.checked })}
+                    />
+                    {t('helpers.required')}
+                  </label>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`${t('helpers.remove')}: ${f.name}`}
+                    aria-label={`${t('helpers.remove')}: ${inp.label || inp.name}`}
                     onClick={(e) => {
                       e.currentTarget.closest('fieldset')?.focus()
-                      set({ output: { kind: 'fields', fields: fields.filter((_, k) => k !== i) } })
+                      set({ inputs: inputs.filter((_, k) => k !== i) })
                     }}
                   >
                     <X />
                   </Button>
-                )}
+                </div>
+              ))}
+              {inputs.length < MAX_INPUTS && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    set({
+                      inputs: [
+                        ...inputs,
+                        {
+                          name: freeName(
+                            'input',
+                            inputs.map((x) => x.name),
+                          ),
+                          label: t('helpers.new_input'),
+                          required: true,
+                        },
+                      ],
+                    })
+                  }
+                >
+                  <Plus data-icon="inline-start" />
+                  {t('helpers.add_input')}
+                </Button>
+              )}
+            </fieldset>
+          </SectionCard>
+
+          <SectionCard
+            icon={FileText}
+            title={t('helpers.sources')}
+            help={t('helpers.sources_help')}
+          >
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(['profile', 'job', 'fit'] as const).map((s) => (
+                <ChoiceCard
+                  key={s}
+                  type="checkbox"
+                  icon={SOURCE_ICON[s]}
+                  title={t(`helpers.source.${s}`)}
+                  checked={sources.includes(s)}
+                  onChange={(on) =>
+                    set({
+                      context_sources: on ? [...sources, s] : sources.filter((x) => x !== s),
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            icon={ListChecks}
+            title={t('helpers.result')}
+            help={t('helpers.ui.sec.result_help')}
+          >
+            <fieldset tabIndex={-1} className="space-y-3 outline-none">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(['text', 'fields'] as const).map((k) => (
+                  <ChoiceCard
+                    key={k}
+                    type="radio"
+                    name="result-kind"
+                    icon={k === 'text' ? FileText : Rows3}
+                    title={t(`helpers.result.${k}`)}
+                    hint={t(`helpers.ui.${k}_hint`)}
+                    checked={spec.output.kind === k}
+                    onChange={() =>
+                      set({
+                        output:
+                          k === 'text'
+                            ? { kind: 'text', fields: [] }
+                            : {
+                                kind: 'fields',
+                                fields: fields.length
+                                  ? fields
+                                  : [{ name: 'answer', type: 'text', options: [] }],
+                              },
+                      })
+                    }
+                  />
+                ))}
               </div>
-            ))}
-          {spec.output.kind === 'fields' && fields.length < MAX_FIELDS && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                set({
-                  output: {
-                    kind: 'fields',
-                    fields: [
-                      ...fields,
-                      {
-                        name: freeName(
-                          'field',
-                          fields.map((x) => x.name),
-                        ),
-                        type: 'text',
-                        options: [],
+              {spec.output.kind === 'fields' &&
+                fields.map((f, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/40 p-2"
+                  >
+                    <Input
+                      aria-label={`${t('helpers.field_name')} ${i + 1}`}
+                      className="w-36 bg-background font-mono text-xs"
+                      value={f.name}
+                      maxLength={32}
+                      onChange={(e) => setField(i, { name: toName(e.target.value) })}
+                    />
+                    <NativeSelect
+                      aria-label={t('helpers.field_type')}
+                      size="sm"
+                      value={f.type}
+                      onChange={(e) =>
+                        setField(i, {
+                          type: e.target.value as Field['type'],
+                          options: e.target.value === 'choice' ? ['yes', 'no'] : [],
+                        })
+                      }
+                    >
+                      {TYPES.map((x) => (
+                        <option key={x} value={x}>
+                          {t(`helpers.type.${x}`)}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    {f.type === 'choice' && (
+                      <OptionsInput
+                        key={`${i}-${f.type}`}
+                        label={t('helpers.field_options')}
+                        options={f.options ?? []}
+                        onChange={(options) => setField(i, { options })}
+                      />
+                    )}
+                    {fields.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`${t('helpers.remove')}: ${f.name}`}
+                        onClick={(e) => {
+                          e.currentTarget.closest('fieldset')?.focus()
+                          set({
+                            output: { kind: 'fields', fields: fields.filter((_, k) => k !== i) },
+                          })
+                        }}
+                      >
+                        <X />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              {spec.output.kind === 'fields' && fields.length < MAX_FIELDS && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    set({
+                      output: {
+                        kind: 'fields',
+                        fields: [
+                          ...fields,
+                          {
+                            name: freeName(
+                              'field',
+                              fields.map((x) => x.name),
+                            ),
+                            type: 'text',
+                            options: [],
+                          },
+                        ],
                       },
-                    ],
-                  },
-                })
-              }
-            >
-              <Plus data-icon="inline-start" />
-              {t('helpers.add_field')}
-            </Button>
-          )}
-        </fieldset>
-      </SectionCard>
+                    })
+                  }
+                >
+                  <Plus data-icon="inline-start" />
+                  {t('helpers.add_field')}
+                </Button>
+              )}
+            </fieldset>
+          </SectionCard>
+        </>
+      )}
 
       <SectionCard icon={Gauge} title={t('helpers.quality')} help={t('helpers.quality_help')}>
         <div

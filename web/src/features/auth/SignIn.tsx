@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CircleAlert, Sparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useRef, useState, type ComponentProps } from 'react'
+import { useForm, type FieldError } from 'react-hook-form'
 import { Link } from 'react-router'
 import { z } from 'zod'
 import { LanguageSelect } from '@/components/LanguageSelect'
@@ -11,23 +11,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { clearEndReason, peekEndReason } from '@/lib/session'
-import { signInWithEmail, signInWithGoogle, signUpWithEmail } from '@/lib/auth'
+import {
+  authErrorKey,
+  sendPasswordReset,
+  signInWithEmail,
+  signInWithGoogle,
+  signUpWithEmail,
+} from '@/lib/auth'
 
-type Values = { email: string; password: string }
+type Mode = 'signin' | 'signup' | 'reset'
+type Values = { email: string; password: string; confirm: string }
 
-const MESSAGES: Record<string, Key> = {
-  'auth/invalid-credential': 'auth.err.credentials',
-  'auth/user-not-found': 'auth.err.credentials',
-  'auth/wrong-password': 'auth.err.credentials',
-  'auth/email-already-in-use': 'auth.err.exists',
-  'auth/popup-closed-by-user': 'auth.err.cancelled',
-  'auth/popup-blocked': 'auth.err.popup',
-  'auth/network-request-failed': 'auth.err.network',
-}
-
-// Never show raw SDK text: map the error code or fall back to a generic message.
-const errorKey = (e: unknown): Key =>
-  MESSAGES[(e as { code?: string }).code ?? ''] ?? 'auth.err.generic'
+const MIN_PASSWORD = 8 // new passwords only: older accounts may have a shorter one (the SDK allows 6)
 
 const REASONS: Record<string, Key> = {
   idle: 'auth.reason.idle',
@@ -35,38 +30,114 @@ const REASONS: Record<string, Key> = {
   'other-tab': 'auth.reason.other_tab',
 }
 
+const TITLES: Record<Mode, Key> = {
+  signin: 'auth.sign_in',
+  signup: 'auth.create_account',
+  reset: 'auth.reset_title',
+}
+const SUBMITS: Record<Mode, Key> = {
+  signin: 'auth.sign_in',
+  signup: 'auth.sign_up',
+  reset: 'auth.reset_send',
+}
+
+function Field({
+  id,
+  label,
+  error,
+  ...input
+}: { id: string; label: string; error?: FieldError } & ComponentProps<typeof Input>) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        aria-invalid={!!error}
+        aria-describedby={error ? `${id}-error` : undefined}
+        {...input}
+      />
+      <p id={`${id}-error`} role="alert" className="text-sm text-destructive empty:hidden">
+        {error?.message}
+      </p>
+    </div>
+  )
+}
+
 export function SignIn() {
   const t = useT()
-  const schema = z.object({
-    email: z.string().email(t('auth.email_invalid')),
-    password: z.string().min(8, t('auth.password_min')),
-  })
   const [reason] = useState(() => REASONS[peekEndReason() ?? ''])
   useEffect(() => clearEndReason, [])
   const [remember, setRemember] = useState(false)
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<Mode>('signin')
   const [error, setError] = useState<Key>()
+  const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false) // one request at a time: the form, Google, a reset
+  const running = useRef(false) // set at once; `busy` only after the next render (Enter twice)
+
+  const schema = z
+    .object({
+      email: z.string().trim().toLowerCase().email(t('auth.email_invalid')),
+      password: z.string(),
+      confirm: z.string(),
+    })
+    .superRefine((v, ctx) => {
+      const issue = (path: keyof Values, message: Key) =>
+        ctx.addIssue({ code: 'custom', path: [path], message: t(message) })
+      if (mode === 'reset') return
+      if (!v.password) issue('password', 'auth.password_required')
+      else if (mode === 'signup' && v.password.length < MIN_PASSWORD)
+        issue('password', 'auth.password_min')
+      else if (mode === 'signup' && v.password !== v.confirm)
+        issue('confirm', 'auth.password_match')
+    })
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<Values>({ resolver: zodResolver(schema) })
+    resetField,
+    setFocus,
+    formState: { errors },
+  } = useForm<Values>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: '', password: '', confirm: '' }, // fields not on screen stay empty, not missing
+  })
+
+  const go = (next: Mode) => {
+    setMode(next)
+    setError(undefined)
+    setSent(false)
+    resetField('password')
+    resetField('confirm')
+    setTimeout(() => setFocus('email'), 0) // the clicked button just changed meaning
+  }
 
   const run = async (fn: () => Promise<unknown>) => {
+    if (running.current) return
+    running.current = true
     setError(undefined)
+    setBusy(true)
     try {
       await fn()
     } catch (e) {
-      setError(errorKey(e))
+      setError(authErrorKey(e))
+    } finally {
+      running.current = false
+      setBusy(false)
     }
   }
 
   const onSubmit = ({ email, password }: Values) =>
-    run(() =>
-      mode === 'signin'
-        ? signInWithEmail(email, password, remember)
-        : signUpWithEmail(email, password, remember),
-    )
+    run(async () => {
+      if (mode === 'reset') {
+        try {
+          await sendPasswordReset(email)
+        } catch (e) {
+          // Production answers the same for every address; the emulator says "no such account".
+          if ((e as { code?: string }).code !== 'auth/user-not-found') throw e
+        }
+        setSent(true)
+      } else if (mode === 'signin') await signInWithEmail(email, password, remember)
+      else await signUpWithEmail(email, password, remember)
+    })
 
   return (
     <main className="grid min-h-screen md:grid-cols-2">
@@ -86,78 +157,103 @@ export function SignIn() {
         </div>
         <Card className="w-full max-w-sm shadow-none ring-0 md:bg-transparent">
           <CardHeader>
-            <CardTitle className="text-xl">
-              {mode === 'signin' ? t('auth.sign_in') : t('auth.create_account')}
+            <CardTitle role="heading" aria-level={1} className="text-xl">
+              {t(TITLES[mode])}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-              <div className="space-y-1">
-                <Label htmlFor="email">{t('auth.email')}</Label>
-                <Input id="email" type="email" autoComplete="email" {...register('email')} />
-                {errors.email && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="password">{t('auth.password')}</Label>
-                <Input
+            <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4" noValidate>
+              <Field
+                id="email"
+                label={t('auth.email')}
+                type="email"
+                autoComplete={mode === 'reset' ? 'email' : 'username'}
+                error={errors.email}
+                {...register('email')}
+              />
+              {mode !== 'reset' && (
+                <Field
                   id="password"
+                  label={t('auth.password')}
                   type="password"
                   autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                  error={errors.password}
                   {...register('password')}
                 />
-                {errors.password && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {errors.password.message}
-                  </p>
-                )}
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
+              )}
+              {mode === 'signup' && (
+                <Field
+                  id="confirm"
+                  label={t('auth.password_confirm')}
+                  type="password"
+                  autoComplete="new-password"
+                  error={errors.confirm}
+                  {...register('confirm')}
                 />
-                {t('auth.remember')}
-              </label>
+              )}
+              {mode === 'signin' && (
+                <Button type="button" variant="link" className="px-0" onClick={() => go('reset')}>
+                  {t('auth.forgot')}
+                </Button>
+              )}
+              {mode !== 'reset' && (
+                <label className="flex min-h-6 items-center gap-2 py-1 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(e) => setRemember(e.target.checked)}
+                  />
+                  {t('auth.remember')}
+                </label>
+              )}
               {reason && !error && (
                 <p role="status" className="text-sm text-muted-foreground">
                   {t(reason)}
                 </p>
               )}
-              {error && (
-                <p
-                  role="alert"
-                  className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  <CircleAlert className="mt-0.5 size-4 shrink-0" />
-                  {t(error)}
-                </p>
-              )}
-              <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-                {mode === 'signin' ? t('auth.sign_in') : t('auth.sign_up')}
+              <p role="status" className="text-sm text-muted-foreground empty:hidden">
+                {sent ? t('auth.reset_sent') : ''}
+              </p>
+              <div role="alert" className="empty:hidden">
+                {error && (
+                  <div className="space-y-1 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    <p className="flex items-start gap-2">
+                      <CircleAlert className="mt-0.5 size-4 shrink-0" />
+                      {t(error)}
+                    </p>
+                    {/* Google-only accounts answer "wrong password" too: point to the way in. */}
+                    {mode === 'signin' && error === 'auth.err.credentials' && (
+                      <p>{t('auth.hint_google')}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Button type="submit" size="lg" className="w-full" disabled={busy}>
+                {t(SUBMITS[mode])}
               </Button>
             </form>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              {t('auth.or')}
-              <span className="h-px flex-1 bg-border" />
-            </div>
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full"
-              onClick={() => run(() => signInWithGoogle(remember))}
-            >
-              {t('auth.google')}
-            </Button>
+            {mode !== 'reset' && (
+              <>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  {t('auth.or')}
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={() => run(() => signInWithGoogle(remember))}
+                >
+                  {t('auth.google')}
+                </Button>
+              </>
+            )}
             <Button
               variant="link"
               className="w-full"
-              onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+              onClick={() => go(mode === 'signin' ? 'signup' : 'signin')}
             >
               {mode === 'signin' ? t('auth.no_account') : t('auth.have_account')}
             </Button>

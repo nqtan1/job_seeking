@@ -586,7 +586,7 @@ function RunDialog({
   const fields = input?.type === 'input' ? input.fields : []
   const needsJob = graph.nodes.some(
     (n) =>
-      (n.type === 'tool' && n.tool === 'job_lookup') ||
+      (n.type === 'tool' && (n.tool === 'job_lookup' || n.tool === 'fit_check')) ||
       (n.type === 'agent' &&
         (specs.get(n.agent_version_id)?.context_sources ?? []).some(
           (s) => s === 'job' || s === 'fit',

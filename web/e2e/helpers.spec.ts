@@ -12,7 +12,8 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.goto('/helpers')
   await page.getByRole('button', { name: 'No account? Sign up' }).click()
   await page.getByLabel('Email').fill(`helpers${Date.now()}@example.com`)
-  await page.getByLabel('Password').fill('password123')
+  await page.getByLabel('Password', { exact: true }).fill('password123')
+  await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
   await nav(page, 'Helpers').click()
@@ -52,7 +53,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   // What moves from Start to Mira is visible, with the previews rendered by the server.
   await page.getByRole('button', { name: '→ Mira', exact: true }).click()
   await expect(page.getByText('The next step cannot see:')).toBeVisible()
-  await expect(page.getByText('sample notes').first()).toBeVisible()
+  await expect(page.getByText('What this step gives back')).toBeVisible() // with an example each
 
   await expect(page.getByRole('button', { name: 'Run flow' })).toBeDisabled() // unsaved
   await page.getByRole('button', { name: /Save version/ }).click()
@@ -121,6 +122,20 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.getByLabel('Add an action…').selectOption({ label: 'Search jobs' })
   await expect(page.getByRole('button', { name: /Search jobs/ }).first()).toBeVisible()
   await expect(page.getByRole('status').filter({ hasText: /to fix/ })).toBeVisible()
+  // Selecting it shows what it gives back, with an example, so links can be wired by looking.
+  await page
+    .getByRole('button', { name: /Search jobs/ })
+    .first()
+    .click()
+  await expect(page.getByText('What this step gives back')).toBeVisible()
+  await expect(page.getByText('{{count}}')).toBeVisible()
+  await page.screenshot({
+    path: process.env.SHOTS ? `${process.env.SHOTS}/outputs.png` : undefined,
+  })
+
+  // "Start an automation for each" needs its target: the checks say so until one is chosen.
+  await page.getByLabel('Add an action…').selectOption({ label: 'Start an automation for each' })
+  await expect(page.getByText('Choose the automation to start.')).toBeVisible({ timeout: 15_000 })
 
   // Contacts: add someone to email; they stay "waiting for their OK" until they confirm.
   await page.goto('/automations?tab=contacts')

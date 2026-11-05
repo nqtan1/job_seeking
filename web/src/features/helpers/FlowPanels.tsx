@@ -9,9 +9,9 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react'
-import { useT } from '@/i18n'
+import { type Key, catalogs, useT } from '@/i18n'
 import { Avatar } from './Avatar'
-import { type Handoff, useAgent, usePreview } from './api'
+import { type Handoff, useAgent, useFlows, usePreview } from './api'
 import { type AvatarSpec, PALETTES } from './avatar'
 import {
   type Graph,
@@ -22,6 +22,7 @@ import {
   type Specs,
   type VersionSpec,
   freeName,
+  EXTRA_INPUT,
   inputsOf,
   outputsOf,
   patchNode,
@@ -30,10 +31,11 @@ import {
 } from './graph'
 import type { Selection } from './Canvas'
 import { KIND } from './nodeKind'
+import { type OutField, outputFields } from './samples'
 import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import { Link } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { TryPanel } from './HelperForm'
 import { Button } from '@/components/ui/button'
 
@@ -256,6 +258,8 @@ export function EdgeInspector({
   const from = graph.nodes.find((n) => n.id === edge?.from.node)
   const to = graph.nodes.find((n) => n.id === edge?.to)
   const outs = from ? outputsOf(from, specs) : []
+  const fields = from ? outputFields(from, specs) : []
+  const example = (name: string) => fields.find((f) => f.name === name)?.example ?? ''
   const ins = to ? inputsOf(to, specs) : []
   const [sample, setSample] = useState<Record<string, string>>({})
   const { mutate: render, data: rendered } = usePreview()
@@ -268,7 +272,10 @@ export function EdgeInspector({
       : JSON.stringify({
           map,
           outputs: Object.fromEntries(
-            outs.map((o) => [o, sample[o] ?? t('helpers.sample_value', { field: o })]),
+            outs.map((o) => [
+              o,
+              sample[o] ?? (example(o) || t('helpers.sample_value', { field: o })),
+            ]),
           ),
         })
 
@@ -296,12 +303,7 @@ export function EdgeInspector({
           {avatars.get(to.id) && <Avatar spec={avatars.get(to.id)!} size={24} />}
           {titles.get(to.id)}
         </h2>
-        <p className="text-xs text-muted-foreground">
-          {t('helpers.handoff.outputs')}:{' '}
-          <span className="font-mono">
-            {outs.length ? outs.map((o) => `{{${o}}}`).join('  ') : '—'}
-          </span>
-        </p>
+        <OutputList fields={fields} />
       </header>
 
       <ul className="space-y-4">
@@ -312,7 +314,7 @@ export function EdgeInspector({
           return (
             <li key={i.name} className="space-y-1.5">
               <label htmlFor={`map-${i.name}`} className="text-sm font-medium">
-                {i.name}
+                {i.name === EXTRA_INPUT ? t('helpers.handoff.info') : i.name}
                 {i.required && <span className="text-destructive"> *</span>}
               </label>
               <NativeSelect
@@ -330,7 +332,7 @@ export function EdgeInspector({
                 <option value={NONE}>{t('helpers.handoff.none')}</option>
                 {outs.map((o) => (
                   <option key={o} value={o}>
-                    {t('helpers.handoff.pass', { field: o })}
+                    {t('helpers.handoff.pass', { field: o })} — {example(o).slice(0, 32)}
                   </option>
                 ))}
                 <option value={CUSTOM}>{t('helpers.handoff.custom')}</option>
@@ -374,7 +376,7 @@ export function EdgeInspector({
               <Input
                 key={o}
                 aria-label={o}
-                placeholder={o}
+                placeholder={example(o) || o}
                 value={sample[o] ?? ''}
                 onChange={(e) => setSample({ ...sample, [o]: e.target.value })}
               />
@@ -531,6 +533,68 @@ function LengthInput({
 }
 
 /** Settings of the selected step. Only fixed, closed operations: nothing here runs user code. */
+/** What a step gives back: each field with what it means and an example, so a link can be wired by
+ *  looking at it. */
+function OutputList({ fields }: { fields: OutField[] }) {
+  const t = useT()
+  if (!fields.length) return null
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium">{t('helpers.gives_back')}</p>
+      <ul className="space-y-1.5">
+        {fields.map((f) => {
+          const key = `helpers.field.${f.name}`
+          return (
+            <li key={f.name} className="text-xs">
+              <p>
+                <span className="font-mono">{`{{${f.name}}}`}</span>
+                {key in catalogs.en && (
+                  <span className="text-muted-foreground"> · {t(key as Key)}</span>
+                )}
+              </p>
+              <p className="mt-0.5 line-clamp-3 rounded-r-lg border-l-2 border-primary/40 bg-muted/60 px-2.5 py-1.5 whitespace-pre-wrap text-muted-foreground">
+                {f.example}
+              </p>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+/** The automation a "start a flow for each" step launches (never this one). */
+function FlowPicker({
+  node,
+  patch,
+}: {
+  node: Extract<GraphNode, { type: 'tool' }>
+  patch: (p: Partial<GraphNode>) => void
+}) {
+  const t = useT()
+  const { flowId } = useParams()
+  const flows = useFlows()
+  return (
+    <div className="space-y-1">
+      <NativeSelect
+        aria-label={t('helpers.foreach.flow')}
+        value={node.flow_id ?? ''}
+        onChange={(e) => patch({ flow_id: e.target.value || null } as Partial<GraphNode>)}
+      >
+        <option value="">{t('helpers.foreach.choose')}</option>
+        {(flows.data ?? [])
+          .filter((f) => f.id !== flowId)
+          .map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+      </NativeSelect>
+      <p className="text-xs text-muted-foreground">{t('helpers.foreach.hint')}</p>
+    </div>
+  )
+}
+
 export function NodeInspector({
   graph,
   node,
@@ -598,6 +662,14 @@ export function NodeInspector({
           />
         </>
       )}
+      {node.type !== 'output' && (
+        <OutputList
+          fields={outputFields(
+            node,
+            node.type === 'agent' && spec ? new Map([[node.agent_version_id, spec]]) : new Map(),
+          )}
+        />
+      )}
       {node.type === 'condition' && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">{t('helpers.inspect.condition')}</p>
@@ -623,6 +695,7 @@ export function NodeInspector({
       {node.type === 'tool' && (
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">{t(`helpers.tool.${node.tool}.about`)}</p>
+          {node.tool === 'for_each' && <FlowPicker node={node} patch={patch} />}
           {node.tool === 'wait' && (
             <div className="space-y-1">
               <p className="text-sm font-medium">{t('helpers.wait.minutes')}</p>

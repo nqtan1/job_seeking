@@ -21,7 +21,11 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page).toHaveURL(/\/signin/) // route guard
   await page.getByRole('button', { name: 'No account? Sign up' }).click()
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill('password123')
+  await page.getByLabel('Password', { exact: true }).fill('password123')
+  await page.getByLabel('Confirm password').fill('password124')
+  await page.getByRole('button', { name: 'Sign up', exact: true }).click()
+  await expect(page.getByText('The two passwords are not the same.')).toBeVisible() // nothing created
+  await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
   await expect(page).toHaveURL(/\/jobs/) // back to the page that was asked for
@@ -95,6 +99,8 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   // Settings: export (worker task), then delete the account.
   await page.getByRole('button', { name: 'Account menu' }).click()
   await page.getByRole('menuitem', { name: 'Settings' }).click()
+  await expect(page.getByText('How you sign in')).toBeVisible()
+  await expect(page.getByText('Email and password connected')).toBeVisible()
   await page.getByRole('button', { name: 'Request export' }).click()
   await expect(page.getByRole('link', { name: /Download your export/ })).toBeVisible({
     timeout: 60_000,

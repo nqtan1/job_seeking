@@ -142,7 +142,8 @@ class RunSummary(BaseModel):
     id: UUID
     flow_id: UUID
     flow_version_id: UUID
-    trigger: Literal["manual", "schedule"]
+    trigger: Literal["manual", "schedule", "flow"]
+    parent_run_id: UUID | None
     status: Literal["queued", "running", "waiting", "done", "failed", "cancelled"]
     error_code: str | None
     wake_at: datetime | None

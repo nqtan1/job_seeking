@@ -1349,7 +1349,7 @@ async def test_confirmation_mail_cannot_be_farmed_by_removing_and_adding_again(
     assert "block_url" in mail.sent[0].context  # the victim can block it for good
 
 
-async def test_new_offer_hands_out_each_offer_once_and_a_yes_exit_gates_what_follows(
+async def test_find_offers_saves_new_offers_once_and_a_yes_exit_gates_what_follows(
     client, db_session, fake_llm: FakeLLMGateway, task_app, ada
 ):
     from recruitai.core.email import FakeEmailSender
@@ -1357,30 +1357,26 @@ async def test_new_offer_hands_out_each_offer_once_and_a_yes_exit_gates_what_fol
     from tests.e2e_radar_fakes import Provider
 
     org = await org_of(client, ada)
-    pages: list[str] = []
 
-    async def fetch(url: str) -> str:
-        pages.append(url)
-        return "Full offer text."
+    async def no_fetch(url: str) -> str:
+        raise AssertionError("no page is read")
 
-    kit = tools.ToolKit(fetch=fetch, jobs=Provider(), mail=FakeEmailSender())
-    i, new, cond, page, track, o = (
+    kit = tools.ToolKit(fetch=no_fetch, jobs=Provider(), mail=FakeEmailSender())
+    i, find, cond, track, o = (
         input_node("q"),
-        tool_node("new_offer"),
-        {"type": "condition", "id": str(uuid4()), "op": "contains", "value": "http"},
-        tool_node("read_page"),
+        tool_node("find_offers"),
+        {"type": "condition", "id": str(uuid4()), "op": "gt", "value": "0"},
         tool_node("add_to_tracker"),
-        output_node("page", "left", "card"),
+        output_node("count", "left", "card"),
     )
     flow = await make_flow(
-        client, ada, [i, new, cond, page, track, o],
+        client, ada, [i, find, cond, track, o],
         [
-            edge(i, new, {"query": "{{q}}"}),
-            edge(new, cond, {"value": "{{url}}"}),
-            edge(cond, page, {"url": "{{value}}"}, "true"),
+            edge(i, find, {"query": "{{q}}"}),
+            edge(find, cond, {"value": "{{count}}"}),
             edge(cond, track, {}, "true"),  # a gate: no data, only "run me if yes"
-            edge(new, track, {"company": "{{company}}", "title": "{{title}}"}),
-            edge(page, o, {"page": "{{text}}"}), edge(new, o, {"left": "{{remaining}}"}),
+            edge(i, track, {"company": "{{q}}"}),
+            edge(find, o, {"count": "{{count}}", "left": "{{remaining}}"}),
             edge(track, o, {"card": "{{status}}"}),
         ],
     )  # fmt: skip
@@ -1395,14 +1391,276 @@ async def test_new_offer_hands_out_each_offer_once_and_a_yes_exit_gates_what_fol
         await engine.execute(db_session, fake_llm, org_id=org, run_id=run_id, kit=kit)
         return (await client.get(f"{BASE}/flow-runs/{run_id}", headers=ada)).json()
 
-    runs = [await go() for _ in range(4)]
-    assert [r["status"] for r in runs] == ["done"] * 4
-    assert [r["result"].get("left") for r in runs] == ["2", "1", "0", "0"]
+    first, second = await go(), await go()
+    assert first["status"] == second["status"] == "done"
+    assert first["result"]["count"] == "3" and second["result"]["count"] == "0"
+    saved = (await client.get("/api/v1/jobs", headers=ada)).json()
+    assert len(saved) == 3  # the full offers are now the account's Jobs: the "old data"
+    assert len((await client.get("/api/v1/applications", headers=ada)).json()) == 1
+    last = {s["node_id"]: s["status"] for s in second["steps"]}
+    assert last[track["id"]] == "skipped"  # nothing new: gated off
+
+
+async def test_any_helper_can_receive_information_even_without_declared_inputs(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from tests.integration.test_agents import SPEC
+
+    org = await org_of(client, ada)
+    a = await agent(client, ada, spec={**SPEC, "inputs": [], "context_sources": []})
+    i, x, o = input_node("n"), agent_node(a), output_node("r")
+    flow = await make_flow(
+        client, ada, [i, x, o],
+        [edge(i, x, {"info": "company: {{n}}"}), edge(x, o, {"r": "{{text}}"})],
+    )  # fmt: skip
+    fake_llm.queue(feature_of(a), TEXT(text="ok"))
+    run = await run_now(client, db_session, fake_llm, ada, flow, {"n": "Acme"}, org)
+    assert run["status"] == "done"
+    assert '<data name="info">\ncompany: Acme\n</data>' in sent_text(fake_llm.calls[0])
+
+
+async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_the_quota(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    import pytest
+    from sqlalchemy import select
+
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents import flows as flows_
+    from recruitai.modules.agents import tools
+    from recruitai.modules.agents.models import FlowRun
+    from tests.e2e_radar_fakes import Provider
+
+    org = await org_of(client, ada)
+    kit = tools.ToolKit(
+        fetch=lambda url: None,
+        jobs=Provider(),
+        mail=FakeEmailSender(),  # type: ignore[arg-type]
+    )
+
+    # the per-offer flow: its Start step receives the offer's fields, the run gets its job
+    ci, co = input_node("title", "url"), output_node("seen")
+    child = await make_flow(
+        client, ada, [ci, co], [edge(ci, co, {"seen": "{{title}} @ {{url}}"})]
+    )
+    i, find, each, o = (
+        input_node("q"),
+        tool_node("find_offers"),
+        {**tool_node("for_each"), "flow_id": child["id"]},
+        output_node("started"),
+    )
+    hunter = await make_flow(
+        client, ada, [i, find, each, o],
+        [
+            edge(i, find, {"query": "{{q}}"}), edge(find, each, {"items": "{{items}}"}),
+            edge(each, o, {"started": "{{started}}"}),
+        ],
+    )  # fmt: skip
+
+    async def go(flow: dict) -> dict:
+        r = await client.post(
+            f"{BASE}/flows/{flow['id']}/runs",
+            headers=ada,
+            json={"inputs": {"q": "dev"}},
+        )
+        await engine.execute(
+            db_session, fake_llm, org_id=org, run_id=UUID(r.json()["id"]), kit=kit
+        )
+        return (
+            await client.get(f"{BASE}/flow-runs/{r.json()['id']}", headers=ada)
+        ).json()
+
+    first = await go(hunter)
+    assert first["status"] == "done" and first["result"]["started"] == "3", first
+    kids = (
+        (
+            await db_session.execute(
+                select(FlowRun).where(FlowRun.parent_run_id.is_not(None))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(kids) == 3 and {k.trigger for k in kids} == {"flow"}
+    assert all(
+        k.job_id is not None for k in kids
+    )  # each started run works on its own offer
+    assert all(k.inputs["url"].startswith("https://x.test/") for k in kids)
+    for k in kids:  # a started run is an ordinary run
+        await engine.execute(db_session, fake_llm, org_id=org, run_id=k.id, kit=kit)
+    done = [
+        (await client.get(f"{BASE}/flow-runs/{k.id}", headers=ada)).json() for k in kids
+    ]
+    assert {d["status"] for d in done} == {"done"} and all(
+        d["parent_run_id"] for d in done
+    )
+
+    # a resumed for_each starts nothing twice: the same items give the same runs
+    parent = (
+        await db_session.execute(select(FlowRun).where(FlowRun.id == UUID(first["id"])))
+    ).scalar_one()
+    items = [{**k.inputs, "job_id": str(k.job_id)} for k in kids]
+    again = await flows_.fan_out(
+        db_session,
+        parent=parent,
+        flow_id=UUID(child["id"]),
+        items=items,
+        daily_quota=50,
+    )
+    assert {r.id for r in again} == {k.id for k in kids}
+
+    # the quota: a target with one model call and room for one run starts one, then says so;
+    # after the quota is back, a Resume starts only the missing ones
+    x = await agent(client, ada)
+    ai, ax, ao = input_node("title", "url"), agent_node(x), output_node("r")
+    costly = await make_flow(
+        client, ada, [ai, ax, ao],
+        [edge(ai, ax, {"notes": "{{title}}"}), edge(ax, ao, {"r": "{{text}}"})],
+    )  # fmt: skip
+    fresh = [{"title": f"t{n}", "url": f"https://x.test/{n}"} for n in range(3)]
+    with pytest.raises(tools.DailyLimit):
+        await flows_.fan_out(
+            db_session,
+            parent=parent,
+            flow_id=UUID(costly["id"]),
+            items=fresh,
+            daily_quota=1,
+        )
+    started = (
+        (
+            await db_session.execute(
+                select(FlowRun).where(FlowRun.flow_id == UUID(costly["id"]))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(started) == 1
+    rest = await flows_.fan_out(
+        db_session,
+        parent=parent,
+        flow_id=UUID(costly["id"]),
+        items=fresh,
+        daily_quota=50,
+    )
+    assert len(rest) == 3 and started[0].id in {r.id for r in rest}
+
+    # one level only: a flow that fans out cannot be the target
+    bad = await client.post(
+        f"{BASE}/flows/{child['id']}/versions",
+        headers=ada,
+        json={
+            "based_on": 1,
+            "graph": {
+                "nodes": [ci, {**tool_node("for_each"), "flow_id": hunter["id"]}, co],
+                "edges": [],
+            },
+        },
+    )
+    assert bad.status_code == 201  # saving with problems is allowed...
+    detail = (await client.get(f"{BASE}/flows/{hunter['id']}", headers=ada)).json()
+    assert "target_nested" in {
+        x["code"] for x in detail["issues"]
+    }  # ...but it cannot run
+    refused = await client.post(
+        f"{BASE}/flows/{hunter['id']}/runs", headers=ada, json={"inputs": {"q": "dev"}}
+    )
+    assert refused.status_code == 422
+
+
+async def test_fit_check_runs_the_apps_fit_analysis_once_and_a_low_score_skips_the_rest(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from recruitai.ai.prompts import fit
+    from recruitai.modules.matching.schemas import FitCheck
+    from tests.integration.test_matching_router import _add_job, _add_profile
+    from tests.unit.test_schemas import VALID
+
+    org = await org_of(client, ada)
+    await _add_profile(client, fake_llm, ada)
+    job_id = await _add_job(client, fake_llm, ada)
+    low = FitCheck.model_validate({**VALID, "fit_score": 40})
+
+    x = await agent(client, ada)
+    i, fitn, cond, nxt, o = (
+        input_node("n"),
+        tool_node("fit_check"),
+        {"type": "condition", "id": str(uuid4()), "op": "gt", "value": "60"},
+        agent_node(x),
+        output_node("score", "verdict", "after"),
+    )
+    flow = await make_flow(
+        client, ada, [i, fitn, cond, nxt, o],
+        [
+            edge(i, fitn, {"employer": "startup"}),
+            edge(fitn, cond, {"value": "{{score}}"}),
+            edge(cond, nxt, {"notes": "{{value}}"}, "true"),
+            edge(fitn, o, {"score": "{{score}}", "verdict": "{{verdict}}"}),
+            edge(nxt, o, {"after": "{{text}}"}),
+        ],
+    )  # fmt: skip
+
+    no_job = await client.post(
+        f"{BASE}/flows/{flow['id']}/runs", headers=ada, json={"inputs": {"n": "x"}}
+    )
+    assert no_job.status_code == 422  # a fit check asks for a job before anything runs
+
+    fake_llm.queue(fit.PROMPT_VERSION, low)
+    before = len(fake_llm.calls)
+    run = await run_now(
+        client, db_session, fake_llm, ada, flow, {"n": "x"}, org, job_id
+    )
+    assert run["status"] == "done" and run["result"]["score"] == "40"
     assert (
-        len(set(pages)) == 3 == len(pages)
-    )  # a different offer each run, then nothing
-    assert len((await client.get("/api/v1/applications", headers=ada)).json()) == 3
-    last = {s["node_id"]: s["status"] for s in runs[3]["steps"]}
+        run["result"]["verdict"] and run["result"]["after"] == ""
+    )  # below 60: skipped
     assert (
-        last[page["id"]] == last[track["id"]] == "skipped"
-    )  # nothing new: both gated off
+        len(fake_llm.calls) == before + 1
+    )  # one model call, none for the skipped helper
+
+    again = await run_now(
+        client, db_session, fake_llm, ada, flow, {"n": "x"}, org, job_id
+    )
+    assert (
+        again["result"]["score"] == "40" and len(fake_llm.calls) == before + 1
+    )  # reused
+
+
+async def test_find_offers_keeps_going_when_one_offer_cannot_be_fetched(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents import tools
+    from tests.e2e_radar_fakes import OFFERS, Provider
+
+    bad = list(OFFERS)[1]
+
+    class Flaky(Provider):
+        async def detail(self, job_id: str):  # type: ignore[no-untyped-def]
+            if job_id == bad:
+                raise RuntimeError("provider down for this offer")
+            return await super().detail(job_id)
+
+    org = await org_of(client, ada)
+
+    async def no_fetch(url: str) -> str:
+        raise AssertionError("no page is read")
+
+    kit = tools.ToolKit(fetch=no_fetch, jobs=Flaky(), mail=FakeEmailSender())
+    i, find, o = input_node("q"), tool_node("find_offers"), output_node("count", "left")
+    flow = await make_flow(
+        client, ada, [i, find, o],
+        [edge(i, find, {"query": "{{q}}"}), edge(find, o, {"count": "{{count}}", "left": "{{remaining}}"})],
+    )  # fmt: skip
+    r = await client.post(
+        f"{BASE}/flows/{flow['id']}/runs", headers=ada, json={"inputs": {"q": "dev"}}
+    )
+    await engine.execute(
+        db_session, fake_llm, org_id=org, run_id=UUID(r.json()["id"]), kit=kit
+    )
+    run = (await client.get(f"{BASE}/flow-runs/{r.json()['id']}", headers=ada)).json()
+    assert run["status"] == "done" and run["result"]["count"] == "2", (
+        run
+    )  # the others still saved
+    assert len((await client.get("/api/v1/jobs", headers=ada)).json()) == 2
+    assert run["result"]["left"] == "1"  # the one that failed comes back next time

@@ -1,6 +1,8 @@
 """Flows and runs: CRUD with immutable versions, validation, starting/resuming/cancelling a run
 (ADR 0031). The engine (``engine.py``) does the actual work in the worker."""
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -9,10 +11,11 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.ai import usage
 from recruitai.config import Settings
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
-from recruitai.modules.agents import engine, service
+from recruitai.modules.agents import engine, service, tools
 from recruitai.modules.agents import flow_repository as repo
 from recruitai.modules.agents import graph as g
 from recruitai.modules.agents import recipients_repository as recipients_repo
@@ -29,6 +32,7 @@ from recruitai.modules.jobs import service as jobs
 MAX_FLOWS_PER_ORG = 20
 MAX_FLOWS_EVER = 100  # archived ones count too: archiving is not a way around the cap
 MAX_ACTIVE_RUNS = 2
+MAX_ACTIVE_CHILDREN = 10  # runs started by for_each steps, all together
 WAKE_GRACE = timedelta(
     minutes=10
 )  # a wake-up job this late is lost: the sweep fails the run
@@ -59,10 +63,10 @@ def graph_of(version: FlowVersion) -> g.Graph:
 
 
 def ai_calls(graph: g.Graph) -> int:
-    """Model calls a run can make: one per helper, and one per web search."""
+    """Model calls a run can make: one per helper, web search and fit check."""
     return sum(
         isinstance(n, g.AgentNode)
-        or (isinstance(n, g.ToolNode) and n.tool == "web_search")
+        or (isinstance(n, g.ToolNode) and n.tool in ("web_search", "fit_check"))
         for n in graph.nodes
     )
 
@@ -73,10 +77,37 @@ async def check(
     org_id: UUID,
     graph: g.Graph,
     agents: dict[UUID, g.AgentInfo] | None = None,
+    flow_id: UUID | None = None,
 ) -> list[g.Issue]:
     if agents is None:
         agents = await engine.load_agents(db, org_id=org_id, graph=graph)
-    return g.validate(graph, agents)
+    issues = g.validate(graph, agents)
+    for n in graph.nodes:
+        if isinstance(n, g.ToolNode) and n.tool == "for_each":
+            issues += await _target_issues(db, org_id, flow_id, n)
+    return issues
+
+
+async def _target_issues(
+    db: AsyncSession, org_id: UUID, own_id: UUID | None, node: g.ToolNode
+) -> list[g.Issue]:
+    """A for_each may start another live automation of this account that does not fan out itself
+    (one level only: no loops, no explosion)."""
+    if node.flow_id is None:
+        return [g.Issue("target_missing", "Choose the flow to start.", node.id)]
+    if node.flow_id == own_id:
+        return [g.Issue("target_self", "A flow cannot start itself.", node.id)]
+    gone = [g.Issue("target_unavailable", "The flow to start is missing.", node.id)]
+    try:
+        flow, version = await get_detail(db, org_id=org_id, flow_id=node.flow_id)
+    except NotFound:
+        return gone
+    if flow.archived_at is not None:
+        return gone
+    target = graph_of(version)
+    if any(isinstance(n, g.ToolNode) and n.tool == "for_each" for n in target.nodes):
+        return [g.Issue("target_nested", "That flow starts flows itself.", node.id)]
+    return []
 
 
 def _refuse_unsavable(issues: list[g.Issue]) -> None:
@@ -191,7 +222,7 @@ async def add_version(
     db: AsyncSession, *, org_id: UUID, flow_id: UUID, data: FlowVersionCreate
 ) -> FlowVersion:
     flow = await get_flow(db, org_id=org_id, flow_id=flow_id)
-    _refuse_unsavable(await check(db, org_id=org_id, graph=data.graph))
+    _refuse_unsavable(await check(db, org_id=org_id, graph=data.graph, flow_id=flow_id))
     number = await service.claim_next_version(
         db, Flow, flow, org_id=org_id, based_on=data.based_on, noun="flow"
     )
@@ -224,6 +255,15 @@ def _check_inputs(graph: g.Graph, inputs: dict[str, str]) -> None:
             raise ValidationFailed(f"“{f.label}” is required.")
 
 
+def _needs_job(graph: g.Graph, agents: dict[UUID, g.AgentInfo]) -> bool:
+    return any(
+        {"job", "fit"} & set(a.spec.context_sources) for a in agents.values()
+    ) or any(
+        isinstance(n, g.ToolNode) and n.tool in ("job_lookup", "fit_check")
+        for n in graph.nodes
+    )
+
+
 async def prepare_run(
     db: AsyncSession, *, org_id: UUID, flow_id: UUID, data: RunIn
 ) -> tuple[Flow, FlowVersion, g.Graph]:
@@ -234,14 +274,11 @@ async def prepare_run(
         raise Conflict("This flow is archived.")
     graph = graph_of(version)
     agents = await engine.load_agents(db, org_id=org_id, graph=graph)
-    issues = await check(db, org_id=org_id, graph=graph, agents=agents)
+    issues = await check(db, org_id=org_id, graph=graph, agents=agents, flow_id=flow_id)
     if any(i.severity == "error" for i in issues):
         raise ValidationFailed("This flow has problems. Fix them before running it.")
     _check_inputs(graph, data.inputs)
-    needs_job = any(
-        {"job", "fit"} & set(a.spec.context_sources) for a in agents.values()
-    ) or any(isinstance(n, g.ToolNode) and n.tool == "job_lookup" for n in graph.nodes)
-    if needs_job and data.job_id is None:
+    if _needs_job(graph, agents) and data.job_id is None:
         raise ValidationFailed("This flow needs a job: pick one.")
     if data.job_id is not None:
         await jobs.get_job(db, org_id=org_id, job_id=data.job_id)  # 404 across orgs
@@ -257,6 +294,8 @@ async def start_run(
     data: RunIn,
     idempotency_key: str | None,
     schedule_id: UUID | None = None,
+    parent_run_id: UUID | None = None,
+    lock: str | None = None,
 ) -> tuple[FlowRun, bool]:
     """Queue a run. Returns ``(run, created)``: a repeated idempotency key returns the first run."""
     idempotency_key = (idempotency_key or "").strip() or None
@@ -268,6 +307,9 @@ async def start_run(
         ):
             return _same_request(existing, flow_id, data), False
     _, version, graph = await prepare_run(db, org_id=org_id, flow_id=flow_id, data=data)
+    child = (
+        parent_run_id is not None
+    )  # capped by its parent's step, not by the live-run limit
     await repo.lock_org_runs(db, org_id=org_id)  # count and insert as one step
     if (
         idempotency_key
@@ -278,8 +320,15 @@ async def start_run(
         )
     ):
         return _same_request(existing, flow_id, data), False
-    if await repo.count_active_runs(db, org_id=org_id) >= MAX_ACTIVE_RUNS:
+    if not child and await repo.count_active_runs(db, org_id=org_id) >= MAX_ACTIVE_RUNS:
         raise OrgBusy("Two flows are already running. Wait for one to finish.")
+    if (
+        child
+        and await repo.count_active_children(db, org_id=org_id) >= MAX_ACTIVE_CHILDREN
+    ):
+        raise OrgBusy(
+            "Too many started runs are still going. Resume this step shortly."
+        )
 
     try:
         run = await repo.create_run(
@@ -292,8 +341,9 @@ async def start_run(
                 "inputs": dict(data.inputs),
                 "job_id": data.job_id,
                 "idempotency_key": idempotency_key,
-                "trigger": "schedule" if schedule_id else "manual",
+                "trigger": "flow" if child else "schedule" if schedule_id else "manual",
                 "schedule_id": schedule_id,
+                "parent_run_id": parent_run_id,
             },
         )
     except (
@@ -310,9 +360,73 @@ async def start_run(
     order = g.topological(graph)
     assert order is not None  # validated above
     await repo.create_steps(db, org_id=org_id, run_id=run.id, node_ids=order)
-    await _enqueue(db, org_id=org_id, user_id=user_id, run_id=run.id)
+    await _enqueue(db, org_id=org_id, user_id=user_id, run_id=run.id, lock=lock)
     await db.commit()
     return run, True
+
+
+def _fan_key(parent_id: UUID, flow_id: UUID, inputs: dict[str, str]) -> str:
+    """Same parent, flow and item = same run, however often a resumed step asks."""
+    raw = f"{parent_id}|{flow_id}|{json.dumps(inputs, sort_keys=True)}"
+    return "fan:" + hashlib.sha256(raw.encode()).hexdigest()[:48]
+
+
+CHILD_SLOTS = 2  # runs started by for_each that one user's worker slots serve at a time
+
+
+async def fan_out(
+    db: AsyncSession,
+    *,
+    parent: FlowRun,
+    flow_id: UUID,
+    items: list[dict[str, str]],
+    daily_quota: int,
+) -> list[FlowRun]:
+    """One run of ``flow_id`` per item (ADR 0034/0035). An item's ``job_id`` is the started run's
+    job; its other keys fill the target's Start step by name (unknown keys are ignored). The runs
+    are queued two at a time per user, and only as many as the user's remaining daily AI calls
+    pay for: the rest raises ``DailyLimit`` after the first are started, so Resume starts only the
+    missing ones (same items = same runs). A repeated call returns the runs already started."""
+    assert parent.user_id is not None
+    _, version = await get_detail(db, org_id=parent.org_id, flow_id=flow_id)
+    graph = graph_of(version)
+    start = next(n for n in graph.nodes if isinstance(n, g.InputNode))
+    wanted = {f.name for f in start.fields}
+    prepared: list[tuple[dict[str, str], UUID | None]] = []
+    for item in items:
+        inputs = {k: v for k, v in item.items() if k in wanted}
+        _check_inputs(graph, inputs)
+        try:
+            job = UUID(item["job_id"]) if item.get("job_id") else None
+        except ValueError as exc:
+            raise ValidationFailed("An item has an invalid job.") from exc
+        if job is not None:
+            await jobs.get_job(db, org_id=parent.org_id, job_id=job)  # 404 across orgs
+        prepared.append(
+            (inputs, job)
+        )  # every item is checked before the first run starts
+    per_run = ai_calls(graph)
+    used = await usage.count_calls_today(db, user_id=parent.user_id)
+    room = max(daily_quota - used, 0)
+    affordable = len(prepared) if per_run == 0 else room // per_run
+    runs = []
+    for i, (inputs, job) in enumerate(prepared[:affordable]):
+        run, _ = await start_run(
+            db,
+            org_id=parent.org_id,
+            user_id=parent.user_id,
+            flow_id=flow_id,
+            data=RunIn(inputs=inputs, job_id=job),
+            idempotency_key=_fan_key(
+                parent.id, flow_id, {**inputs, "job_id": str(job)}
+            ),
+            parent_run_id=parent.id,
+            lock=f"children:{parent.user_id}:{i % CHILD_SLOTS}",
+        )
+        runs.append(run)
+    if affordable < len(prepared):
+        raise tools.DailyLimit()
+    return runs
 
 
 async def rerun(
@@ -362,9 +476,16 @@ def _same_request(run: FlowRun, flow_id: UUID, data: RunIn) -> FlowRun:
 
 
 async def _enqueue(
-    db: AsyncSession, *, org_id: UUID, user_id: UUID, run_id: UUID
+    db: AsyncSession,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    run_id: UUID,
+    lock: str | None = None,
 ) -> None:
-    await engine.enqueue_run(db, org_id=org_id, user_id=user_id, run_id=run_id)
+    await engine.enqueue_run(
+        db, org_id=org_id, user_id=user_id, run_id=run_id, lock=lock
+    )
 
 
 async def get_run(db: AsyncSession, *, org_id: UUID, run_id: UUID) -> FlowRun:

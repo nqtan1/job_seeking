@@ -30,6 +30,7 @@ import {
   type Specs,
   connect,
   moveNode,
+  outputsOf,
   refusal,
   removeEdge,
   removeNode,
@@ -45,6 +46,7 @@ type StepData = {
   avatar?: AvatarSpec
   mood: Mood
   statusLabel: string
+  outs: string[]
   [k: string]: unknown
 }
 type FlowEdgeData = {
@@ -116,6 +118,12 @@ function StepNode({ data, selected }: NodeProps<Node<StepData>>) {
           <p className="mt-0.5 truncate text-xs text-muted-foreground">{data.statusLabel}</p>
         </div>
       </div>
+      {data.outs.length > 0 && n.type !== 'output' && (
+        <p className="mt-1.5 truncate font-mono text-[10px] text-muted-foreground">
+          → {data.outs.slice(0, 3).join(', ')}
+          {data.outs.length > 3 ? ` +${data.outs.length - 3}` : ''}
+        </p>
+      )}
       {n.type === 'condition' ? (
         <>
           <Handle type="source" position={Position.Right} id="true" style={{ top: '30%' }} />
@@ -261,9 +269,10 @@ function Inner(p: CanvasProps) {
           avatar: p.avatars.get(n.id),
           mood: p.moods?.get(n.id) ?? 'idle',
           statusLabel: p.statusLabels?.get(n.id) ?? subtitleOf(n, t),
+          outs: outputsOf(n, p.specs),
         },
       })),
-    [graph.nodes, p.titles, p.avatars, p.moods, p.statusLabels, p.selection, readOnly, t],
+    [graph.nodes, p.specs, p.titles, p.avatars, p.moods, p.statusLabels, p.selection, readOnly, t],
   )
 
   const edges: Edge<FlowEdgeData>[] = useMemo(() => {

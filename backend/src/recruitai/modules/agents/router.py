@@ -277,7 +277,7 @@ async def _flow_detail(
     db: AsyncSession, ctx: OrgContext, f: Flow, v: FlowVersion
 ) -> FlowDetail:
     graph = flows.graph_of(v)
-    issues = await flows.check(db, org_id=ctx.org_id, graph=graph)
+    issues = await flows.check(db, org_id=ctx.org_id, graph=graph, flow_id=f.id)
     return FlowDetail(
         **_flow_out(f, v).model_dump(), graph=graph, issues=[_issue(i) for i in issues]
     )

@@ -5,7 +5,11 @@ import { renderWithApp } from './utils'
 
 const mocks = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn(), signOut: vi.fn() }))
 vi.mock('@/lib/api/client', () => ({ api: mocks }))
-vi.mock('@/lib/auth', () => ({ signOut: mocks.signOut, signInAgeSeconds: async () => 0 }))
+vi.mock('@/lib/auth', () => ({
+  signOut: mocks.signOut,
+  signInAgeSeconds: async () => 0,
+  signInMethods: () => ({ email: 'a@b.co', verified: true, google: true, password: true }),
+}))
 
 const renderPage = () => renderWithApp(<SettingsPage />)
 

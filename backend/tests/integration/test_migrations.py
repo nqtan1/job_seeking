@@ -192,7 +192,6 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "email_recipients",
         "email_suppressions",
         "email_invites",
-        "seen_offers",
         "flow_versions",
         "flows",
         "job_postings",

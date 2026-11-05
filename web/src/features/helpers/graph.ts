@@ -24,13 +24,21 @@ export const TOOL_IO = {
     ],
     out: ['text', 'count'],
   },
-  new_offer: {
+  find_offers: {
     in: [
       ['query', true],
       ['department', false],
     ],
-    out: ['title', 'company', 'place', 'url', 'remaining'],
+    out: ['items', 'text', 'count', 'remaining'],
   },
+  fit_check: {
+    in: [
+      ['start', false],
+      ['employer', false],
+    ],
+    out: ['score', 'verdict', 'strengths', 'gaps', 'missing', 'reasons'],
+  },
+  for_each: { in: [['items', true]], out: ['started', 'text'] },
   read_page: { in: [['url', true]], out: ['text'] },
   job_lookup: { in: [['start', false]], out: ['title', 'company', 'place', 'description', 'url'] },
   add_to_tracker: {
@@ -62,11 +70,16 @@ export function inputsOf(node: GraphNode, specs: Specs): { name: string; require
   switch (node.type) {
     case 'output':
       return node.fields.map((f) => ({ name: f.name, required: false }))
-    case 'agent':
-      return (specs.get(node.agent_version_id)?.inputs ?? []).map((i) => ({
+    case 'agent': {
+      const own = (specs.get(node.agent_version_id)?.inputs ?? []).map((i) => ({
         name: i.name,
         required: i.required ?? true,
       }))
+      // Every helper also takes "info" (backend graph.EXTRA_INPUT): anything can be handed to it.
+      return specs.has(node.agent_version_id) && !own.some((i) => i.name === EXTRA_INPUT)
+        ? [...own, { name: EXTRA_INPUT, required: false }]
+        : own
+    }
     case 'condition':
       return [{ name: 'value', required: true }]
     case 'transform':
@@ -97,6 +110,8 @@ export function outputsOf(node: GraphNode, specs: Specs): string[] {
       return []
   }
 }
+
+export const EXTRA_INPUT = 'info'
 
 export const newId = () => crypto.randomUUID()
 
@@ -180,6 +195,9 @@ export function autoMap(
     return [{ input: required[0].name, value: `{{${outs[0]}}}` }]
   if (to.type === 'output' && outs.length === 1 && ins.length === 1)
     return [{ input: ins[0].name, value: `{{${outs[0]}}}` }]
+  // Nothing declared to fill: hand over what the step gave, labelled, through the optional input.
+  if (to.type === 'agent' && ins.some((i) => i.name === EXTRA_INPUT) && outs.length)
+    return [{ input: EXTRA_INPUT, value: outs.map((o) => `${o}: {{${o}}}`).join('\n') }]
   return []
 }
 
@@ -222,7 +240,11 @@ export const setMap = (g: Graph, id: string, map: MapEntry[]): Graph => ({
 
 /** Model calls a run can make: one per helper and one per web search (backend flows.ai_calls). */
 export const aiCalls = (g: Graph) =>
-  g.nodes.filter((n) => n.type === 'agent' || (n.type === 'tool' && n.tool === 'web_search')).length
+  g.nodes.filter(
+    (n) =>
+      n.type === 'agent' ||
+      (n.type === 'tool' && (n.tool === 'web_search' || n.tool === 'fit_check')),
+  ).length
 
 /** Copy steps with fresh ids and the connections between them remapped (paste / duplicate). */
 export function cloneNodes(g: Graph, ids: string[], dx = 40, dy = 40): Graph {

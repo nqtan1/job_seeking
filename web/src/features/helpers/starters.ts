@@ -21,6 +21,7 @@ export const STARTERS: Starter[] = [
     goal: 'helpers.st.followup.goal',
     inputLabels: ['helpers.st.followup.input'],
     spec: {
+      role: 'custom',
       instructions: `Write a short, polite follow-up message (4 to 6 sentences) to a recruiter about an application. Use the notes for the company, the role and when I applied. Be warm, specific and never pushy. Do not invent facts. ${LANG}`,
       model_tier: 'fast',
       inputs: [{ name: 'notes', label: 'Company, role, when I applied', required: true }],
@@ -34,6 +35,7 @@ export const STARTERS: Starter[] = [
     goal: 'helpers.st.redflags.goal',
     inputLabels: [],
     spec: {
+      role: 'custom',
       instructions: `Read the job and list warning signs a job seeker should know about: vague duties, unrealistic requirements, pay or contract concerns, pressure wording. Then give a risk level. Only use what the job text says. ${LANG}`,
       model_tier: 'fast',
       inputs: [],
@@ -53,6 +55,7 @@ export const STARTERS: Starter[] = [
     goal: 'helpers.st.interview.goal',
     inputLabels: [],
     spec: {
+      role: 'custom',
       instructions: `Ask me one realistic interview question for this job, then give three bullet points on what a strong answer covers, using only facts from my profile. ${LANG}`,
       model_tier: 'smart',
       inputs: [],
@@ -66,6 +69,7 @@ export const STARTERS: Starter[] = [
     goal: 'helpers.st.pitch.goal',
     inputLabels: [],
     spec: {
+      role: 'custom',
       instructions: `Write a 30-second "why me" pitch for this job, in the first person, using only real strengths from my profile that match the job. No clichés. ${LANG}`,
       model_tier: 'fast',
       inputs: [],
@@ -79,6 +83,7 @@ export const STARTERS: Starter[] = [
     goal: 'helpers.st.reply.goal',
     inputLabels: ['helpers.st.reply.input'],
     spec: {
+      role: 'custom',
       instructions: `Draft a brief, professional reply to the recruiter message in the notes. Answer what they ask, propose next steps, keep it friendly. Do not promise anything that is not in the notes. ${LANG}`,
       model_tier: 'fast',
       inputs: [{ name: 'notes', label: 'The recruiter’s message', required: true }],
@@ -89,6 +94,7 @@ export const STARTERS: Starter[] = [
 ]
 
 export const BLANK_SPEC: VersionSpec = {
+  role: 'custom',
   instructions: 'Describe what this helper should do, in plain words.',
   model_tier: 'fast',
   inputs: [{ name: 'notes', label: 'Notes', required: true }],

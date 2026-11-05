@@ -48,6 +48,7 @@ def default_avatar(agent_id: UUID) -> Avatar:
 def spec_of(version: AgentVersion) -> VersionSpec:
     return VersionSpec.model_validate(
         {
+            "role": version.role,
             "instructions": version.instructions,
             "model_tier": version.model_tier,
             "inputs": version.inputs,
@@ -61,6 +62,7 @@ def _values(spec: VersionSpec, note: str, version: int) -> dict[str, Any]:
     dumped = spec.model_dump(mode="json")
     return {
         "version": version,
+        "role": dumped["role"],
         "instructions": dumped["instructions"],
         "model_tier": dumped["model_tier"],
         "inputs": dumped["inputs"],

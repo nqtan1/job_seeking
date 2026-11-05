@@ -13,7 +13,8 @@ async function signUp(page: Page, remember: boolean) {
   await page
     .getByLabel('Email')
     .fill(`sess${Date.now()}${Math.random().toString(36).slice(2, 6)}@example.com`)
-  await page.getByLabel('Password').fill('password123')
+  await page.getByLabel('Password', { exact: true }).fill('password123')
+  await page.getByLabel('Confirm password').fill('password123')
   if (remember) await page.getByLabel('Keep me signed in').check()
   await shot(page, remember ? 'login-remember' : 'login-checkbox')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()

@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, StringConstraints, model_validator
 
+from recruitai.ai.prompts.roles import MAX_PREFERENCES, ROLES
+
 NAME = r"^[a-z][a-z0-9_]{0,31}$"
 # Names that would collide with pydantic attributes or with the <data> blocks a helper receives.
 CONTEXT_NAMES = {"profile", "job", "fit"}
@@ -105,10 +107,17 @@ class OutputSpec(BaseModel):
         return self
 
 
-class VersionSpec(BaseModel):
-    """What a version is: the part a user edits and a run pins."""
+Role = Literal["custom", "letter", "interview", "cv_advice"]
+ROLE_CONTEXT: list[ContextSource] = ["profile", "job", "fit"]  # what every role reads
 
-    instructions: str = Field(min_length=1, max_length=4000)
+
+class VersionSpec(BaseModel):
+    """What a version is: the part a user edits and a run pins. A built-in ``role`` brings its own
+    tested prompt, inputs, context and output format (set here, not editable); ``instructions``
+    are then only preferences added after it."""
+
+    role: Role = "custom"
+    instructions: str = Field("", max_length=4000)
     model_tier: Literal["fast", "smart"] = "fast"
     inputs: list[InputField] = Field(default=[], max_length=MAX_INPUTS)
     context_sources: list[ContextSource] = []
@@ -116,6 +125,15 @@ class VersionSpec(BaseModel):
 
     @model_validator(mode="after")
     def _check(self) -> Self:
+        if self.role != "custom":
+            if len(self.instructions) > MAX_PREFERENCES:
+                raise ValueError(
+                    f"preferences are limited to {MAX_PREFERENCES} characters"
+                )
+            self.inputs = []
+            self.context_sources = list(ROLE_CONTEXT)
+            self.output = OutputSpec.model_validate(ROLES[self.role]["output"])
+            return self
         if len({i.name for i in self.inputs}) != len(self.inputs):
             raise ValueError("duplicate input names")
         if len(set(self.context_sources)) != len(self.context_sources):

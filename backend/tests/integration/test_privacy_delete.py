@@ -29,7 +29,7 @@ ORG_TABLES = (
     "job_postings", "fit_analyses", "letters", "letter_versions", "applications",
     "application_events", "conversations", "messages", "radar_searches", "radar_results",
     "radar_runs", "consents", "agents", "agent_versions", "flows", "flow_versions", "flow_runs",
-    "flow_run_steps", "flow_run_handoffs", "flow_schedules", "flow_effects", "email_recipients", "seen_offers",
+    "flow_run_steps", "flow_run_handoffs", "flow_schedules", "flow_effects", "email_recipients",
 )  # fmt: skip
 
 
@@ -212,13 +212,6 @@ async def _fill_account(
             text(
                 "INSERT INTO flow_effects (id, org_id, user_id, run_id, node_id, kind)"
                 " VALUES (gen_random_uuid(), :o, :u, :r, gen_random_uuid(), 'add_to_tracker')"
-            ),
-            {**org2, "u": me["user"]["id"]},
-        )
-        await conn.execute(
-            text(
-                "INSERT INTO seen_offers (id, org_id, user_id, url_hash, run_id, node_id)"
-                " VALUES (gen_random_uuid(), :o, :u, 'h', gen_random_uuid(), gen_random_uuid())"
             ),
             {**org2, "u": me["user"]["id"]},
         )
