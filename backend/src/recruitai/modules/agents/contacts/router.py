@@ -24,10 +24,10 @@ from recruitai.core.errors import (
 )
 from recruitai.core.ratelimit import limit_public, limit_sensitive
 from recruitai.core.tenancy import OrgContext, get_org_context
-from recruitai.modules.agents import recipients as service
-from recruitai.modules.agents.models import EmailRecipient
-from recruitai.modules.agents.router import require_enabled
-from recruitai.modules.agents.schemas import Strict
+from recruitai.modules.agents.base import Strict
+from recruitai.modules.agents.contacts import service
+from recruitai.modules.agents.contacts.models import EmailRecipient
+from recruitai.modules.agents.deps import require_enabled
 
 router = APIRouter(prefix="/api/v1", tags=["email"])
 # Public like the radar link (/api/public/...): the one-time token in the link is the credential.

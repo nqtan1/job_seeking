@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.modules.agents.models import (
+from recruitai.modules.agents.contacts.models import (
     EmailInvite,
     EmailRecipient,
     EmailSuppression,

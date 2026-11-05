@@ -2,6 +2,10 @@ name: CI
 
 # Runs on pull requests, and is called by cd.yml for every push to main / tag, so a deploy
 # can never start from a red commit (and CI runs once per push, not twice).
+#
+# One job per question, so the Checks tab says at a glance what failed and a single job can be
+# re-run alone: Backend (lint, types, import rules, audit, tests), Docker (api, worker),
+# Web (lint, types, unit, build, audit, API types), E2E, and "CI passed" as the one summary.
 on:
   pull_request:
   workflow_call:
@@ -16,8 +20,67 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  new-code:
-    name: new-code (recruitai)
+  # ---------------------------------------------------------------- backend
+  backend-lint:
+    name: Backend · lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-backend
+      - name: Ruff check
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  backend-types:
+    name: Backend · types (mypy strict)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-backend
+      - name: mypy
+        run: uv run mypy --strict src
+
+  backend-imports:
+    name: Backend · import rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-backend
+      - name: import-linter
+        run: uv run lint-imports
+
+  backend-audit:
+    name: Backend · dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-backend
+        with:
+          sync: "false"
+      - name: pip-audit (locked runtime dependencies)
+        run: |
+          uv export --frozen --no-dev --no-emit-project -o /tmp/req.txt
+          uvx pip-audit -r /tmp/req.txt --no-deps --disable-pip
+
+  backend-tests:
+    name: Backend · tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -39,32 +102,7 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
-
-      - name: Sync dependencies
-        run: uv sync --locked
-
-      - name: Ruff check
-        run: uv run ruff check .
-
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-      - name: mypy
-        run: uv run mypy --strict src
-
-      - name: import-linter
-        run: uv run lint-imports
-
-      - name: pip-audit (locked runtime dependencies)
-        run: |
-          uv export --frozen --no-dev --no-emit-project -o /tmp/req.txt
-          uvx pip-audit -r /tmp/req.txt --no-deps --disable-pip
+      - uses: ./.github/actions/setup-backend
 
       # 22 test files mint real ID tokens from the Firebase Auth emulator (localhost:9099).
       - name: Start the Firebase Auth emulator
@@ -76,8 +114,25 @@ jobs:
           TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitai_test
         run: uv run pytest
 
-  docker-images:
-    name: docker images (api + worker)
+  # ----------------------------------------------------------------- docker
+  docker-api:
+    name: Docker · api image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build api image
+        run: docker build -f Dockerfile.api -t recruitai-api:ci .
+      - name: api image runs as non-root
+        run: |
+          user="$(docker run --rm recruitai-api:ci whoami)"
+          test "$user" = "app"
+
+  docker-worker:
+    name: Docker · worker image (offline letters)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -85,23 +140,12 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v7
-
-      - name: Build api image
-        run: docker build -f Dockerfile.api -t recruitai-api:ci .
-
       - name: Build worker image
         run: docker build -f Dockerfile.worker -t recruitai-worker:ci .
-
-      - name: api image runs as non-root
-        run: |
-          user="$(docker run --rm recruitai-api:ci whoami)"
-          test "$user" = "app"
-
       - name: worker image runs as non-root
         run: |
           user="$(docker run --rm recruitai-worker:ci whoami)"
           test "$user" = "app"
-
       - name: Tectonic compiles offline (package bundle pre-warmed at build time, ADR 0010)
         run: |
           docker run --rm --network none recruitai-worker:ci sh -c \
@@ -109,8 +153,80 @@ jobs:
       - name: worker image compiles every letter template offline (P2-20)
         run: docker run --rm --network none recruitai-worker:ci python /app/docker/render_check.py
 
-  web:
-    name: web (lint, types, unit, build, OpenAPI drift)
+  # -------------------------------------------------------------------- web
+  web-lint:
+    name: Web · lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Lint
+        run: pnpm lint
+      - name: Format check
+        run: pnpm exec prettier --check .
+
+  web-types:
+    name: Web · types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Typecheck
+        run: pnpm typecheck
+
+  web-unit:
+    name: Web · unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Unit tests
+        run: pnpm test --run
+
+  web-build:
+    name: Web · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Build
+        run: pnpm build
+
+  web-audit:
+    name: Web · dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+        with:
+          install: "false"
+      - name: Audit (production dependencies)
+        run: pnpm audit --prod
+
+  # Drift check: regenerate the API types from the real app's OpenAPI and fail if the
+  # committed schema.d.ts differs (a backend response-model change without `pnpm gen:api`).
+  web-api-types:
+    name: Web · API types in sync
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -129,51 +245,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v7
-
-      - uses: pnpm/action-setup@v4
-        with:
-          package_json_file: web/package.json
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Install web dependencies
-        working-directory: web
-        run: pnpm install --frozen-lockfile
-
-      - name: Audit (production dependencies)
-        working-directory: web
-        run: pnpm audit --prod
-
-      - name: Lint
-        working-directory: web
-        run: pnpm lint
-
-      - name: Format check
-        working-directory: web
-        run: pnpm exec prettier --check .
-
-      - name: Typecheck
-        working-directory: web
-        run: pnpm typecheck
-
-      - name: Unit tests
-        working-directory: web
-        run: pnpm test --run
-
-      - name: Build
-        working-directory: web
-        run: pnpm build
-
-      # Drift check: regenerate the API types from the real app's OpenAPI and fail if the
-      # committed schema.d.ts differs (a backend response-model change without `pnpm gen:api`).
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+      - uses: ./.github/actions/setup-web
+      - uses: ./.github/actions/setup-backend
 
       - name: Start the API (OpenAPI source)
         working-directory: backend
@@ -183,7 +256,6 @@ jobs:
           FIREBASE_PROJECT_ID: demo-recruitai
           APP_CHECK_ENFORCED: "false"
         run: |
-          uv sync --locked
           nohup uv run uvicorn recruitai.main:app --port 8000 > /tmp/api.log 2>&1 &
           curl --retry 30 --retry-delay 1 --retry-connrefused --retry-all-errors -fsS http://localhost:8000/openapi.json > /dev/null
 
@@ -191,31 +263,24 @@ jobs:
         working-directory: web
         run: pnpm check:api
 
+  # -------------------------------------------------------------------- e2e
+  # Only worth the minutes once the cheap web checks are green.
   web-e2e:
-    name: web e2e (Playwright, canned LLM)
+    name: E2E · browser journeys (Playwright, canned LLM)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: web
+    needs: [web-lint, web-types, web-unit, web-build]
     env:
       E2E_WEB_PORT: "5174"
       E2E_API_URL: http://localhost:8011
     steps:
       - uses: actions/checkout@v7
-
-      - uses: pnpm/action-setup@v4
+      - uses: ./.github/actions/setup-web
         with:
-          package_json_file: web/package.json
-
-      - uses: actions/setup-node@v4
+          install: "false"
+      - uses: ./.github/actions/setup-backend
         with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: backend/uv.lock
+          sync: "false"
 
       # Postgres + Firebase emulator; --wait uses their healthchecks.
       - name: Start Postgres + Firebase emulator
@@ -248,3 +313,33 @@ jobs:
           path: |
             web/test-results
             backend/.e2e-run/*.log
+
+  # --------------------------------------------------------------- summary
+  # The one status to look at (and, later, to require in branch protection). It runs even when a
+  # job failed, and fails if any job failed or was cancelled.
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs:
+      - backend-lint
+      - backend-types
+      - backend-imports
+      - backend-audit
+      - backend-tests
+      - docker-api
+      - docker-worker
+      - web-lint
+      - web-types
+      - web-unit
+      - web-build
+      - web-audit
+      - web-api-types
+      - web-e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job must have succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "At least one job did not succeed:"
+          echo '${{ toJSON(needs) }}'
+          exit 1

@@ -12,10 +12,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.core.errors import AppError, NotFound, ValidationFailed
-from recruitai.modules.agents import flow_repository as repo
-from recruitai.modules.agents import flows
-from recruitai.modules.agents.flow_schemas import RunIn, ScheduleIn
-from recruitai.modules.agents.models import FlowSchedule
+from recruitai.modules.agents.flows import repository as repo
+from recruitai.modules.agents.flows import runs as flow_runs
+from recruitai.modules.agents.flows import service as flows
+from recruitai.modules.agents.flows.models import FlowSchedule
+from recruitai.modules.agents.flows.schemas import RunIn, ScheduleIn
 from recruitai.modules.identity import service as identity
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ async def create_schedule(
 ) -> FlowSchedule:
     _zone(data.timezone)  # an unknown zone is refused even for an hourly schedule
     # the same checks as pressing Run now: a schedule that could never run is refused up front
-    await flows.prepare_run(
+    await flow_runs.prepare_run(
         db,
         org_id=org_id,
         flow_id=flow_id,
@@ -123,7 +124,7 @@ async def set_enabled(
     values: dict[str, object] = {"enabled": enabled}
     if enabled:
         # turning it back on needs a flow that can run today (deleted job, archived or edited flow)
-        await flows.prepare_run(
+        await flow_runs.prepare_run(
             db,
             org_id=org_id,
             flow_id=s.flow_id,
@@ -165,6 +166,14 @@ class _Claim:
 
 
 async def _count_failure(db: AsyncSession, c: _Claim) -> None:
+    try:
+        await _save_failure(db, c)
+    except Exception as exc:  # noqa: BLE001  (a database hiccup must not lose the other slots)
+        await db.rollback()
+        logger.error("failure not counted", extra={"error_type": type(exc).__name__})
+
+
+async def _save_failure(db: AsyncSession, c: _Claim) -> None:
     failures = c.failures + 1
     values: dict[str, object] = {"consecutive_failures": failures}
     if failures >= FAILURES_BEFORE_PAUSE:
@@ -193,7 +202,23 @@ async def run_due(db: AsyncSession, *, now: datetime) -> int:
             )
             continue
         if await repo.has_waiting_run(db, schedule_id=s.id):
-            continue  # its last run is still sleeping on a wait: never pile runs up behind it
+            # its last run is still sleeping on a wait: never pile runs up behind it. The slot is
+            # skipped (next one saved), else parked rows stay the oldest and fill every batch.
+            await repo.update_schedule(
+                db,
+                org_id=s.org_id,
+                schedule_id=s.id,
+                values={
+                    "next_run_at": next_run(
+                        s.cadence,
+                        s.at_time,
+                        s.weekday,
+                        s.timezone,
+                        max(now, s.next_run_at),
+                    )
+                },
+            )
+            continue
         last, made_at = await repo.last_scheduled_run(db, schedule_id=s.id)
         # A failed run counts once (only if it was queued after the previous claim, so a refused
         # start can never make the same failure count again), a finished one resets; anything else
@@ -215,18 +240,17 @@ async def run_due(db: AsyncSession, *, now: datetime) -> int:
             )
             continue
         slot = s.next_run_at
-        await repo.update_schedule(
-            db,
-            org_id=s.org_id,
-            schedule_id=s.id,
-            values={
-                "next_run_at": next_run(
-                    s.cadence, s.at_time, s.weekday, s.timezone, max(now, slot)
-                ),
-                "last_run_at": now,
-                "consecutive_failures": failures,
-            },
-        )
+        values: dict[str, object] = {
+            "next_run_at": next_run(
+                s.cadence, s.at_time, s.weekday, s.timezone, max(now, slot)
+            ),
+            "consecutive_failures": failures,
+        }
+        if last == "failed" and fresh:
+            values["last_run_at"] = (
+                now  # that failure is counted now: never count it twice
+            )
+        await repo.update_schedule(db, org_id=s.org_id, schedule_id=s.id, values=values)
         claimed.append(
             _Claim(
                 s.id,
@@ -243,7 +267,7 @@ async def run_due(db: AsyncSession, *, now: datetime) -> int:
 
     for c in claimed:
         try:
-            _, created = await flows.start_run(
+            _, created = await flow_runs.start_run(
                 db,
                 org_id=c.org_id,
                 user_id=c.user_id,
@@ -252,9 +276,14 @@ async def run_due(db: AsyncSession, *, now: datetime) -> int:
                 idempotency_key=f"sched:{c.id}:{int(c.slot.timestamp())}",
                 schedule_id=c.id,
             )
-            started += created
+            if created:  # last_run_at marks runs actually made, so a later failure is still fresh
+                started += 1
+                await repo.update_schedule(
+                    db, org_id=c.org_id, schedule_id=c.id, values={"last_run_at": now}
+                )
+                await db.commit()
         except (
-            flows.OrgBusy
+            flow_runs.OrgBusy
         ) as exc:  # busy right now: skip this slot, it is not a failure
             await db.rollback()
             logger.info(

@@ -1,5 +1,5 @@
 import '@/features/helpers/lib'
-import { Check, CircleDot, History, RotateCcw, Save, UserRound } from 'lucide-react'
+import { Check, CircleDot, History, RotateCcw, Save, Shuffle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useI18n, useT } from '@/i18n'
@@ -20,10 +20,11 @@ import {
   useFetchAgent,
   usePatchAgent,
 } from './api'
-import { AvatarPicker, SpecForm, TryPanel } from './HelperForm'
+import { Avatar } from './Avatar'
+import { AvatarPicker, InstructionsField, Receives, SpecForm, TryPanel } from './HelperForm'
 import { clearDraft, loadDraft, relTime, saveDraft } from './lib'
-import { ConflictBanner, LeaveGuard, SectionCard } from './ui'
-import { type AvatarSpec, safe } from './avatar'
+import { ConflictBanner, LeaveGuard } from './ui'
+import { type AvatarSpec, safe, shuffled } from './avatar'
 import type { VersionSpec } from './graph'
 
 type Fields = { name: string; description: string; avatar: AvatarSpec; spec: VersionSpec }
@@ -121,31 +122,90 @@ function Editor({ detail }: { detail: AgentDetail }) {
       setSaving(false)
     }
   }
+  const versionsList = (
+    <section aria-label={t('helpers.versions')}>
+      {versions.isPending ? (
+        <ListSkeleton rows={2} />
+      ) : (
+        <ol className="relative space-y-4 border-l pl-5">
+          {(versions.data ?? []).map((v) => (
+            <li key={v.id} className="relative flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span
+                aria-hidden
+                className={`absolute top-1.5 -left-[25px] size-2 rounded-full ring-4 ring-background ${v.version === baseline.base ? 'bg-primary' : 'bg-border'}`}
+              />
+              <span className="font-medium tabular-nums">v{v.version}</span>
+              {v.version === baseline.base && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
+                  {t('helpers.ui.current')}
+                </span>
+              )}
+              <time
+                dateTime={v.created_at}
+                title={new Date(v.created_at).toLocaleString(locale)}
+                className="text-sm text-muted-foreground"
+              >
+                {relTime(v.created_at, locale)}
+              </time>
+              <span className="order-last basis-full text-sm text-muted-foreground italic">
+                {v.note || t('helpers.ui.no_note')}
+              </span>
+              <span className="flex-1" />
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setDraft({ ...draft, spec: v.spec })}
+              >
+                <RotateCcw data-icon="inline-start" />
+                {t('helpers.restore')}
+              </Button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
   const error = add.error ?? patch.error
   const busy = saving
 
+  const role = draft.spec.role ?? 'custom'
+  const setSpec = (spec: VersionSpec) => setDraft({ ...draft, spec })
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="min-w-0 space-y-5">
-        <SectionCard
-          icon={UserRound}
-          title={t('helpers.ui.sec.identity')}
-          help={t('helpers.ui.sec.identity_help')}
-        >
-          <AvatarPicker
-            value={draft.avatar}
-            onChange={(avatar) => setDraft({ ...draft, avatar })}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="h-name">{t('helpers.name')}</Label>
-              <Input
-                id="h-name"
-                value={draft.name}
-                maxLength={80}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-            </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <Avatar spec={draft.avatar} size={56} label={t('helpers.avatar')} />
+          <div className="min-w-48 flex-1 space-y-1.5">
+            <Label htmlFor="h-name">{t('helpers.name')}</Label>
+            <Input
+              id="h-name"
+              value={draft.name}
+              maxLength={80}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDraft({ ...draft, avatar: shuffled() })}
+          >
+            <Shuffle data-icon="inline-start" />
+            {t('helpers.shuffle')}
+          </Button>
+        </div>
+        {role !== 'custom' && (
+          <p className="-mt-2 text-xs text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-0.5 font-medium">
+              {t(`helpers.role.${role}`)}
+            </span>
+          </p>
+        )}
+
+        <InstructionsField spec={draft.spec} onChange={setSpec} />
+
+        <details className="rounded-xl border px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium">{t('helpers.advanced')}</summary>
+          <div className="mt-4 space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="h-desc">{t('helpers.goal')}</Label>
               <Input
@@ -155,13 +215,36 @@ function Editor({ detail }: { detail: AgentDetail }) {
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               />
             </div>
+            <AvatarPicker
+              value={draft.avatar}
+              onChange={(avatar) => setDraft({ ...draft, avatar })}
+            />
+            <SpecForm spec={draft.spec} onChange={setSpec} />
+            <Receives spec={draft.spec} />
+            <div className="space-y-1.5">
+              <Label htmlFor="h-note">{t('helpers.note')}</Label>
+              <Input
+                id="h-note"
+                maxLength={200}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVersions((v) => !v)}
+              aria-expanded={showVersions}
+            >
+              <History data-icon="inline-start" />
+              {t('helpers.versions')}
+            </Button>
+            {showVersions && versionsList}
+            <p className="font-mono text-xs text-muted-foreground">
+              {t('helpers.id')}: {detail.id}
+            </p>
           </div>
-          <p className="font-mono text-xs text-muted-foreground">
-            {t('helpers.id')}: {detail.id}
-          </p>
-        </SectionCard>
-
-        <SpecForm spec={draft.spec} onChange={(spec) => setDraft({ ...draft, spec })} />
+        </details>
 
         <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card/95 p-3 shadow-lg backdrop-blur">
           <span role="status" className="flex items-center gap-2 text-sm">
@@ -181,28 +264,10 @@ function Editor({ detail }: { detail: AgentDetail }) {
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
             v{baseline.base}
           </span>
-          <Button
-            variant="outline"
-            onClick={() => setShowVersions((s) => !s)}
-            aria-expanded={showVersions}
-          >
-            <History data-icon="inline-start" />
-            {t('helpers.versions')}
-          </Button>
           <Button onClick={save} disabled={!dirty || busy || !draft.name.trim()}>
             {busy ? <Spinner /> : <Save data-icon="inline-start" />}
             {t('helpers.save_version')}
           </Button>
-          {dirty && (
-            <Input
-              aria-label={t('helpers.note')}
-              placeholder={t('helpers.note')}
-              className="order-last basis-full"
-              maxLength={200}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          )}
         </div>
         <ErrorMessage error={conflict ? null : error} />
         {conflict && (
@@ -220,57 +285,10 @@ function Editor({ detail }: { detail: AgentDetail }) {
             }}
           />
         )}
-
-        {showVersions && (
-          <section
-            aria-label={t('helpers.versions')}
-            className="rounded-xl border bg-card p-5 shadow-xs"
-          >
-            {versions.isPending ? (
-              <ListSkeleton rows={2} />
-            ) : (
-              <ol className="relative space-y-4 border-l pl-5">
-                {(versions.data ?? []).map((v) => (
-                  <li key={v.id} className="relative flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span
-                      aria-hidden
-                      className={`absolute top-1.5 -left-[25px] size-2 rounded-full ring-4 ring-card ${v.version === baseline.base ? 'bg-primary' : 'bg-border'}`}
-                    />
-                    <span className="font-medium tabular-nums">v{v.version}</span>
-                    {v.version === baseline.base && (
-                      <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
-                        {t('helpers.ui.current')}
-                      </span>
-                    )}
-                    <time
-                      dateTime={v.created_at}
-                      title={new Date(v.created_at).toLocaleString(locale)}
-                      className="text-sm text-muted-foreground"
-                    >
-                      {relTime(v.created_at, locale)}
-                    </time>
-                    <span className="order-last basis-full text-sm text-muted-foreground italic">
-                      {v.note || t('helpers.ui.no_note')}
-                    </span>
-                    <span className="flex-1" />
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      onClick={() => setDraft({ ...draft, spec: v.spec })}
-                    >
-                      <RotateCcw data-icon="inline-start" />
-                      {t('helpers.restore')}
-                    </Button>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        )}
       </div>
 
       <div className="lg:sticky lg:top-20 lg:self-start">
-        <TryPanel agentId={detail.id} spec={draft.spec} />
+        <TryPanel agentId={detail.id} spec={draft.spec} receives={false} />
       </div>
 
       <LeaveGuard dirty={dirty} leaving={leaving} />

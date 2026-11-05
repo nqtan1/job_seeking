@@ -6,9 +6,10 @@ from uuid import uuid4
 
 import pytest
 
-from recruitai.modules.agents import graph as g
-from recruitai.modules.agents import schedules, schemas, service
-from recruitai.modules.agents.schemas import VersionSpec
+from recruitai.modules.agents.flows import graph as g
+from recruitai.modules.agents.flows import schedules
+from recruitai.modules.agents.helpers import schemas, service
+from recruitai.modules.agents.helpers.schemas import VersionSpec
 
 SPEC = VersionSpec(
     instructions="x",

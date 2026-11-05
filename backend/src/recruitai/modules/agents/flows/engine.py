@@ -21,10 +21,13 @@ from recruitai.ai.prompts import helper
 from recruitai.config import get_settings
 from recruitai.core.errors import AppError
 from recruitai.core.tasks import enqueue
-from recruitai.modules.agents import flow_repository as flows
-from recruitai.modules.agents import graph as g
-from recruitai.modules.agents import repository, runner, service, tools
-from recruitai.modules.agents.models import FlowRun, FlowRunStep
+from recruitai.modules.agents.blocks import tools
+from recruitai.modules.agents.blocks.catalogue import BLOCKS
+from recruitai.modules.agents.blocks.errors import ToolFailed
+from recruitai.modules.agents.flows import graph as g
+from recruitai.modules.agents.flows import repository as flow_repo
+from recruitai.modules.agents.flows.models import FlowRun, FlowRunStep
+from recruitai.modules.agents.helpers import repository, runner, service
 
 logger = logging.getLogger(__name__)
 
@@ -68,15 +71,15 @@ async def _park(
     org_id, run_id, user_id = run.org_id, run.id, run.user_id
     if user_id is None:
         await _fail(db, run, step, "tool_failed")
-    await flows.lock_org_runs(db, org_id=org_id)
+    await flow_repo.lock_org_runs(db, org_id=org_id)
     if (
-        await flows.count_waiting_runs(db, org_id=org_id)
-        >= flows.MAX_WAITING_RUNS_PER_ORG
+        await flow_repo.count_waiting_runs(db, org_id=org_id)
+        >= flow_repo.MAX_WAITING_RUNS_PER_ORG
     ):
         await _fail(db, run, step, "too_many_waiting")
     assert node.minutes is not None  # validated with the node
     wake_at = datetime.now(UTC) + timedelta(minutes=node.minutes)
-    await flows.set_step(
+    await flow_repo.set_step(
         db,
         org_id=org_id,
         step_id=step.id,
@@ -84,7 +87,7 @@ async def _park(
         output={"value": value, "wake_at": wake_at.isoformat()},
         started_at=func.now(),
     )
-    if not await flows.set_run(
+    if not await flow_repo.set_run(
         db,
         org_id=org_id,
         run_id=run_id,
@@ -120,7 +123,7 @@ async def execute(
     run_id: UUID,
     kit: tools.ToolKit | None = None,
 ) -> None:
-    if not await flows.claim_run(db, org_id=org_id, run_id=run_id):
+    if not await flow_repo.claim_run(db, org_id=org_id, run_id=run_id):
         await db.rollback()
         return  # already running, finished or cancelled: a duplicate delivery does nothing
     await db.commit()
@@ -137,7 +140,7 @@ async def execute(
         logger.error("flow run stopped", extra={"error_type": type(exc).__name__})
         try:
             await db.rollback()
-            await flows.fail_active_run(
+            await flow_repo.fail_active_run(
                 db,
                 org_id=org_id,
                 run_id=run_id,
@@ -149,7 +152,7 @@ async def execute(
         if not crashed:
             raise
         return
-    await flows.finish_run(
+    await flow_repo.finish_run(
         db, org_id=org_id, run_id=run_id, status="done", result=result
     )
     await db.commit()
@@ -178,14 +181,14 @@ async def _fail(
     step_id = step.id if step is not None else None
     await db.rollback()
     if step_id is not None:
-        await flows.set_step(
+        await flow_repo.set_step(
             db,
             org_id=org_id,
             step_id=step_id,
             status="failed",
             error_code=code,
         )
-    await flows.finish_run(
+    await flow_repo.finish_run(
         db, org_id=org_id, run_id=run_id, status="failed", error_code=code
     )
     await db.commit()
@@ -200,9 +203,9 @@ async def _advance(
     org_id: UUID,
     run_id: UUID,
 ) -> dict[str, Any]:
-    run = await flows.get_run(db, org_id=org_id, run_id=run_id)
+    run = await flow_repo.get_run(db, org_id=org_id, run_id=run_id)
     assert run is not None  # claimed a moment ago
-    version = await flows.get_flow_version_by_id(
+    version = await flow_repo.get_flow_version_by_id(
         db, org_id=org_id, version_id=run.flow_version_id
     )
     assert version is not None
@@ -210,7 +213,8 @@ async def _advance(
     agents = await load_agents(db, org_id=org_id, graph=graph)
     nodes = {n.id: n for n in graph.nodes}
     steps = {
-        s.node_id: s for s in await flows.list_steps(db, org_id=org_id, run_id=run_id)
+        s.node_id: s
+        for s in await flow_repo.list_steps(db, org_id=org_id, run_id=run_id)
     }
     order = g.topological(graph)
     if order is None or set(steps) != set(nodes):
@@ -236,7 +240,7 @@ async def _advance(
             continue
         if status[nid] == "waiting":  # the run was woken: this wait is over
             output = {"value": (step.output or {}).get("value", "")}
-            await flows.set_step(
+            await flow_repo.set_step(
                 db, org_id=org_id, step_id=step.id, only_if=("waiting",),
                 status="done", output=output, finished_at=func.now(),
             )  # fmt: skip
@@ -249,7 +253,7 @@ async def _advance(
         if time.monotonic() - started > RUN_TIMEOUT_S:
             await _fail(db, run, None, "run_timeout")
 
-        await flows.touch_run(db, org_id=org_id, run_id=run_id)
+        await flow_repo.touch_run(db, org_id=org_id, run_id=run_id)
         active = [e for e in incoming[nid] if _is_active(e, status, outputs)]
         # An edge from a Condition's "if yes / if no" exit is a gate: a step with gates runs only
         # if one of them was taken. Without a gate, a step is skipped when nothing reaches it.
@@ -257,7 +261,9 @@ async def _advance(
         if incoming[nid] and (
             not active or (gates and not any(e in active for e in gates))
         ):
-            await flows.set_step(db, org_id=org_id, step_id=step.id, status="skipped")
+            await flow_repo.set_step(
+                db, org_id=org_id, step_id=step.id, status="skipped"
+            )
             status[nid] = "skipped"
             await db.commit()
             continue
@@ -271,7 +277,7 @@ async def _advance(
                 ):  # two live edges into one input: never guess which wins
                     await _fail(db, run, step, "ambiguous_input")
             values.update(payload)
-            await flows.record_handoff(
+            await flow_repo.record_handoff(
                 db,
                 org_id=org_id,
                 values={
@@ -289,22 +295,24 @@ async def _advance(
         if incoming[nid] and any(
             req and name not in values for name, req in g.input_names(node, agents)
         ):
-            await flows.set_step(db, org_id=org_id, step_id=step.id, status="skipped")
+            await flow_repo.set_step(
+                db, org_id=org_id, step_id=step.id, status="skipped"
+            )
             status[nid] = "skipped"
             await db.commit()
             continue
 
-        if isinstance(node, g.ToolNode) and node.tool == "wait":
+        if isinstance(node, g.ToolNode) and BLOCKS[node.tool].pauses:
             await _park(db, run, step, node, values.get("value", ""))
 
-        if not await flows.claim_step(db, org_id=org_id, step_id=step.id):
+        if not await flow_repo.claim_step(db, org_id=org_id, step_id=step.id):
             raise _Stop  # another worker holds it
         await db.commit()
 
         output, model, latency = await _run_node(
             db, llm, kit, run, step, node, agents, values
         )
-        if not await flows.set_step(
+        if not await flow_repo.set_step(
             db,
             org_id=org_id,
             step_id=step.id,
@@ -319,7 +327,7 @@ async def _advance(
         ):
             await db.rollback()
             raise _Stop
-        await flows.touch_run(db, org_id=org_id, run_id=run_id)
+        await flow_repo.touch_run(db, org_id=org_id, run_id=run_id)
         await db.commit()
         status[nid], outputs[nid] = "done", output
         if isinstance(node, g.OutputNode):
@@ -383,17 +391,18 @@ async def _run_tool(
 ) -> tuple[dict[str, Any], str | None, int | None]:
     began = time.monotonic()
     try:
-        if node.tool == "for_each" and run.trigger == "flow":
+        spec = BLOCKS[node.tool]
+        if spec.starts_runs and run.trigger == "flow":
             await _fail(
                 db, run, step, "nested_not_allowed"
             )  # one level only, before any cap use
-        caps = tools.EFFECT_CAPS.get(node.tool)
+        caps = spec.cap
         if (
             caps is not None
         ):  # an outside effect: at most once per step, and capped per day
             if run.user_id is None:
                 await _fail(db, run, step, "tool_failed")
-            verdict = await flows.claim_effect(
+            verdict = await flow_repo.claim_effect(
                 db,
                 org_id=run.org_id,
                 user_id=run.user_id,
@@ -409,11 +418,13 @@ async def _run_tool(
             if (
                 verdict == "done"
             ):  # a resumed step: it already happened, do not repeat it
-                await db.rollback()
+                await (
+                    db.commit()
+                )  # frees the lock; a rollback would expire every loaded row
                 return {"status": "already done"}, None, 0
         output = (
             await _fan_out(db, run, node, values)
-            if node.tool == "for_each"
+            if spec.starts_runs
             else await tools.run_tool(db, llm, kit, run, node, values)
         )
     except _Stop:
@@ -430,14 +441,15 @@ async def _fan_out(
     db: AsyncSession, run: FlowRun, node: g.ToolNode, values: dict[str, str]
 ) -> dict[str, str]:
     """Start one run of another flow per item; this step is done once they are queued."""
-    from recruitai.modules.agents import flows  # flows imports this module
+    # Lazy on purpose: flows.runs imports this module (import cycle, kept for now).
+    from recruitai.modules.agents.flows import runs as flow_runs
 
     if node.flow_id is None:
-        raise tools.ToolFailed()
+        raise ToolFailed()
     try:
         items = json.loads(values.get("items") or "[]")
     except ValueError as exc:
-        raise tools.ToolFailed() from exc
+        raise ToolFailed() from exc
     if not (
         isinstance(items, list)
         and len(items) <= tools.MAX_FAN_OUT
@@ -447,9 +459,9 @@ async def _fan_out(
             for i in items
         )
     ):
-        raise tools.ToolFailed()
+        raise ToolFailed()
     await db.commit()  # nothing held open while the runs are queued
-    runs = await flows.fan_out(
+    runs = await flow_runs.fan_out(
         db,
         parent=run,
         flow_id=node.flow_id,

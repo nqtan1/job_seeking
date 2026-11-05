@@ -1,17 +1,11 @@
 import {
   Briefcase,
   FileText,
-  FlaskConical,
-  Gauge,
-  ListChecks,
-  PenLine,
   Play,
   Plus,
   Rows3,
-  Shuffle,
   Sparkles,
   Target,
-  TextCursorInput,
   UserRound,
   X,
   Zap,
@@ -24,21 +18,13 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { MAX_FIELDS, MAX_INPUTS, MAX_INPUT_CHARS, type VersionSpec, freeName } from './graph'
-import { ChoiceCard, JobSelect, Result, SectionCard } from './ui'
+import { ChoiceCard, JobSelect, Result } from './ui'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Spinner } from '@/components/Spinner'
 import { useAiUse } from '@/features/radar/api'
 import { useTrial } from './api'
 import { Avatar } from './Avatar'
-import {
-  ACCESSORIES,
-  type AvatarSpec,
-  BODIES,
-  EYES,
-  PALETTES,
-  PALETTES_COUNT,
-  shuffled,
-} from './avatar'
+import { ACCESSORIES, type AvatarSpec, BODIES, EYES, PALETTES, PALETTES_COUNT } from './avatar'
 
 const NAME = /[^a-z0-9_]/g
 const toName = (s: string) =>
@@ -86,8 +72,57 @@ const ROLES = ['custom', 'letter', 'interview', 'cv_advice'] as const
 
 const SOURCE_ICON = { profile: UserRound, job: Briefcase, fit: Target } as const
 
-/** The editable part of a helper: instructions, inputs, sources, result shape, quality. Each is a
- *  card of its own so the form reads as a short list of decisions, not one long page. */
+/** A flat titled group inside "Advanced": no card, at most one short hint. */
+function Block({
+  title,
+  hint,
+  children,
+}: {
+  title: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-medium">{title}</h3>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {children}
+    </section>
+  )
+}
+
+/** The main thing to write: the instructions (or, for a built-in type, only extra preferences). */
+export function InstructionsField({
+  spec,
+  onChange,
+}: {
+  spec: VersionSpec
+  onChange: (next: VersionSpec) => void
+}) {
+  const t = useT()
+  const built = (spec.role ?? 'custom') !== 'custom'
+  const max = built ? 1000 : 4000
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="h-instructions">
+        {built ? t('helpers.role.prefs_title') : t('helpers.instructions')}
+      </Label>
+      <Textarea
+        id="h-instructions"
+        rows={built ? 4 : 9}
+        maxLength={max}
+        className="leading-relaxed"
+        value={spec.instructions}
+        onChange={(e) => onChange({ ...spec, instructions: e.target.value })}
+      />
+      <p className="text-right text-xs text-muted-foreground tabular-nums">
+        {spec.instructions.length} / {max}
+      </p>
+    </div>
+  )
+}
+
+/** The technical part of a helper, for "Advanced": type, inputs, sources, result shape, quality. */
 export function SpecForm({
   spec,
   onChange,
@@ -110,8 +145,8 @@ export function SpecForm({
     set({ inputs: inputs.map((x, k) => (k === i ? { ...x, ...patch } : x)) })
 
   return (
-    <>
-      <SectionCard icon={Sparkles} title={t('helpers.role.title')} help={t('helpers.role.help')}>
+    <div className="space-y-5">
+      <Block title={t('helpers.role.title')}>
         <NativeSelect
           aria-label={t('helpers.role.title')}
           value={role}
@@ -133,45 +168,11 @@ export function SpecForm({
         {built && (
           <p className="text-sm text-muted-foreground">{t(`helpers.role.${role}.about`)}</p>
         )}
-      </SectionCard>
-
-      <SectionCard
-        icon={PenLine}
-        title={built ? t('helpers.role.prefs_title') : t('helpers.ui.sec.instructions')}
-        help={built ? t('helpers.role.prefs_help') : t('helpers.ui.sec.instructions_help')}
-      >
-        <div className="space-y-1.5">
-          <Label htmlFor="h-instructions" className="sr-only">
-            {t('helpers.instructions')}
-          </Label>
-          <Textarea
-            id="h-instructions"
-            rows={built ? 4 : 9}
-            maxLength={built ? 1000 : 4000}
-            className="leading-relaxed"
-            value={spec.instructions}
-            onChange={(e) => set({ instructions: e.target.value })}
-            aria-describedby="h-instructions-help"
-          />
-          <p
-            id="h-instructions-help"
-            className="flex justify-between gap-3 text-xs text-muted-foreground"
-          >
-            <span>{built ? '' : t('helpers.instructions_help')}</span>
-            <span className="shrink-0 tabular-nums">
-              {spec.instructions.length} / {built ? 1000 : 4000}
-            </span>
-          </p>
-        </div>
-      </SectionCard>
+      </Block>
 
       {!built && (
         <>
-          <SectionCard
-            icon={TextCursorInput}
-            title={t('helpers.inputs')}
-            help={t('helpers.inputs_help')}
-          >
+          <Block title={t('helpers.inputs')}>
             <fieldset tabIndex={-1} className="space-y-2 outline-none">
               {inputs.map((inp, i) => (
                 <div
@@ -243,13 +244,9 @@ export function SpecForm({
                 </Button>
               )}
             </fieldset>
-          </SectionCard>
+          </Block>
 
-          <SectionCard
-            icon={FileText}
-            title={t('helpers.sources')}
-            help={t('helpers.sources_help')}
-          >
+          <Block title={t('helpers.sources')} hint={t('helpers.sources_help')}>
             <div className="grid gap-2 sm:grid-cols-3">
               {(['profile', 'job', 'fit'] as const).map((s) => (
                 <ChoiceCard
@@ -266,13 +263,9 @@ export function SpecForm({
                 />
               ))}
             </div>
-          </SectionCard>
+          </Block>
 
-          <SectionCard
-            icon={ListChecks}
-            title={t('helpers.result')}
-            help={t('helpers.ui.sec.result_help')}
-          >
+          <Block title={t('helpers.result')}>
             <fieldset tabIndex={-1} className="space-y-3 outline-none">
               <div className="grid gap-2 sm:grid-cols-2">
                 {(['text', 'fields'] as const).map((k) => (
@@ -282,7 +275,6 @@ export function SpecForm({
                     name="result-kind"
                     icon={k === 'text' ? FileText : Rows3}
                     title={t(`helpers.result.${k}`)}
-                    hint={t(`helpers.ui.${k}_hint`)}
                     checked={spec.output.kind === k}
                     onChange={() =>
                       set({
@@ -383,11 +375,11 @@ export function SpecForm({
                 </Button>
               )}
             </fieldset>
-          </SectionCard>
+          </Block>
         </>
       )}
 
-      <SectionCard icon={Gauge} title={t('helpers.quality')} help={t('helpers.quality_help')}>
+      <Block title={t('helpers.quality')}>
         <div
           role="radiogroup"
           aria-label={t('helpers.quality')}
@@ -406,13 +398,22 @@ export function SpecForm({
             />
           ))}
         </div>
-      </SectionCard>
-    </>
+      </Block>
+    </div>
   )
 }
 
 /** "Try it": runs the draft (unsaved) once on sample text or a real job. Nothing is stored. */
-export function TryPanel({ agentId, spec }: { agentId: string; spec: VersionSpec }) {
+export function TryPanel({
+  agentId,
+  spec,
+  receives = true,
+}: {
+  agentId: string
+  spec: VersionSpec
+  /** Show "What the AI receives" under the answer (the editor puts it in Advanced instead). */
+  receives?: boolean
+}) {
   const t = useT()
   const trial = useTrial()
   const use = useAiUse()
@@ -428,17 +429,9 @@ export function TryPanel({ agentId, spec }: { agentId: string; spec: VersionSpec
 
   return (
     <section aria-labelledby="try-h" className="space-y-4 rounded-xl border bg-card p-5 shadow-xs">
-      <header className="flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-          <FlaskConical className="size-4" aria-hidden />
-        </span>
-        <div>
-          <h2 id="try-h" className="leading-8 font-semibold tracking-tight">
-            {t('helpers.try')}
-          </h2>
-          <p className="-mt-1 text-sm text-muted-foreground">{t('helpers.ui.try_hint')}</p>
-        </div>
-      </header>
+      <h2 id="try-h" className="font-semibold tracking-tight">
+        {t('helpers.try')}
+      </h2>
       {inputs.map((i) => (
         <div key={i.name} className="space-y-1.5">
           <Label htmlFor={`try-${i.name}`}>{i.label}</Label>
@@ -452,6 +445,9 @@ export function TryPanel({ agentId, spec }: { agentId: string; spec: VersionSpec
         </div>
       ))}
       {needsJob && <JobSelect id="try-job" value={jobId} onChange={setJobId} />}
+      {sources.includes('fit') && (
+        <p className="text-xs text-muted-foreground">{t('helpers.ui.try_fit_hint')}</p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <Button
           disabled={missing || trial.isPending || left === 0}
@@ -488,28 +484,37 @@ export function TryPanel({ agentId, spec }: { agentId: string; spec: VersionSpec
         ) : (
           !trial.isPending &&
           !trial.error && (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-              <Sparkles className="size-5 text-primary/70" aria-hidden />
+            <p className="py-6 text-center text-sm text-muted-foreground">
               {t('helpers.ui.try_empty')}
-            </div>
+            </p>
           )
         )}
       </div>
-      <details className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
-        <summary className="cursor-pointer text-muted-foreground">{t('helpers.receives')}</summary>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
-          <li>{t('helpers.receives.frame')}</li>
-          <li>{t('helpers.receives.instructions')}</li>
-          {inputs.map((i) => (
-            <li key={i.name}>{t('helpers.receives.data', { name: i.name })}</li>
-          ))}
-          {sources.map((s) => (
-            <li key={s}>{t('helpers.receives.data', { name: s })}</li>
-          ))}
-        </ol>
-        <p className="mt-2 text-xs text-muted-foreground">{t('helpers.receives.never')}</p>
-      </details>
+      {receives && <Receives spec={spec} />}
     </section>
+  )
+}
+
+/** "What the AI receives": the exact list of what one run sends, for the curious. */
+export function Receives({ spec }: { spec: VersionSpec }) {
+  const t = useT()
+  const inputs = spec.inputs ?? []
+  const sources = spec.context_sources ?? []
+  return (
+    <details className="rounded-lg bg-muted/40 px-3 py-2 text-sm">
+      <summary className="cursor-pointer text-muted-foreground">{t('helpers.receives')}</summary>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+        <li>{t('helpers.receives.frame')}</li>
+        <li>{t('helpers.receives.instructions')}</li>
+        {inputs.map((i) => (
+          <li key={i.name}>{t('helpers.receives.data', { name: i.name })}</li>
+        ))}
+        {sources.map((s) => (
+          <li key={s}>{t('helpers.receives.data', { name: s })}</li>
+        ))}
+      </ol>
+      <p className="mt-2 text-xs text-muted-foreground">{t('helpers.receives.never')}</p>
+    </details>
   )
 }
 
@@ -547,7 +552,7 @@ function Row({
   )
 }
 
-/** Pick a character: shuffle for a surprise, or choose each part. Parameters only (no uploads). */
+/** Choose each part of the character (the shuffle button lives next to the name). Parameters only. */
 export function AvatarPicker({
   value,
   onChange,
@@ -557,56 +562,47 @@ export function AvatarPicker({
 }) {
   const t = useT()
   return (
-    <div className="flex flex-wrap items-start gap-5 rounded-xl bg-muted/40 p-4">
-      <div className="flex flex-col items-center gap-2">
-        <Avatar spec={value} size={104} label={t('helpers.avatar')} />
-        <Button variant="outline" size="sm" onClick={() => onChange(shuffled())}>
-          <Shuffle data-icon="inline-start" />
-          {t('helpers.shuffle')}
-        </Button>
-      </div>
-      <div className="min-w-0 flex-1 space-y-2.5">
-        <Row
-          value={value}
-          onChange={onChange}
-          label={t('helpers.avatar.body')}
-          field="body"
-          count={BODIES}
-        />
-        <Row
-          value={value}
-          onChange={onChange}
-          label={t('helpers.avatar.eyes')}
-          field="eyes"
-          count={EYES}
-        />
-        <Row
-          value={value}
-          onChange={onChange}
-          label={t('helpers.avatar.extra')}
-          field="accessory"
-          count={ACCESSORIES}
-        />
-        <div
-          role="group"
-          aria-label={t('helpers.avatar.color')}
-          className="flex flex-wrap items-center gap-1"
-        >
-          <span className="w-14 shrink-0 text-xs font-medium text-muted-foreground">
-            {t('helpers.avatar.color')}
-          </span>
-          {range(PALETTES_COUNT).map((i) => (
-            <button
-              key={i}
-              type="button"
-              aria-pressed={value.palette === i}
-              aria-label={`${t('helpers.avatar.color')} ${i + 1}`}
-              onClick={() => onChange({ ...value, palette: i })}
-              style={{ background: PALETTES[i].fill, borderColor: PALETTES[i].accent }}
-              className="size-5 rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground pointer-coarse:size-9"
-            />
-          ))}
-        </div>
+    <div className="space-y-2.5">
+      <Row
+        value={value}
+        onChange={onChange}
+        label={t('helpers.avatar.body')}
+        field="body"
+        count={BODIES}
+      />
+      <Row
+        value={value}
+        onChange={onChange}
+        label={t('helpers.avatar.eyes')}
+        field="eyes"
+        count={EYES}
+      />
+      <Row
+        value={value}
+        onChange={onChange}
+        label={t('helpers.avatar.extra')}
+        field="accessory"
+        count={ACCESSORIES}
+      />
+      <div
+        role="group"
+        aria-label={t('helpers.avatar.color')}
+        className="flex flex-wrap items-center gap-1"
+      >
+        <span className="w-14 shrink-0 text-xs font-medium text-muted-foreground">
+          {t('helpers.avatar.color')}
+        </span>
+        {range(PALETTES_COUNT).map((i) => (
+          <button
+            key={i}
+            type="button"
+            aria-pressed={value.palette === i}
+            aria-label={`${t('helpers.avatar.color')} ${i + 1}`}
+            onClick={() => onChange({ ...value, palette: i })}
+            style={{ background: PALETTES[i].fill, borderColor: PALETTES[i].accent }}
+            className="size-5 rounded-full border-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:ring-2 aria-pressed:ring-foreground pointer-coarse:size-9"
+          />
+        ))}
       </div>
     </div>
   )

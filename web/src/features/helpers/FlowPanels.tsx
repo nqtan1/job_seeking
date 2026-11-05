@@ -39,47 +39,37 @@ import { Link, useParams } from 'react-router'
 import { TryPanel } from './HelperForm'
 import { Button } from '@/components/ui/button'
 
-/** Always visible: what is wrong, where, and that Run waits for it. Every row jumps to the place. */
+/** One status line: "Ready", or only what is wrong. Every row jumps to the step. */
 export function ValidationPanel({
   titles,
   issues,
-  aiCalls,
   onJump,
 }: {
   titles: ReadonlyMap<string, string>
   issues: Issue[] | undefined
-  aiCalls: number
   onJump: (s: Selection) => void
 }) {
   const t = useT()
   const errors = (issues ?? []).filter((i) => i.severity === 'error')
   const warnings = (issues ?? []).filter((i) => i.severity === 'warning')
-  const ok = errors.length === 0
   const rows = [...errors, ...warnings]
   return (
-    <section
-      aria-label={t('helpers.checks')}
-      className={`rounded-xl border p-3.5 ${ok ? 'border-success/30 bg-success/10' : 'border-destructive/30 bg-destructive/5'}`}
-    >
-      <div className="flex items-start gap-2.5">
-        {ok ? (
-          <CircleCheck aria-hidden className="mt-0.5 size-5 shrink-0 text-success" />
+    <section aria-label={t('helpers.checks')} className="space-y-1">
+      <p
+        role="status"
+        className={`flex items-center gap-2 px-1 text-sm ${errors.length ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+      >
+        {errors.length ? (
+          <CircleAlert aria-hidden className="size-4 shrink-0" />
         ) : (
-          <CircleAlert aria-hidden className="mt-0.5 size-5 shrink-0 text-destructive" />
+          <CircleCheck aria-hidden className="size-4 shrink-0 text-success" />
         )}
-        <div className="min-w-0">
-          <h2 className="text-sm leading-5 font-semibold">
-            <span role="status">
-              {ok ? t('helpers.checks.ok') : t('helpers.checks.problems', { count: errors.length })}
-            </span>
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {t('helpers.flow.cost', { count: aiCalls })}
-          </p>
-        </div>
-      </div>
+        {errors.length
+          ? t('helpers.checks.problems', { count: errors.length })
+          : t('helpers.checks.ok')}
+      </p>
       {rows.length > 0 && (
-        <ul className="mt-2 space-y-0.5 border-t border-current/10 pt-2">
+        <ul className="space-y-0.5">
           {rows.map((i, k) => (
             <li key={k}>
               <button
@@ -93,7 +83,7 @@ export function ValidationPanel({
                         : null,
                   )
                 }
-                className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none hover:bg-background/70 focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:min-h-11"
+                className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 pointer-coarse:min-h-11"
               >
                 {i.severity === 'error' ? (
                   <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />

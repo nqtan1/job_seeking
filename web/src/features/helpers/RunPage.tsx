@@ -25,6 +25,7 @@ import { type Graph, orderOf } from './graph'
 import { useLabels, when } from './lib'
 import { ResultHero, RunSummary, StepTimeline } from './RunParts'
 import { StepsList } from './StepsList'
+import { Details } from './ui'
 import type { Selection } from './Canvas'
 
 const Canvas = lazy(() => import('./Canvas'))
@@ -123,23 +124,6 @@ function View({ run }: { run: Run }) {
           {t('helpers.run.resume')}
         </Button>
       )}
-      {!live && run.steps.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setReplay(
-              playing && replay
-                ? { ...replay, playing: false }
-                : { i: 0, playing: true, status: run.status },
-            )
-          }
-          aria-pressed={playing}
-        >
-          {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
-          {t('helpers.replay')}
-        </Button>
-      )}
     </>
   )
 
@@ -160,20 +144,6 @@ function View({ run }: { run: Run }) {
           {t('helpers.run.waiting_until', { time: when(run.wake_at, locale) })}
         </p>
       )}
-      {frame !== null && (
-        <input
-          type="range"
-          min={0}
-          max={Math.max(frames.length - 1, 0)}
-          value={frame}
-          aria-label={t('helpers.replay')}
-          onChange={(e) =>
-            setReplay({ i: Number(e.target.value), playing: false, status: run.status })
-          }
-          className="w-full"
-        />
-      )}
-
       <ResultHero run={run} />
       {live && !run.result && (
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -185,9 +155,40 @@ function View({ run }: { run: Run }) {
       {!graph ? (
         <ListSkeleton rows={3} />
       ) : (
-        <>
+        <Details defaultOpen={run.status === 'failed'}>
+          {!live && run.steps.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setReplay(
+                  playing && replay
+                    ? { ...replay, playing: false }
+                    : { i: 0, playing: true, status: run.status },
+                )
+              }
+              aria-pressed={playing}
+            >
+              {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
+              {t('helpers.replay')}
+            </Button>
+          )}
+          {frame !== null && (
+            <input
+              type="range"
+              min={0}
+              max={Math.max(frames.length - 1, 0)}
+              value={frame}
+              aria-label={t('helpers.replay')}
+              onChange={(e) =>
+                setReplay({ i: Number(e.target.value), playing: false, status: run.status })
+              }
+              className="w-full"
+            />
+          )}
+
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold tracking-tight">{t('helpers.ui.timeline')}</h2>
+            <h2 className="text-base font-semibold tracking-tight">{t('helpers.ui.timeline')}</h2>
             <StepTimeline
               order={orderOf(graph)}
               steps={stepOf}
@@ -203,7 +204,7 @@ function View({ run }: { run: Run }) {
             />
           </section>
 
-          <section className="space-y-3 rounded-2xl border bg-card p-4">
+          <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="ghost"
@@ -284,7 +285,7 @@ function View({ run }: { run: Run }) {
             handoffs={run.handoffs}
             onSelect={setSelection}
           />
-        </>
+        </Details>
       )}
     </div>
   )

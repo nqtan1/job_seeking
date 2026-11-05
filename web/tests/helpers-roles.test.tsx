@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { SpecForm } from '@/features/helpers/HelperForm'
+import { InstructionsField, SpecForm } from '@/features/helpers/HelperForm'
 import type { VersionSpec } from '@/features/helpers/graph'
 
 const custom: VersionSpec = {
@@ -28,7 +28,9 @@ test('a built-in role keeps its own prompt and format: only extra preferences ar
   )
 
   rerender(<SpecForm spec={{ ...custom, role: 'letter', inputs: [] }} onChange={onChange} />)
-  expect(screen.getByText('Your extra preferences')).toBeInTheDocument()
   expect(screen.queryByText('What you give it')).not.toBeInTheDocument() // locked by the role
+  rerender(<InstructionsField spec={{ ...custom, role: 'letter' }} onChange={onChange} />)
+  expect(screen.getByLabelText('Your extra preferences')).toBeInTheDocument()
+  rerender(<SpecForm spec={{ ...custom, role: 'letter', inputs: [] }} onChange={onChange} />)
   expect(screen.getByText(/writes a cover letter of about 200 words/)).toBeInTheDocument()
 })

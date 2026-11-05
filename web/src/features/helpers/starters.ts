@@ -102,6 +102,19 @@ export const BLANK_SPEC: VersionSpec = {
   output: text,
 }
 
+export const PICKS = ['letter', 'interview', 'cv_advice', 'custom'] as const
+export type Pick = (typeof PICKS)[number]
+
+/** A helper of a built-in type: the server fixes its prompt, format and sources; we only start empty. */
+export const pickSpec = (role: Exclude<Pick, 'custom'>): VersionSpec => ({
+  role,
+  instructions: '',
+  model_tier: 'fast',
+  inputs: [],
+  context_sources: ['profile', 'job', 'fit'],
+  output: text,
+})
+
 type Translate = (key: Key, vars?: Vars) => string
 
 /** The spec with its input labels in the user's language (the instructions stay as written: they

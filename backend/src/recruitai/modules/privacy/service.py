@@ -17,8 +17,9 @@ from recruitai.core.errors import UpstreamUnavailable
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.storage import Storage
 from recruitai.core.tasks import enqueue, find_queued
-from recruitai.modules.agents import flows as agent_flows
-from recruitai.modules.agents import service as agents
+from recruitai.modules.agents.flows import runs as agent_runs
+from recruitai.modules.agents.flows import service as agent_flows
+from recruitai.modules.agents.helpers import service as agents
 from recruitai.modules.applications import service as applications
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.coach import service as coach
@@ -177,7 +178,7 @@ async def sweep_ai_calls(db: AsyncSession, *, now: datetime) -> int:
 
 
 async def sweep_flow_runs(db: AsyncSession, *, now: datetime) -> int:
-    return await agent_flows.sweep_old_runs(db, cutoff=now - FLOW_RUNS_KEPT)
+    return await agent_runs.sweep_old_runs(db, cutoff=now - FLOW_RUNS_KEPT)
 
 
 async def sweep_radar_runs(db: AsyncSession, *, now: datetime) -> int:

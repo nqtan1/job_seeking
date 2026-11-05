@@ -132,6 +132,17 @@
   }
   html {
     @apply font-sans antialiased;
+    color-scheme: light;
+  }
+  /* Native controls (the open list of a dropdown, scrollbars) follow the theme: without this the
+     list stays white while its text turns light, and the options cannot be read. */
+  html.dark {
+    color-scheme: dark;
+  }
+  select option,
+  select optgroup {
+    background-color: var(--background);
+    color: var(--foreground);
   }
 }
 

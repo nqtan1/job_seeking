@@ -68,7 +68,7 @@ test('editing a helper: a version is saved on the version it started from, and a
   const user = userEvent.setup()
   open(<HelperEditor />, '/helpers/:agentId', '/helpers/a1')
   const box = await screen.findByLabelText('Instructions')
-  const save = screen.getByRole('button', { name: /Save version/ })
+  const save = screen.getByRole('button', { name: /^Save/ })
   expect(save).toBeDisabled() // nothing changed yet
 
   await user.clear(box)
@@ -108,7 +108,7 @@ test('the gallery starts a helper from a template', async () => {
   mocks.POST.mockResolvedValueOnce({ data: { ...AGENT, id: 'new1' } })
   open(<HelpersPage />, '/helpers', '/helpers')
   expect(await screen.findByText('No helper yet')).toBeInTheDocument()
-  await user.click(screen.getAllByRole('button', { name: 'Use this template' })[0])
+  await user.click(screen.getAllByRole('button', { name: /^Use:/ })[0])
   await waitFor(() => expect(mocks.POST).toHaveBeenCalled())
   expect(mocks.POST.mock.calls[0][1].body.name).toBe('Follow-up writer')
   expect(mocks.POST.mock.calls[0][1].body.spec.instructions).toContain('follow-up')
@@ -280,10 +280,8 @@ test('a finished run leads with its summary and the result, then the steps', asy
   })
   open(<RunPage />, '/automations/runs/:runId', '/automations/runs/r2')
 
-  expect(await screen.findByText('3 of 3 steps')).toBeInTheDocument()
+  expect(await screen.findByText('Took 4.0 s')).toBeInTheDocument()
   expect(screen.getAllByText('Done')[0]).toBeInTheDocument() // the status badge comes first
-  expect(screen.getByText('Took 4.0 s')).toBeInTheDocument()
-  expect(screen.getByText('1 AI use')).toBeInTheDocument() // only the step that used a model
   expect(screen.getByRole('region', { name: 'Result' })).toHaveTextContent(
     'A canned helper answer.',
   )
@@ -392,18 +390,20 @@ describe('the flow editor', () => {
   test('the header carries save and run with an always-present save status; adding a step makes it unsaved', async () => {
     const user = userEvent.setup()
     renderEditor()
-    await screen.findByRole('button', { name: /Save version/ })
+    await screen.findByRole('button', { name: /^Save/ })
     const banner = screen.getByRole('banner')
     const status = within(banner).getByRole('status')
     expect(status).toHaveTextContent('All changes saved')
-    expect(within(banner).getByRole('button', { name: /Save version/ })).toBeDisabled()
+    expect(within(banner).getByRole('button', { name: /^Save/ })).toBeDisabled()
     expect(within(banner).getByRole('button', { name: 'Run flow' })).toBeEnabled()
 
     await user.click(screen.getByRole('button', { name: 'Steps' }))
-    await user.selectOptions(await screen.findByLabelText('Add a helper…'), 'Mira')
+    await user.click((await screen.findAllByText('Add'))[0]) // the one "+ Add" menu
+    await user.click(await screen.findByRole('button', { name: 'Mira' }))
     expect(await within(banner).findByRole('status')).toHaveTextContent('Unsaved changes')
     expect(within(banner).getByRole('button', { name: 'Run flow' })).toBeDisabled()
 
+    await user.click(screen.getAllByText('Add')[0])
     await user.click(screen.getByRole('button', { name: 'Clean text' })) // the renamed transform
     const send = screen.getAllByLabelText('Send to…')[0] // Start's list
     const labels = within(send)
@@ -413,24 +413,20 @@ describe('the flow editor', () => {
     expect(labels).toContain('Clean text')
   })
 
-  test('the status card says Ready to run with the price, or lists clickable problems naming the step', async () => {
+  test('the status line says Ready, or lists clickable problems naming the step', async () => {
     const user = userEvent.setup()
     const onJump = vi.fn()
     const titles = new Map([['n1', 'Mira']])
-    const { rerender } = render(
-      <ValidationPanel titles={titles} issues={[]} aiCalls={2} onJump={onJump} />,
-    )
-    expect(screen.getByText('Ready to run')).toBeInTheDocument()
-    expect(screen.getByText(/up to 2 AI uses/)).toBeInTheDocument()
+    const { rerender } = render(<ValidationPanel titles={titles} issues={[]} onJump={onJump} />)
+    expect(screen.getByText('Ready')).toBeInTheDocument()
     rerender(
       <ValidationPanel
         titles={titles}
         issues={[{ severity: 'error', code: 'cycle', node_id: 'n1', edge_id: null } as never]}
-        aiCalls={2}
         onJump={onJump}
       />,
     )
-    expect(screen.queryByText('Ready to run')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Mira/ }))
     expect(onJump).toHaveBeenCalledWith({ kind: 'node', id: 'n1' })
   })
@@ -556,8 +552,7 @@ describe('platform pages', () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     )
-    const buttons = await screen.findAllByRole('button', { name: 'Create this automation' })
-    await user.click(buttons[2]) // Prepare my interview: two helpers
+    await user.click(await screen.findByRole('button', { name: 'Use Prepare my interview' })) // two helpers
     expect(await screen.findByText('editor')).toBeInTheDocument()
     const calls = mocks.POST.mock.calls
     expect(calls.map((c) => c[0])).toEqual(['/api/v1/agents', '/api/v1/agents', '/api/v1/flows'])

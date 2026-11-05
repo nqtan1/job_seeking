@@ -1,11 +1,10 @@
-import { type LucideIcon, CalendarClock, GitBranch, Play, Rows3, UserRound } from 'lucide-react'
+import { Play } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { type Key, catalogs, useI18n } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { ListSkeleton } from '@/components/Skeleton'
 import { Spinner } from '@/components/Spinner'
-import { EmptyState } from '@/components/EmptyState'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
@@ -32,19 +31,17 @@ function useOutcome() {
 }
 
 const TRIGGER = {
-  manual: { Icon: UserRound, label: 'helpers.pages.runs.by_you' },
-  schedule: { Icon: CalendarClock, label: 'helpers.pages.runs.by_schedule' },
-  flow: { Icon: GitBranch, label: 'helpers.pages.runs.by_flow' },
-} as const satisfies Record<string, { Icon: LucideIcon; label: Key }>
+  schedule: 'helpers.pages.runs.by_schedule',
+  flow: 'helpers.pages.runs.by_flow',
+} as const satisfies Record<string, Key>
 
 function RunRow({ run }: { run: RunListItem }) {
   const { t, locale } = useI18n()
   const navigate = useNavigate()
   const again = useRerun()
   const outcome = useOutcome()
-  const { Icon, label } = TRIGGER[run.trigger]
   return (
-    <li className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs sm:flex-row sm:items-center">
+    <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -55,29 +52,34 @@ function RunRow({ run }: { run: RunListItem }) {
             {run.flow_name}
           </Link>
           <RunStatusBadge status={run.status} />
-          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-            <Icon className="size-3" aria-hidden />
-            {t(label)}
-          </span>
         </div>
-        <p
-          className={cn(
-            'flex items-center gap-2 text-sm',
-            run.status === 'failed' ? 'text-destructive' : 'text-muted-foreground',
-          )}
-        >
-          {isLive(run.status) && <Spinner />}
-          {outcome(run)}
-        </p>
+        {run.status !== 'done' && (
+          <p
+            className={cn(
+              'flex items-center gap-2 text-sm',
+              run.status === 'failed' ? 'text-destructive' : 'text-muted-foreground',
+            )}
+          >
+            {isLive(run.status) && <Spinner />}
+            {outcome(run)}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           <time dateTime={run.created_at} title={new Date(run.created_at).toLocaleString(locale)}>
             {relTime(run.created_at, locale)}
           </time>
+          {run.trigger !== 'manual' && (
+            <>
+              {' · '}
+              <span>{t(TRIGGER[run.trigger])}</span>
+            </>
+          )}
         </p>
         <ErrorMessage error={again.error} />
       </div>
       <Button
-        variant="outline"
+        variant="ghost"
+        size="sm"
         disabled={again.isPending || isLive(run.status)}
         aria-label={t('helpers.pages.runs.again_label', { name: run.flow_name })}
         onClick={() =>
@@ -103,7 +105,7 @@ export function RunsTab() {
   })
   const rows = runs.data?.pages.flat() ?? []
   return (
-    <div className="space-y-4 pt-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div
           role="group"
@@ -114,7 +116,7 @@ export function RunsTab() {
             <Button
               key={f}
               size="sm"
-              variant={filter === f ? 'default' : 'outline'}
+              variant={filter === f ? 'outline' : 'ghost'}
               aria-pressed={filter === f}
               onClick={() => setFilter(f)}
             >
@@ -141,23 +143,19 @@ export function RunsTab() {
       ) : runs.error ? (
         <ErrorMessage error={runs.error} />
       ) : rows.length === 0 ? (
-        <EmptyState
-          icon={Rows3}
-          title={t(
+        <div className="flex flex-wrap items-center gap-3 py-6 text-sm text-muted-foreground">
+          {t(
             filter === 'all' && !flowId
               ? 'helpers.pages.runs.empty'
               : 'helpers.pages.runs.empty_filtered',
           )}
-          description={t('helpers.pages.runs.empty_hint')}
-          action={
-            <Link to="/automations" className={buttonVariants()}>
-              {t('helpers.pages.runs.go')}
-            </Link>
-          }
-        />
+          <Link to="/automations" className={buttonVariants({ variant: 'outline' })}>
+            {t('helpers.pages.runs.go')}
+          </Link>
+        </div>
       ) : (
         <>
-          <ul aria-label={t('helpers.pages.runs.list')} className="space-y-3">
+          <ul aria-label={t('helpers.pages.runs.list')} className="divide-y rounded-2xl border">
             {rows.map((r) => (
               <RunRow key={r.id} run={r} />
             ))}

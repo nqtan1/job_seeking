@@ -58,6 +58,7 @@ export const TOOL_IO = {
     ],
     out: ['status'],
   },
+  telegram_send: { in: [['text', true]], out: ['status'] },
   wait: { in: [['value', true]], out: ['value'] },
 } as const satisfies Record<
   string,
@@ -243,7 +244,8 @@ export const aiCalls = (g: Graph) =>
   g.nodes.filter(
     (n) =>
       n.type === 'agent' ||
-      (n.type === 'tool' && (n.tool === 'web_search' || n.tool === 'fit_check')),
+      (n.type === 'tool' &&
+        (n.tool === 'web_search' || n.tool === 'fit_check' || n.tool === 'find_offers')),
   ).length
 
 /** Copy steps with fresh ids and the connections between them remapped (paste / duplicate). */
@@ -347,8 +349,8 @@ export const typeKey = (type: GraphNode['type']) =>
     ? ('helpers.node.transform_name' as const)
     : (`helpers.node.${type}` as const)
 
-/** Limits the server enforces (backend/src/recruitai/modules/agents/schemas.py and graph.py).
- *  The UI uses them only as hints; backend/tests/unit/test_limits_in_sync.py fails if they drift. */
+/** Limits the server enforces (backend/src/recruitai/modules/agents/helpers/schemas.py and flows/graph.py).
+ *  The UI uses them only as hints; backend/tests/unit/test_flow_graph.py fails if they drift. */
 export const MAX_INPUT_CHARS = 20_000
 export const MAX_INPUTS = 6
 export const MAX_FIELDS = 12

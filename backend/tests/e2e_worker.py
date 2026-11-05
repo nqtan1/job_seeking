@@ -12,7 +12,7 @@ from typing import Any
 from recruitai.ai import dependencies
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.core.errors import UpstreamUnavailable
-from recruitai.modules.agents.runner import TextResult
+from recruitai.modules.agents.helpers.runner import TextResult
 from recruitai.modules.jobs.providers import factory
 from recruitai.modules.matching.schemas import FitCheck
 from recruitai.worker import app  # noqa: F401  (the CLI reads ``app``)

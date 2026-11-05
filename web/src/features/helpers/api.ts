@@ -164,6 +164,12 @@ export const useCreateFlow = () =>
     [FLOWS],
   )
 
+export const useInstallJobHunter = () =>
+  useInvalidating(
+    async () => unwrap(await api.POST('/api/v1/flows/starters/job-hunter')),
+    [FLOWS, AGENTS],
+  )
+
 export const useAddFlowVersion = () =>
   useInvalidating(
     async (v: { id: string; basedOn: number; graph: Graph; note?: string }) =>
@@ -270,21 +276,26 @@ export const useCancelRun = () =>
 /** The specs of the helper versions a graph pins, for port names (inputs/outputs of a step).
  *  `ready` is false while a newly added helper's spec is still loading: linking waits for it. */
 export function useSpecs(graph: Graph | undefined): { specs: Specs; ready: boolean } {
-  const agents = [
-    ...new Set((graph?.nodes ?? []).flatMap((n) => (n.type === 'agent' ? [n.agent_id] : []))),
-  ]
+  const pinned = new Map<string, Set<string>>() // helper id -> the version ids the graph pins
+  for (const n of graph?.nodes ?? []) {
+    if (n.type === 'agent')
+      pinned.set(n.agent_id, (pinned.get(n.agent_id) ?? new Set()).add(n.agent_version_id))
+  }
+  const agents = [...pinned.keys()].sort()
+  const versionIds = [...pinned.values()].flatMap((v) => [...v]).sort()
   const qc = useQueryClient()
   const results = useQuery({
-    queryKey: ['helper-specs', agents.sort().join(',')],
+    // the pinned versions are part of the key: a new version of a helper must refetch its specs
+    queryKey: ['helper-specs', agents.join(','), versionIds.join(',')],
     enabled: agents.length > 0,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const map = new Map<string, VersionSpec>()
-      for (const id of agents) {
-        const versions = await qc.fetchQuery({
+      const load = (id: string, staleTime: number) =>
+        qc.fetchQuery({
           queryKey: [...AGENTS, id, 'versions'],
-          staleTime: 60_000,
+          staleTime,
           queryFn: async () =>
             unwrap(
               await api.GET('/api/v1/agents/{agent_id}/versions', {
@@ -292,6 +303,12 @@ export function useSpecs(graph: Graph | undefined): { specs: Specs; ready: boole
               }),
             ),
         })
+      for (const id of agents) {
+        let versions = await load(id, 60_000)
+        // a cached list from before the newest version was saved lacks it: ask again
+        if ([...(pinned.get(id) ?? [])].some((v) => !versions.some((x) => x.id === v))) {
+          versions = await load(id, 0)
+        }
         for (const v of versions) map.set(v.id, v.spec)
       }
       return map
@@ -396,6 +413,35 @@ export const useDeleteSchedule = () =>
 // ---- contacts: who an automation may email ----
 
 export type Contact = components['schemas']['RecipientOut']
+
+const CONNECTIONS = ['connections']
+
+export const useConnections = () =>
+  useQuery({
+    queryKey: CONNECTIONS,
+    queryFn: async () => unwrap(await api.GET('/api/v1/connections')),
+  })
+
+export const useStartTelegramLink = () =>
+  useInvalidating(
+    async () => unwrap(await api.POST('/api/v1/connections/telegram/link')),
+    [CONNECTIONS],
+  )
+
+/** Asks the server to look for the code the person just sent the bot. */
+export const useCheckTelegram = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST('/api/v1/connections/telegram/check')),
+    onSuccess: (data) => qc.setQueryData(CONNECTIONS, data),
+  })
+}
+
+export const useDisconnectTelegram = () =>
+  useInvalidating(
+    async () => unwrap(await api.DELETE('/api/v1/connections/telegram')),
+    [CONNECTIONS],
+  )
 
 const CONTACTS = ['email-recipients']
 

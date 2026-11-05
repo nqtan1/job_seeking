@@ -4,8 +4,11 @@ import re
 
 import pytest
 
-from recruitai.modules.agents import graph as g
-from recruitai.modules.agents import tools
+from recruitai.modules.agents.blocks import tools
+from recruitai.modules.agents.blocks.catalogue import BLOCKS
+from recruitai.modules.agents.blocks.errors import ToolFailed
+from recruitai.modules.agents.blocks.web import MAX_TEXT, fetch_public_page, page_text
+from recruitai.modules.agents.flows import graph as g
 from tests.unit.test_flow_graph import ids
 
 
@@ -24,16 +27,14 @@ from tests.unit.test_flow_graph import ids
     ],
 )
 async def test_the_page_reader_never_reaches_a_private_or_odd_address(url):
-    with pytest.raises(
-        tools.ToolFailed
-    ):  # UrlNotAllowed, or a failed lookup: never a fetch
-        await tools.fetch_public_page(url)
+    with pytest.raises(ToolFailed):  # UrlNotAllowed, or a failed lookup: never a fetch
+        await fetch_public_page(url)
 
 
 def test_page_text_drops_scripts_and_keeps_the_words():
     html = "<html><head><title>x</title></head><body><script>evil()</script><h1>Dev</h1><p>Python &amp; SQL</p></body></html>"
-    assert tools.page_text(html) == "Dev\nPython & SQL"
-    assert len(tools.page_text("<p>" + "a" * 50_000)) == tools.MAX_TEXT
+    assert page_text(html) == "Dev\nPython & SQL"
+    assert len(page_text("<p>" + "a" * 50_000)) == MAX_TEXT
 
 
 def test_tool_blocks_have_fixed_inputs_and_outputs_and_a_job_lookup_needs_no_wire():
@@ -65,9 +66,17 @@ def test_the_web_editor_knows_exactly_the_action_blocks_the_server_has():
 
     web = LIMITS.read_text()
     block = web[web.index("export const TOOL_IO") : web.index("} as const satisfies")]
-    for kind, (inputs, outputs) in g.TOOLS.items():
+    for kind, (inputs, outputs) in (
+        (k, (b.inputs, b.outputs)) for k, b in BLOCKS.items()
+    ):
         part = block[block.index(f"{kind}:") :].split("},", 1)[0]
         names = {n for n, _ in inputs} | set(outputs)
         assert names <= set(re.findall(r"'([a-z_]+)'", part)), kind
         assert len(re.findall(r"\['", part.split("out:")[0])) == len(inputs), kind
-    assert set(re.findall(r"^\s{2}([a-z_]+): \{", block, re.MULTILINE)) == set(g.TOOLS)
+    assert set(re.findall(r"^\s{2}([a-z_]+): \{", block, re.MULTILINE)) == set(BLOCKS)
+
+
+def test_every_block_has_a_handler_unless_the_engine_owns_it():
+    """Adding a block is one catalogue row and one handler: the two lists cannot drift apart."""
+    engine_owned = {k for k, b in BLOCKS.items() if b.starts_runs or b.pauses}
+    assert set(tools.HANDLERS) == set(BLOCKS) - engine_owned

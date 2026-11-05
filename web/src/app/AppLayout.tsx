@@ -41,7 +41,7 @@ export function AppLayout() {
   }, [collapsed])
 
   return (
-    <div className="flex h-dvh bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <SessionGuard />
       <aside
         className={cn(
@@ -76,7 +76,9 @@ export function AppLayout() {
           <span className="font-semibold">RecruitAI</span>
         </div>
         <ColdStartNotice />
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        {/* `relative`: screen-reader-only and other absolutely placed bits stay inside this scroll area, or
+            they stretch the whole document and a second scrollbar appears */}
+        <main className="relative min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>

@@ -1,4 +1,4 @@
-"""All SQL for the agents module. Every query filters by org_id."""
+"""All SQL for helpers (agents and their versions). Every query filters by org_id."""
 
 from typing import Any
 from uuid import UUID
@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.modules.agents.models import Agent, AgentVersion
+from recruitai.modules.agents.helpers.models import Agent, AgentVersion
 
 
 async def count_agents(

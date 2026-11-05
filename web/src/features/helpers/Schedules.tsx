@@ -19,7 +19,7 @@ import {
   useSetScheduleEnabled,
 } from './api'
 import { type Graph, MAX_INPUT_CHARS, type Specs, aiCalls, MAX_SCHEDULES } from './graph'
-import { ChoiceCard, JobSelect, SectionCard } from './ui'
+import { ChoiceCard, JobSelect } from './ui'
 
 const CADENCES = ['hourly', 'daily', 'weekly'] as const
 const ZONES = [
@@ -163,28 +163,33 @@ export function SchedulePanel({
       : null
   const rows = schedules.data ?? []
   return (
-    <SectionCard
-      icon={CalendarClock}
-      title={t('helpers.pages.sched.title')}
-      help={t('helpers.pages.sched.help')}
-    >
+    <section aria-label={t('helpers.pages.sched.title')} className="space-y-2">
+      <div className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2">
+        <CalendarClock aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+        <span className="text-sm font-medium">{t('helpers.pages.sched.title')}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          {schedules.isPending ? <Spinner /> : rows.length === 0 && t('helpers.pages.sched.none')}
+        </span>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!!blocked}
+          aria-label={t('helpers.pages.sched.add')}
+          onClick={() => setAdding(true)}
+        >
+          <Plus data-icon="inline-start" />
+          {t('helpers.flow.add')}
+        </Button>
+      </div>
       <ErrorMessage error={schedules.error} />
-      {schedules.isPending ? (
-        <Spinner />
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('helpers.pages.sched.none')}</p>
-      ) : (
+      {rows.length > 0 && (
         <ul className="space-y-2">
           {rows.map((s) => (
             <ScheduleRow key={s.id} s={s} />
           ))}
         </ul>
       )}
-      {blocked && <p className="rounded-lg bg-muted px-3 py-2 text-sm">{t(blocked)}</p>}
-      <Button disabled={!!blocked} onClick={() => setAdding(true)}>
-        <Plus data-icon="inline-start" />
-        {t('helpers.pages.sched.add')}
-      </Button>
+      {blocked && <p className="px-1 text-xs text-muted-foreground">{t(blocked)}</p>}
       <AddDialog
         key={String(adding)}
         open={adding}
@@ -193,7 +198,7 @@ export function SchedulePanel({
         specs={specs}
         onClose={() => setAdding(false)}
       />
-    </SectionCard>
+    </section>
   )
 }
 

@@ -1,12 +1,10 @@
 import {
   Ban,
-  Bot,
   Check,
   ChevronDown,
   Circle,
   Clock,
   ExternalLink,
-  ListChecks,
   Minus,
   Play,
   RotateCcw,
@@ -27,7 +25,7 @@ import {
   useResumeRun,
 } from './api'
 import { relTime, seconds, when } from './lib'
-import { Result, RunStatusBadge } from './ui'
+import { Details, Result, RunStatusBadge } from './ui'
 import { Link } from 'react-router'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { cn } from 'cn'
@@ -73,28 +71,18 @@ export function RunSummary({
 }) {
   const { t, locale } = useI18n()
   const took = durationMs(run)
-  const done = run.steps.filter((s) => s.status === 'done' || s.status === 'skipped').length
-  const uses = run.steps.filter((s) => s.model).length
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border bg-card p-4 shadow-xs">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div className="flex items-center gap-2">
         <RunStatusBadge status={run.status} />
         {live && <Spinner />}
       </div>
       <Stat icon={Clock} title={new Date(run.created_at).toLocaleString(locale)}>
-        <span>
-          {relTime(run.created_at, locale)}
-          <span className="hidden text-muted-foreground/70 sm:inline">
-            {' · '}
-            {new Date(run.created_at).toLocaleString(locale)}
-          </span>
-        </span>
+        {relTime(run.created_at, locale)}
       </Stat>
       {took !== null && (
         <Stat icon={Timer}>{t('helpers.ui.took', { time: seconds(Math.max(took, 0)) })}</Stat>
       )}
-      <Stat icon={ListChecks}>{t('helpers.ui.steps_of', { done, count: run.steps.length })}</Stat>
-      <Stat icon={Bot}>{t('helpers.ui.ai_uses', { count: uses })}</Stat>
       <span className="flex-1" />
       <div className="flex flex-wrap items-center gap-2">{actions}</div>
     </div>
@@ -115,9 +103,9 @@ export function ResultHero({ run }: { run: Run }) {
   return (
     <section
       aria-label={t('helpers.run.result')}
-      className="space-y-2 rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent p-5 shadow-sm"
+      className="space-y-3 rounded-2xl border bg-card p-6 shadow-sm"
     >
-      <h2 className="text-lg font-semibold tracking-tight">{t('helpers.run.result')}</h2>
+      <h2 className="text-xl font-semibold tracking-tight">{t('helpers.run.result')}</h2>
       <Result value={run.result} large />
     </section>
   )
@@ -452,20 +440,22 @@ export function LiveRunPanel({
           {t('helpers.live.starting')}
         </p>
       )}
-      <StepTimeline
-        order={orderOf(graph)}
-        steps={started}
-        graph={graph}
-        titles={titles}
-        avatars={avatars}
-        moods={moods}
-        handoffs={run.handoffs}
-        errText={errText}
-        canResume={run.status === 'failed'}
-        resuming={resume.isPending}
-        onResume={() => resume.mutate(run.id)}
-      />
       <ResultHero run={run} />
+      <Details defaultOpen={live || run.status === 'failed'}>
+        <StepTimeline
+          order={orderOf(graph)}
+          steps={started}
+          graph={graph}
+          titles={titles}
+          avatars={avatars}
+          moods={moods}
+          handoffs={run.handoffs}
+          errText={errText}
+          canResume={run.status === 'failed'}
+          resuming={resume.isPending}
+          onResume={() => resume.mutate(run.id)}
+        />
+      </Details>
     </section>
   )
 }

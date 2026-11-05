@@ -43,6 +43,7 @@ const TOOL_EXAMPLE: { [K in ToolKind]: Record<(typeof TOOL_IO)[K]['out'][number]
   },
   add_to_tracker: { status: 'added:…' },
   send_email: { status: 'sent' },
+  telegram_send: { status: 'sent' },
   wait: { value: '(what the step received, passed on after the wait)' },
 }
 

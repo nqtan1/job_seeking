@@ -11,8 +11,11 @@ from pydantic import BaseModel, Field, create_model
 from recruitai.ai.gateway import LLMGateway, Part, TextPart, generate_retrying_invalid
 from recruitai.ai.prompts import helper
 from recruitai.core.errors import ValidationFailed
-from recruitai.modules.agents.graph import EXTRA_INPUT
-from recruitai.modules.agents.schemas import OutputSpec, VersionSpec
+from recruitai.modules.agents.helpers.schemas import (
+    EXTRA_INPUT,
+    OutputSpec,
+    VersionSpec,
+)
 
 MAX_TEXT = 20_000
 

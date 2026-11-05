@@ -3,20 +3,18 @@
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import LLMGateway
 from recruitai.ai.prompts import helper
 from recruitai.ai.text import compact_json
-from recruitai.core.db import rows_affected
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.ids import new_id
-from recruitai.modules.agents import repository, runner
-from recruitai.modules.agents.models import Agent, AgentVersion, Flow
-from recruitai.modules.agents.schemas import (
-    MAX_VERSIONS,
+from recruitai.modules.agents import versioning
+from recruitai.modules.agents.helpers import repository, runner
+from recruitai.modules.agents.helpers.models import Agent, AgentVersion
+from recruitai.modules.agents.helpers.schemas import (
     AgentCreate,
     AgentPatch,
     Avatar,
@@ -153,7 +151,9 @@ async def patch_agent(
     if data.avatar is not None:
         values["avatar"] = data.avatar.model_dump(mode="json")
     if values:
-        await update_row(db, Agent, org_id=org_id, id=agent_id, values=values)
+        await versioning.update_row(
+            db, Agent, org_id=org_id, id=agent_id, values=values
+        )
         await db.commit()
         await db.refresh(agent)
     return agent
@@ -163,7 +163,7 @@ async def add_version(
     db: AsyncSession, *, org_id: UUID, agent_id: UUID, data: VersionCreate
 ) -> AgentVersion:
     agent = await get_agent(db, org_id=org_id, agent_id=agent_id)
-    number = await claim_next_version(
+    number = await versioning.claim_next_version(
         db, Agent, agent, org_id=org_id, based_on=data.based_on, noun="helper"
     )
     version = await repository.add_version(
@@ -178,14 +178,21 @@ async def add_version(
 
 async def archive(db: AsyncSession, *, org_id: UUID, agent_id: UUID) -> None:
     await get_agent(db, org_id=org_id, agent_id=agent_id)
-    await archive_row(db, Agent, org_id=org_id, id=agent_id)
+    await versioning.archive_row(db, Agent, org_id=org_id, id=agent_id)
     await db.commit()
 
 
 async def context_for(
-    db: AsyncSession, *, org_id: UUID, spec: VersionSpec, job_id: UUID | None
+    db: AsyncSession,
+    *,
+    org_id: UUID,
+    spec: VersionSpec,
+    job_id: UUID | None,
+    llm: LLMGateway | None = None,
 ) -> dict[str, str]:
-    """The attached sources as text. Contact details and references never go in (ADR 0031)."""
+    """The attached sources as text. Contact details and references never go in (ADR 0031).
+    With ``llm`` (a test run), a job that has no fit analysis yet gets one first, so a helper that
+    reads it can be tried at once; in a flow a "Check my fit" step provides it instead."""
     out: dict[str, str] = {}
     needs_job = "job" in spec.context_sources or "fit" in spec.context_sources
     if needs_job and job_id is None:
@@ -202,9 +209,15 @@ async def context_for(
             reports = await matching.list_analyses(
                 db, org_id=org_id, job_id=job.id, limit=1
             )
+            if not reports and llm is not None:
+                reports = [
+                    await matching.latest_or_analyze(
+                        db, llm, org_id=org_id, job_id=job.id
+                    )
+                ]
             if not reports:
                 raise ValidationFailed(
-                    "This helper needs a fit analysis: run one first."
+                    "This helper needs a fit analysis: add a “Check my fit” step before it."
                 )
             out["fit"] = compact_json(reports[0].data)[:FIT_CHARS]
     return out
@@ -226,7 +239,7 @@ async def try_it(
     if agent.archived_at is not None:
         raise Conflict("This helper is archived.")
     runner.check_inputs(spec, inputs)  # before any context load or model call
-    context = await context_for(db, org_id=org_id, spec=spec, job_id=job_id)
+    context = await context_for(db, org_id=org_id, spec=spec, job_id=job_id, llm=llm)
     await db.rollback()  # no transaction held open across the model call
     return await runner.run(
         llm,
@@ -247,61 +260,3 @@ async def export_data(
         "agents": rows_as_dicts(agents),
         "agent_versions": rows_as_dicts(versions),
     }
-
-
-Identity = type[Agent] | type[Flow]
-
-
-async def update_row(
-    session: AsyncSession,
-    model: Identity,
-    *,
-    org_id: UUID,
-    id: UUID,
-    values: dict[str, Any],
-) -> None:
-    await session.execute(
-        update(model).where(model.id == id, model.org_id == org_id).values(**values)
-    )
-
-
-async def archive_row(
-    session: AsyncSession, model: Identity, *, org_id: UUID, id: UUID
-) -> None:
-    await update_row(
-        session, model, org_id=org_id, id=id, values={"archived_at": func.now()}
-    )
-
-
-async def claim_next_version(
-    session: AsyncSession,
-    model: Identity,
-    entity: Agent | Flow,
-    *,
-    org_id: UUID,
-    based_on: int,
-    noun: str,
-) -> int:
-    """Take version ``based_on + 1`` for this identity, or refuse. Atomic compare-and-set: only the
-    editor that saw the latest version wins, and the row lock serializes two saves, so version
-    numbers never collide. Returns the new version number."""
-    if entity.archived_at is not None:
-        raise Conflict(f"This {noun} is archived.")
-    if based_on >= MAX_VERSIONS:
-        raise ValidationFailed(
-            f"A {noun} keeps at most {MAX_VERSIONS} versions: duplicate it to continue."
-        )
-    result = await session.execute(
-        update(model)
-        .where(
-            model.id == entity.id,
-            model.org_id == org_id,
-            model.current_version == based_on,
-            model.archived_at.is_(None),
-        )
-        .values(current_version=based_on + 1, updated_at=func.now())
-    )
-    if rows_affected(result) != 1:
-        await session.rollback()
-        raise Conflict(f"This {noun} changed elsewhere. Reload it and try again.")
-    return based_on + 1

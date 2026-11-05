@@ -8,8 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway, TextPart
 from recruitai.ai.prompts import helper
-from recruitai.modules.agents import engine, flows, runner
-from recruitai.modules.agents.schemas import OutputSpec
+from recruitai.modules.agents.blocks.errors import DailyLimit
+from recruitai.modules.agents.flows import engine
+from recruitai.modules.agents.flows import runs as flow_runs
+from recruitai.modules.agents.helpers import runner
+from recruitai.modules.agents.helpers.schemas import OutputSpec
 from tests.integration.test_agents import _create as agent
 
 BASE = "/api/v1"
@@ -460,7 +463,7 @@ async def test_runs_survive_dead_workers_races_and_awkward_input(
 ):
     from datetime import UTC, datetime, timedelta
 
-    from recruitai.modules.agents import flow_repository as repo
+    from recruitai.modules.agents.flows import repository as repo
 
     org = await org_of(client, ada)
     x = await agent(client, ada)
@@ -511,7 +514,7 @@ async def test_runs_survive_dead_workers_races_and_awkward_input(
         updated_at=datetime.now(UTC) - timedelta(hours=1),
     )
     assert (
-        await flows.fail_stale_runs(
+        await flow_runs.fail_stale_runs(
             db_session, now=datetime.now(UTC), abandoned_after=timedelta(minutes=10)
         )
         == 1
@@ -577,7 +580,7 @@ async def test_a_worker_that_lost_its_step_cannot_overwrite_it_and_cancel_ends_t
     client, db_session, fake_llm: FakeLLMGateway, task_app, ada
 ):
     from recruitai.config import Settings
-    from recruitai.modules.agents import flow_repository as repo
+    from recruitai.modules.agents.flows import repository as repo
 
     org = await org_of(client, ada)
     x = await agent(client, ada)
@@ -625,7 +628,7 @@ async def test_a_worker_that_lost_its_step_cannot_overwrite_it_and_cancel_ends_t
     ]  # no spinner on a cancelled run
 
     # a live model call is never taken for stuck: the thresholds follow the model timeout
-    from recruitai.modules.agents.flows import abandoned_after, stale_after
+    from recruitai.modules.agents.flows.runs import abandoned_after, stale_after
 
     cfg = Settings.model_construct(ai_call_timeout_s=120.0)
     assert (
@@ -657,7 +660,7 @@ async def test_the_editor_preview_refuses_a_huge_sample(client, ada):
 def test_the_next_slot_follows_the_local_clock_daylight_saving_included():
     from datetime import UTC, datetime
 
-    from recruitai.modules.agents.schedules import next_run
+    from recruitai.modules.agents.flows.schedules import next_run
 
     t = lambda *a: datetime(*a, tzinfo=UTC)
     # Paris is UTC+1 in November: 08:30 local = 07:30 UTC, today if still ahead, else tomorrow
@@ -757,8 +760,8 @@ async def test_due_schedules_start_once_per_slot_and_stop_when_they_should(
 
     from sqlalchemy import text
 
-    from recruitai.modules.agents import flow_repository as repo
-    from recruitai.modules.agents import schedules
+    from recruitai.modules.agents.flows import repository as repo
+    from recruitai.modules.agents.flows import schedules
 
     org = await org_of(client, ada)
     uid = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]["id"]
@@ -912,8 +915,8 @@ async def test_a_schedule_that_cannot_start_pauses_instead_of_retrying_forever(
 
     from sqlalchemy import text
 
-    from recruitai.modules.agents import flow_repository as repo
-    from recruitai.modules.agents import schedules
+    from recruitai.modules.agents.flows import repository as repo
+    from recruitai.modules.agents.flows import schedules
 
     org = await org_of(client, ada)
     uid = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]["id"]
@@ -970,8 +973,8 @@ async def test_action_blocks_search_read_look_up_a_job_and_fill_the_tracker_once
 ):
     from recruitai.ai.gateway import BackendCapabilities, GroundedAnswer, Source
     from recruitai.core.email import FakeEmailSender
-    from recruitai.modules.agents import flow_repository as repo
-    from recruitai.modules.agents import tools
+    from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.agents.flows import repository as repo
     from tests.e2e_radar_fakes import Provider
     from tests.integration.test_matching_router import _add_job
 
@@ -1065,8 +1068,8 @@ async def test_a_wait_step_parks_the_run_without_a_worker_and_wakes_it_later(
 
     from sqlalchemy import select
 
-    from recruitai.modules.agents import flow_repository as repo
-    from recruitai.modules.agents.models import FlowRun
+    from recruitai.modules.agents.flows import repository as repo
+    from recruitai.modules.agents.flows.models import FlowRun
 
     org = await org_of(client, ada)
     i, w, o = input_node("v"), tool_node("wait"), output_node("r")
@@ -1107,10 +1110,10 @@ async def test_a_wait_step_parks_the_run_without_a_worker_and_wakes_it_later(
         db_session,
         org_id=org,
         run_id=run_id,
-        cutoff=datetime.now(UTC) - flows.WAKE_GRACE,
+        cutoff=datetime.now(UTC) - flow_runs.WAKE_GRACE,
     )
     assert (
-        await flows.fail_stale_runs(
+        await flow_runs.fail_stale_runs(
             db_session, now=datetime.now(UTC), abandoned_after=timedelta(0)
         )
         == 0
@@ -1147,7 +1150,7 @@ async def test_a_wait_step_parks_the_run_without_a_worker_and_wakes_it_later(
     await engine.execute(db_session, fake_llm, org_id=org, run_id=lost)
     await wake_in_past(20)
     assert (
-        await flows.fail_stale_runs(
+        await flow_runs.fail_stale_runs(
             db_session, now=datetime.now(UTC), abandoned_after=timedelta(minutes=10)
         )
         >= 1
@@ -1175,8 +1178,8 @@ async def test_email_goes_only_to_confirmed_addresses_and_stops_when_asked(
     client, app, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     from recruitai.core.email import FakeEmailSender
-    from recruitai.modules.agents import tools
-    from recruitai.modules.agents.recipients_router import get_sender
+    from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.agents.contacts.router import get_sender
 
     org = await org_of(client, ada)
     mail = FakeEmailSender()
@@ -1187,7 +1190,7 @@ async def test_email_goes_only_to_confirmed_addresses_and_stops_when_asked(
         raise AssertionError("an email flow reads no page")
 
     kit = tools.ToolKit(fetch=no_fetch, jobs=Provider(), mail=mail)
-    from recruitai.modules.agents import flow_repository as repo
+    from recruitai.modules.agents.flows import repository as repo
 
     me = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]
     i, send, o = input_node("to"), tool_node("send_email"), output_node("r")
@@ -1288,7 +1291,7 @@ async def test_email_goes_only_to_confirmed_addresses_and_stops_when_asked(
     assert sent.context["sender_email"] == "a RecruitAI user"
     from sqlalchemy import text as sql
 
-    from recruitai.modules.agents import recipients
+    from recruitai.modules.agents.contacts import service as recipients
 
     await db_session.execute(
         sql("UPDATE users SET email_verified = true WHERE id = :u"), {"u": me["id"]}
@@ -1319,7 +1322,7 @@ async def test_confirmation_mail_cannot_be_farmed_by_removing_and_adding_again(
     client, app, ada, bob
 ):
     from recruitai.core.email import FakeEmailSender
-    from recruitai.modules.agents.recipients_router import get_sender
+    from recruitai.modules.agents.contacts.router import get_sender
 
     mail = FakeEmailSender()
     app.dependency_overrides[get_sender] = lambda: mail
@@ -1353,7 +1356,7 @@ async def test_find_offers_saves_new_offers_once_and_a_yes_exit_gates_what_follo
     client, db_session, fake_llm: FakeLLMGateway, task_app, ada
 ):
     from recruitai.core.email import FakeEmailSender
-    from recruitai.modules.agents import tools
+    from recruitai.modules.agents.blocks import tools
     from tests.e2e_radar_fakes import Provider
 
     org = await org_of(client, ada)
@@ -1426,9 +1429,9 @@ async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_th
     from sqlalchemy import select
 
     from recruitai.core.email import FakeEmailSender
-    from recruitai.modules.agents import flows as flows_
-    from recruitai.modules.agents import tools
-    from recruitai.modules.agents.models import FlowRun
+    from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.agents.flows import runs as flow_runs
+    from recruitai.modules.agents.flows.models import FlowRun
     from tests.e2e_radar_fakes import Provider
 
     org = await org_of(client, ada)
@@ -1500,7 +1503,7 @@ async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_th
         await db_session.execute(select(FlowRun).where(FlowRun.id == UUID(first["id"])))
     ).scalar_one()
     items = [{**k.inputs, "job_id": str(k.job_id)} for k in kids]
-    again = await flows_.fan_out(
+    again = await flow_runs.fan_out(
         db_session,
         parent=parent,
         flow_id=UUID(child["id"]),
@@ -1518,8 +1521,8 @@ async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_th
         [edge(ai, ax, {"notes": "{{title}}"}), edge(ax, ao, {"r": "{{text}}"})],
     )  # fmt: skip
     fresh = [{"title": f"t{n}", "url": f"https://x.test/{n}"} for n in range(3)]
-    with pytest.raises(tools.DailyLimit):
-        await flows_.fan_out(
+    with pytest.raises(DailyLimit):
+        await flow_runs.fan_out(
             db_session,
             parent=parent,
             flow_id=UUID(costly["id"]),
@@ -1536,7 +1539,7 @@ async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_th
         .all()
     )
     assert len(started) == 1
-    rest = await flows_.fan_out(
+    rest = await flow_runs.fan_out(
         db_session,
         parent=parent,
         flow_id=UUID(costly["id"]),
@@ -1630,7 +1633,7 @@ async def test_find_offers_keeps_going_when_one_offer_cannot_be_fetched(
     client, db_session, fake_llm: FakeLLMGateway, task_app, ada
 ):
     from recruitai.core.email import FakeEmailSender
-    from recruitai.modules.agents import tools
+    from recruitai.modules.agents.blocks import tools
     from tests.e2e_radar_fakes import OFFERS, Provider
 
     bad = list(OFFERS)[1]
@@ -1664,3 +1667,85 @@ async def test_find_offers_keeps_going_when_one_offer_cannot_be_fetched(
     )  # the others still saved
     assert len((await client.get("/api/v1/jobs", headers=ada)).json()) == 2
     assert run["result"]["left"] == "1"  # the one that failed comes back next time
+
+
+async def test_find_offers_reads_a_typed_sentence_like_the_jobs_page_and_falls_back_to_the_text(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from recruitai.ai.prompts import jobs as job_prompts
+    from recruitai.core.email import FakeEmailSender
+    from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.jobs.schemas import ParsedQuery
+    from tests.e2e_radar_fakes import Provider
+
+    seen: list[dict] = []
+
+    class Spy(Provider):
+        async def search(self, **kw):  # type: ignore[no-untyped-def]
+            seen.append(kw)
+            return await super().search(**kw)
+
+    org = await org_of(client, ada)
+
+    async def no_fetch(url: str) -> str:
+        raise AssertionError("no page is read")
+
+    kit = tools.ToolKit(fetch=no_fetch, jobs=Spy(), mail=FakeEmailSender())
+    i, find, o = input_node("q"), tool_node("find_offers"), output_node("count")
+    flow = await make_flow(
+        client, ada, [i, find, o],
+        [edge(i, find, {"query": "{{q}}"}), edge(find, o, {"count": "{{count}}"})],
+    )  # fmt: skip
+
+    async def go(text: str) -> dict:
+        r = await client.post(
+            f"{BASE}/flows/{flow['id']}/runs", headers=ada, json={"inputs": {"q": text}}
+        )
+        await engine.execute(
+            db_session, fake_llm, org_id=org, run_id=UUID(r.json()["id"]), kit=kit
+        )
+        return (
+            await client.get(f"{BASE}/flow-runs/{r.json()['id']}", headers=ada)
+        ).json()
+
+    fake_llm.queue(
+        job_prompts.JOB_QUERY_VERSION,
+        ParsedQuery(
+            keywords="AI engineer",
+            places=["Paris"],
+            contract_types=["CDI"],
+            remote=False,
+            notes=[],
+        ),
+    )
+    assert (await go("AI engineer in Paris, CDI"))["status"] == "done"
+    assert seen[-1]["query"] == "AI engineer" and seen[-1]["department"] == "75"
+    assert seen[-1]["contract_type"] == "CDI"  # a sentence became real filters
+
+    await go(
+        "ingénieur IA"
+    )  # nothing queued for the model: the text itself is searched
+    assert seen[-1]["query"] == "ingénieur IA" and seen[-1]["department"] is None
+
+
+async def test_the_job_hunter_installs_in_one_click_and_only_once(client, ada):
+    first = await client.post(f"{BASE}/flows/starters/job-hunter", headers=ada)
+    assert first.status_code == 201, first.text
+    hunter = first.json()
+    assert hunter["name"] == "Job hunter"
+    assert not [i for i in hunter["issues"] if i["severity"] == "error"], hunter[
+        "issues"
+    ]
+    flows_ = (await client.get(f"{BASE}/flows", headers=ada)).json()
+    assert {f["name"] for f in flows_} == {"Job hunter", "Offer processor"}
+    helpers = (await client.get("/api/v1/agents", headers=ada)).json()
+    assert {h["name"] for h in helpers} == {
+        "Cover letter",
+        "Interview prep",
+        "CV advice",
+    }
+
+    again = await client.post(f"{BASE}/flows/starters/job-hunter", headers=ada)
+    assert again.json()["id"] == hunter["id"]  # the same one, nothing duplicated
+    assert len((await client.get(f"{BASE}/flows", headers=ada)).json()) == 2
+    assert len((await client.get("/api/v1/agents", headers=ada)).json()) == 3

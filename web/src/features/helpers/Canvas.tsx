@@ -9,7 +9,6 @@ import {
   type EdgeProps,
   Handle,
   MarkerType,
-  MiniMap,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -200,7 +199,9 @@ function subtitleOf(n: GraphNode, t: ReturnType<typeof useT>): string {
       return t('helpers.node.agent')
   }
 }
-const FIT = { padding: 0.12, maxZoom: 1.15, duration: 250 }
+const MIN_FIT = 0.7 // never smaller than this: a readable step beats seeing every step at once
+const NODE_W = 220
+const NODE_H = 90
 const nodeTypes = { step: StepNode }
 const edgeTypes = { flow: FlowEdge }
 
@@ -236,20 +237,42 @@ export default function Canvas(props: CanvasProps) {
 function Inner(p: CanvasProps) {
   const t = useT()
   const { graph, specs, readOnly } = p
-  const { fitView } = useReactFlow()
+  const { setViewport } = useReactFlow()
+  const box = useRef<HTMLDivElement>(null)
   const dark = useDark()
   // Re-fit after an auto-arrange and whenever a step is added, so steps never end up tiny or
   // off-screen. The short wait lets React Flow measure the new node first.
   const count = graph.nodes.length
+  const fit = () => {
+    const el = box.current
+    if (!el || count === 0) return
+    const xs = graph.nodes.map((n) => n.position.x)
+    const ys = graph.nodes.map((n) => n.position.y)
+    const w = Math.max(...xs) - Math.min(...xs) + NODE_W
+    const h = Math.max(...ys) - Math.min(...ys) + NODE_H
+    const pad = 24
+    const fits = Math.min((el.clientWidth - 2 * pad) / w, (el.clientHeight - 2 * pad) / h)
+    const zoom = Math.max(MIN_FIT, Math.min(1, fits))
+    // too wide for the box: start at the left edge (Start) and let the person pan; else centre
+    const x = w * zoom > el.clientWidth - 2 * pad ? pad : (el.clientWidth - w * zoom) / 2
+    const y = h * zoom > el.clientHeight - 2 * pad ? pad : (el.clientHeight - h * zoom) / 2
+    setViewport(
+      { x: x - Math.min(...xs) * zoom, y: y - Math.min(...ys) * zoom, zoom },
+      { duration: 200 },
+    )
+  }
   const seen = useRef(count)
+  const fitNow = useRef(fit)
+  useEffect(() => {
+    fitNow.current = fit // the latest graph is read when the timer fires
+  })
   useEffect(() => {
     const grew = count > seen.current
     seen.current = count
-    if (!p.fitSignal && !grew) return
-    const id = setTimeout(() => fitView(FIT), 60)
+    if (!grew && !p.fitSignal) return
+    const id = setTimeout(() => fitNow.current(), 60)
     return () => clearTimeout(id)
-    // fitSignal / count are the triggers; FIT is a constant
-  }, [p.fitSignal, count, fitView])
+  }, [p.fitSignal, count])
 
   const nodes: Node<StepData>[] = useMemo(
     () =>
@@ -341,7 +364,8 @@ function Inner(p: CanvasProps) {
 
   return (
     <div
-      className="flow-canvas h-[clamp(22rem,48vh,36rem)] w-full overflow-hidden rounded-xl border bg-muted/30"
+      ref={box}
+      className="flow-canvas h-[clamp(20rem,55dvh,44rem)] w-full overflow-hidden rounded-xl border bg-muted/30"
       role="application"
       aria-label={t('helpers.canvas')}
     >
@@ -350,9 +374,8 @@ function Inner(p: CanvasProps) {
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={FIT}
-        minZoom={0.3}
+        onInit={fit}
+        minZoom={0.5}
         maxZoom={1.5}
         nodesConnectable={!readOnly}
         elementsSelectable
@@ -378,21 +401,6 @@ function Inner(p: CanvasProps) {
       >
         <Background gap={22} size={1.2} />
         <Controls showInteractive={false} />
-        <MiniMap
-          pannable
-          zoomable
-          ariaLabel={t('helpers.minimap')}
-          nodeColor={(n) => {
-            const d = n.data as StepData
-            return colorsOf(d.node, d.avatar)[dark ? 1 : 0]
-          }}
-          nodeStrokeWidth={0}
-          nodeBorderRadius={4}
-          style={{ width: 150, height: 100 }}
-          bgColor="var(--card)"
-          maskColor="color-mix(in oklch, var(--foreground) 7%, transparent)"
-          className="!hidden sm:!block"
-        />
       </ReactFlow>
     </div>
   )

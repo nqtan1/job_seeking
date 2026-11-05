@@ -1,0 +1,19 @@
+name: Set up backend
+description: uv with its cache, and the locked backend dependencies
+
+inputs:
+  sync:
+    description: Install the locked dependencies (uv sync --locked)
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: backend/uv.lock
+    - if: inputs.sync == 'true'
+      shell: bash
+      working-directory: backend
+      run: uv sync --locked

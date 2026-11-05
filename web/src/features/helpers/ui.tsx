@@ -1,4 +1,4 @@
-import { Check, Copy, type LucideIcon } from 'lucide-react'
+import { Check, ChevronRight, Copy, type LucideIcon } from 'lucide-react'
 import { type ReactNode, type RefObject, useEffect, useState } from 'react'
 import { cn } from 'cn'
 import { Link, useBlocker } from 'react-router'
@@ -11,37 +11,7 @@ import { useJobs } from '@/features/job-search/api'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/StatusBadge'
 import type { RunSummary } from './api'
-import { Avatar } from './Avatar'
-import { avatarFromSeed } from './avatar'
 import { Modal } from '@/components/Modal'
-
-/** One step of the editor: an icon, a title, one line saying what it is for, then the controls. */
-export function SectionCard({
-  icon: Icon,
-  title,
-  help,
-  children,
-}: {
-  icon: LucideIcon
-  title: string
-  help: string
-  children: ReactNode
-}) {
-  return (
-    <section className="rounded-xl border bg-card p-5 shadow-xs">
-      <div className="mb-4 flex items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground">
-          <Icon className="size-4" aria-hidden />
-        </span>
-        <div className="min-w-0">
-          <h2 className="leading-8 font-semibold tracking-tight">{title}</h2>
-          <p className="-mt-1 text-sm text-muted-foreground">{help}</p>
-        </div>
-      </div>
-      <div className="space-y-4">{children}</div>
-    </section>
-  )
-}
 
 /** A selectable card that is still a real checkbox or radio (visually hidden, keyboard focus kept). */
 export function ChoiceCard({
@@ -187,6 +157,14 @@ export function JobSelect({
           </option>
         ))}
       </NativeSelect>
+      {jobs.data?.length === 0 && (
+        <p className="text-xs text-muted-foreground">
+          {t('helpers.pick_job_empty')}{' '}
+          <Link to="/jobs" className="underline">
+            {t('helpers.pick_job_add')}
+          </Link>
+        </p>
+      )}
     </div>
   )
 }
@@ -337,29 +315,23 @@ export function LeaveGuard({ dirty, leaving }: { dirty: boolean; leaving: RefObj
   )
 }
 
-/** A few characters that overlap, so an empty page still feels inhabited. */
-export function Trio({ size }: { size: number }) {
+/** One quiet "Details" fold (native <details>): the technical rest, closed unless asked. */
+export function Details({
+  defaultOpen = false,
+  children,
+}: {
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const t = useT()
+  const [open] = useState(defaultOpen) // fixed at mount: a re-render never re-folds what was opened
   return (
-    <div className="flex items-end -space-x-3" aria-hidden>
-      {['followup', 'pitch', 'reply'].map((id, i) => (
-        <span key={id} className={cn(i === 1 && '-translate-y-2')}>
-          <Avatar spec={avatarFromSeed(id)} size={size} />
-        </span>
-      ))}
-    </div>
-  )
-}
-
-export function Hero({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="relative flex items-center justify-between gap-6 overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-accent/40 to-transparent px-6 py-6 sm:px-8">
-      <div className="max-w-xl space-y-1.5">
-        <h2 className="text-xl font-semibold tracking-tight text-balance sm:text-2xl">{title}</h2>
-        <p className="text-sm text-muted-foreground sm:text-base">{body}</p>
-      </div>
-      <div className="hidden shrink-0 sm:block">
-        <Trio size={64} />
-      </div>
-    </div>
+    <details open={open} className="group space-y-3">
+      <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-lg py-1 pr-2 text-sm font-medium text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden className="size-4 transition-transform group-open:rotate-90" />
+        {t('helpers.ui.details')}
+      </summary>
+      {children}
+    </details>
   )
 }

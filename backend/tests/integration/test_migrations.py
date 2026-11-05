@@ -190,6 +190,7 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "flow_schedules",
         "flow_effects",
         "email_recipients",
+        "connections",
         "email_suppressions",
         "email_invites",
         "flow_versions",

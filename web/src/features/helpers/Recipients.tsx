@@ -17,10 +17,13 @@ export function ContactsTab() {
   const contacts = useContacts()
   const remove = useRemoveContact()
   return (
-    <div className="space-y-4 pt-6">
-      <p className="rounded-2xl bg-muted/40 p-4 text-sm text-muted-foreground">
-        {t('helpers.contacts.intro')}
-      </p>
+    <section aria-labelledby="contacts-h" className="space-y-3">
+      <div>
+        <h2 id="contacts-h" className="text-lg font-semibold tracking-tight">
+          {t('helpers.contacts.title')}
+        </h2>
+        <p className="text-sm text-muted-foreground">{t('helpers.contacts.intro')}</p>
+      </div>
       <AddContact />
       <ErrorMessage error={remove.error} />
       {contacts.isPending ? (
@@ -60,7 +63,7 @@ export function ContactsTab() {
           )}
         </ul>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -85,7 +88,9 @@ function AddContact() {
         })
       }}
     >
-      <Label htmlFor="contact-email">{t('helpers.contacts.add')}</Label>
+      <Label htmlFor="contact-email" className="sr-only">
+        {t('helpers.contacts.add')}
+      </Label>
       <div className="flex flex-wrap gap-2">
         <Input
           id="contact-email"

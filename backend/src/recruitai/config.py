@@ -131,6 +131,10 @@ class Settings(BaseSettings):
     email_sender_address: str = "no-reply@recruitai.example"
     email_sender_name: str = "RecruitAI"
 
+    # The platform's Telegram bot (core/telegram.py, ADR 0036). Without both, Telegram is "not available".
+    telegram_bot_token: str | None = None
+    telegram_bot_username: str | None = None
+
     # Platform admins: verified emails, e.g. ADMIN_EMAILS='["me@example.com"]'. Everyone else who
     # signs up is a normal user with a personal org (core/auth.py ``is_admin``).
     admin_emails: list[str] = []

@@ -7,8 +7,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-from recruitai.modules.agents.graph import Graph, MapEntry
-from recruitai.modules.agents.schemas import MAX_INPUT_CHARS, FieldName, Note, Strict
+from recruitai.modules.agents.base import Strict
+from recruitai.modules.agents.flows.graph import Graph, MapEntry
+from recruitai.modules.agents.helpers.schemas import (
+    MAX_INPUT_CHARS,
+    FieldName,
+    Note,
+)
 
 
 class IssueOut(BaseModel):

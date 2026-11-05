@@ -9,7 +9,7 @@ import math
 import re
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, get_args
 from uuid import UUID
 
 from pydantic import (
@@ -20,7 +20,9 @@ from pydantic import (
     model_validator,
 )
 
-from recruitai.modules.agents.schemas import (
+from recruitai.modules.agents.blocks.catalogue import BLOCKS
+from recruitai.modules.agents.helpers.schemas import (
+    EXTRA_INPUT,
     MAX_INPUT_CHARS,
     FieldName,
     InputField,
@@ -32,9 +34,6 @@ MAX_NODES = 15
 MAX_EDGES = 30
 MAX_MAPS = 10
 MAX_TEMPLATE = 2_000
-# Every helper step also takes this optional input, so anything can be handed to any helper (a helper
-# that declares no input of its own would otherwise have nothing to receive).
-EXTRA_INPUT = "info"
 TOKEN = re.compile(r"\{\{\s*([a-z][a-z0-9_]{0,31})\s*\}\}")
 ANY_BRACES = re.compile(r"\{\{|\}\}")
 Template = Annotated[str, StringConstraints(max_length=MAX_TEMPLATE)]
@@ -106,37 +105,19 @@ ToolKind = Literal[
     "job_lookup",
     "add_to_tracker",
     "send_email",
+    "telegram_send",
     "wait",
 ]
-TOOLS: dict[str, tuple[tuple[tuple[str, bool], ...], tuple[str, ...]]] = {
-    "web_search": ((("query", True),), ("text", "sources")),
-    "job_search": ((("query", True), ("department", False)), ("text", "count")),
-    # new offers of a search (not yet saved as Jobs), saved with their full text; ``items`` is JSON,
-    # one object per offer (job_id, title, company, place, url) for for_each
-    "find_offers": (
-        (("query", True), ("department", False)),
-        ("items", "text", "count", "remaining"),
-    ),
-    # the fit analysis of the run's job (the app's tested fit prompts); "start" hangs it off Start
-    "fit_check": (
-        (("start", False), ("employer", False)),
-        ("score", "verdict", "strengths", "gaps", "missing", "reasons"),
-    ),
-    # starts one run of another automation per item (ADR 0034); the items' keys fill its Start step
-    "for_each": ((("items", True),), ("started", "text")),
-    "read_page": ((("url", True),), ("text",)),
-    # reads the run's chosen job; "start" is an optional link so it can hang off the Input step
-    "job_lookup": (
-        (("start", False),),
-        ("title", "company", "place", "description", "url"),
-    ),
-    "add_to_tracker": (
-        (("company", True), ("title", False), ("url", False), ("notes", False)),
-        ("status",),
-    ),
-    "send_email": ((("to", True), ("subject", True), ("body", True)), ("status",)),
-    "wait": ((("value", True),), ("value",)),  # passes its input on, later (see engine)
-}
+if set(get_args(ToolKind)) != set(
+    BLOCKS
+):  # the type and the catalogue must never drift apart
+    raise RuntimeError("ToolKind and blocks.BLOCKS list different blocks")
+
+
+UNTRUSTED_TOOLS = {
+    "web_search",
+    "read_page",
+}  # their output is text written by outsiders
 
 
 class ToolNode(_Node):
@@ -223,7 +204,7 @@ def input_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[tuple[str, boo
         case TransformNode():
             return [("text", True)]
         case ToolNode():
-            return list(TOOLS[node.tool][0])
+            return list(BLOCKS[node.tool].inputs)
     return []
 
 
@@ -242,7 +223,7 @@ def output_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[str]:
         case TransformNode():
             return ["text"]
         case ToolNode():
-            return list(TOOLS[node.tool][1])
+            return list(BLOCKS[node.tool].outputs)
     return []  # an output node is a sink
 
 
@@ -354,6 +335,26 @@ def validate(graph: Graph, agents: dict[UUID, AgentInfo]) -> list[Issue]:
             if ANY_BRACES.search(leftovers):
                 issues.append(
                     Issue("bad_template", "Malformed {{ }} in a value.", dst.id, e.id)
+                )
+            if (
+                m.input == "url"
+                and isinstance(dst, ToolNode)
+                and dst.tool == "read_page"
+                and TOKEN.search(m.value)
+                and (
+                    isinstance(src, AgentNode)
+                    or (isinstance(src, ToolNode) and src.tool in UNTRUSTED_TOOLS)
+                )
+            ):  # a warning only: injected text could aim the fetch at a hostile address
+                issues.append(
+                    Issue(
+                        "untrusted_url",
+                        "This address comes from text written by an AI or a web page; it could "
+                        "point anywhere. Only keep it if you trust that text.",
+                        dst.id,
+                        e.id,
+                        "warning",
+                    )
                 )
             for field in TOKEN.findall(m.value):
                 if field not in sources and src.id not in blind:

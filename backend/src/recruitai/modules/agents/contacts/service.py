@@ -17,8 +17,8 @@ from recruitai.config import Settings
 from recruitai.core.email import EmailSender
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.tenancy import OrgContext
-from recruitai.modules.agents import recipients_repository as repo
-from recruitai.modules.agents.models import EmailRecipient
+from recruitai.modules.agents.contacts import repository as repo
+from recruitai.modules.agents.contacts.models import EmailRecipient
 from recruitai.modules.identity import service as identity
 
 MAX_RECIPIENTS = 20
@@ -71,6 +71,17 @@ async def add_recipient(
             raise Conflict("A confirmation email was sent a moment ago.")
     elif await repo.count_for_user(db, user_id=ctx.user_id) >= MAX_RECIPIENTS:
         raise Conflict(f"You can have at most {MAX_RECIPIENTS} recipients.")
+    # Every confirmation mail (first or repeated) is one invite in a ledger nobody can erase.
+    await repo.lock_invites(db)
+    if (
+        await repo.count_invites_today(db, user_id=ctx.user_id)
+        >= MAX_INVITES_PER_USER_DAY
+        or await repo.count_invites_today(db, email_hash=digest)
+        >= MAX_INVITES_PER_ADDRESS_DAY
+        or await repo.count_invites_today(db) >= MAX_INVITES_PER_DAY
+    ):
+        raise Conflict("Too many confirmation emails today. Try again tomorrow.")
+    await repo.add_invite(db, user_id=ctx.user_id, email_hash=digest)
     if await repo.is_suppressed(db, email_hash=digest):
         # Same answer as for any address, and nothing is sent: nobody can use this to learn who
         # asked to stop. The row can never be confirmed (``confirm`` refuses it).
@@ -83,19 +94,10 @@ async def add_recipient(
                 confirm_hash=_token_hash(token),
                 unsubscribe_token=secrets.token_urlsafe(32),
             )
+        else:  # the hourly pause must look the same too
+            row.created_at = datetime.now(UTC)
         await db.commit()
         return await _must(db, ctx, email)
-    # Every confirmation mail (first or repeated) is one invite in a ledger nobody can erase.
-    await repo.lock_invites(db)
-    if (
-        await repo.count_invites_today(db, user_id=ctx.user_id)
-        >= MAX_INVITES_PER_USER_DAY
-        or await repo.count_invites_today(db, email_hash=digest)
-        >= MAX_INVITES_PER_ADDRESS_DAY
-        or await repo.count_invites_today(db) >= MAX_INVITES_PER_DAY
-    ):
-        raise Conflict("Too many confirmation emails today. Try again tomorrow.")
-    await repo.add_invite(db, user_id=ctx.user_id, email_hash=digest)
     new = row is None
     if row is None:
         row = await repo.create(

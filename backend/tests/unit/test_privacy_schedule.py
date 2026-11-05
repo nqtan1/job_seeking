@@ -18,4 +18,5 @@ def test_the_sweeps_reminders_and_radar_are_scheduled_on_the_worker():
         "radar:pause_inactive",
         "agents:fail_stale_runs",
         "agents:run_due_schedules",
+        "agents:poll_telegram",
     }

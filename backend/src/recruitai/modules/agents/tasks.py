@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.core.errors import AppError
 from recruitai.core.tasks import mark_done, mark_failed
-from recruitai.modules.agents import engine
+from recruitai.modules.agents.flows import engine
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ async def _unstick(
     session: "AsyncSession", org_id: str, run_id: str, code: str
 ) -> None:
     """A task that dies before the engine starts must not leave its run queued forever."""
-    from recruitai.modules.agents import flow_repository as repo
+    from recruitai.modules.agents.flows import repository as repo
 
     await session.rollback()
     await repo.fail_active_run(
@@ -35,14 +35,14 @@ async def fail_stale_runs(timestamp: int) -> None:
     from datetime import UTC, datetime
 
     from recruitai.config import get_settings
-    from recruitai.modules.agents import flows
+    from recruitai.modules.agents.flows import runs as flow_runs
     from recruitai.worker import session_factory
 
     async with session_factory() as session:
-        await flows.fail_stale_runs(
+        await flow_runs.fail_stale_runs(
             session,
             now=datetime.now(UTC),
-            abandoned_after=flows.abandoned_after(get_settings()),
+            abandoned_after=flow_runs.abandoned_after(get_settings()),
         )
 
 
@@ -52,13 +52,32 @@ async def run_due_schedules(timestamp: int) -> None:
     from datetime import UTC, datetime
 
     from recruitai.config import get_settings
-    from recruitai.modules.agents import schedules
+    from recruitai.modules.agents.flows import schedules
     from recruitai.worker import session_factory
 
     if not get_settings().helpers_enabled:
         return  # the feature is off: nothing starts by itself
     async with session_factory() as session:
         await schedules.run_due(session, now=datetime.now(UTC))
+
+
+@blueprint.periodic(cron="* * * * *")
+@blueprint.task(name="poll_telegram")
+async def poll_telegram(timestamp: int) -> None:
+    """Finish the Telegram links people started (ADR 0036). Nothing happens without a bot."""
+    from datetime import UTC, datetime
+
+    from recruitai.config import get_settings
+    from recruitai.core.telegram import get_telegram
+    from recruitai.modules.agents.connections import service as connections
+    from recruitai.worker import session_factory
+
+    settings = get_settings()
+    bot = get_telegram(settings)
+    if bot is None or not settings.helpers_enabled:
+        return
+    async with session_factory() as session:
+        await connections.poll_telegram(session, bot, now=datetime.now(UTC))
 
 
 @blueprint.task(name="run_flow")

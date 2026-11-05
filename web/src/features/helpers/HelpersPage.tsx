@@ -1,72 +1,37 @@
 import '@/features/helpers/lib'
-import { ArrowRight, Briefcase, FileText, Plus, Sparkles, UserRound } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { cn } from 'cn'
-import { type Key, useI18n, useT } from '@/i18n'
+import { useI18n, useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
+import { Modal } from '@/components/Modal'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
-import { Spinner } from '@/components/Spinner'
 import { Button } from '@/components/ui/button'
 import { useAgents, useArchiveAgent, useCreateAgent } from './api'
 import { Avatar } from './Avatar'
-import { Hero, ItemCard, Trio } from './ui'
+import { ItemCard } from './ui'
 import { LIFT } from './lib'
 import { PALETTES, avatarFromSeed } from './avatar'
 import type { VersionSpec } from './graph'
-import { BLANK_SPEC, STARTERS, type Starter, localized } from './starters'
+import { BLANK_SPEC, PICKS, STARTERS, type Pick, localized, pickSpec } from './starters'
 
 export function HelpersPage() {
   const t = useT()
+  const [picking, setPicking] = useState(false)
   return (
-    <Page title={t('helpers.title')} description={t('helpers.subtitle')}>
-      <Hero title={t('helpers.ui.hero_title')} body={t('helpers.ui.hero_body')} />
-      <HelpersTab />
+    <Page
+      title={t('helpers.title')}
+      actions={
+        <Button size="sm" onClick={() => setPicking(true)}>
+          <Plus data-icon="inline-start" />
+          {t('helpers.new')}
+        </Button>
+      }
+    >
+      <HelpersTab picking={picking} onClose={() => setPicking(false)} />
     </Page>
-  )
-}
-
-function Chip({
-  icon: Icon,
-  label,
-  hint,
-}: {
-  icon: typeof Briefcase
-  label: string
-  hint: string
-}) {
-  return (
-    <li className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-      <Icon className="size-3" aria-hidden />
-      <span className="sr-only">{hint}: </span>
-      {label}
-    </li>
-  )
-}
-
-const SOURCE_CHIP = { profile: UserRound, job: Briefcase, fit: Sparkles } as const
-
-function TemplateChips({ s }: { s: Starter }) {
-  const t = useT()
-  const reads: [typeof Briefcase, Key][] = [
-    ...(s.spec.inputs?.length
-      ? [[FileText, 'helpers.ui.chip.notes'] as [typeof Briefcase, Key]]
-      : []),
-    ...(s.spec.context_sources ?? []).map(
-      (c) => [SOURCE_CHIP[c], `helpers.ui.chip.${c}` as Key] as [typeof Briefcase, Key],
-    ),
-  ]
-  return (
-    <ul className="flex flex-wrap gap-1.5">
-      {reads.map(([icon, key]) => (
-        <Chip key={key} icon={icon} label={t(key)} hint={t('helpers.ui.reads')} />
-      ))}
-      <li className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-        <ArrowRight className="size-3" aria-hidden />
-        <span className="sr-only">{t('helpers.ui.gives')}: </span>
-        {t(s.spec.output.kind === 'fields' ? 'helpers.ui.chip.fields' : 'helpers.ui.chip.text')}
-      </li>
-    </ul>
   )
 }
 
@@ -82,7 +47,7 @@ function Tint({ palette, children }: { palette: number; children: React.ReactNod
   )
 }
 
-function HelpersTab() {
+function HelpersTab({ picking, onClose }: { picking: boolean; onClose: () => void }) {
   const { t } = useI18n()
   const navigate = useNavigate()
   const agents = useAgents()
@@ -95,98 +60,96 @@ function HelpersTab() {
       { onSuccess: (a) => navigate(`/helpers/${a.id}`) },
     )
 
-  return (
-    <div className="space-y-10 pt-6">
-      <ErrorMessage error={create.error ?? archive.error} />
-      <section aria-labelledby="mine-h" className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="mine-h" className="text-lg font-semibold tracking-tight">
-            {t('helpers.mine')}
-          </h2>
-          <Button
-            size="sm"
-            disabled={create.isPending}
-            onClick={() =>
-              start(t('helpers.new_name'), '', localized(BLANK_SPEC, ['helpers.blank.input'], t))
-            }
-          >
-            {create.isPending ? <Spinner /> : <Plus data-icon="inline-start" />}
-            {t('helpers.new')}
-          </Button>
-        </div>
-        {agents.isPending ? (
-          <ListSkeleton />
-        ) : agents.error ? (
-          <ErrorMessage error={agents.error} />
-        ) : agents.data.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed px-6 py-12 text-center">
-            <Trio size={56} />
-            <h3 className="pt-2 text-lg font-semibold">{t('helpers.empty')}</h3>
-            <p className="max-w-sm text-sm text-muted-foreground">{t('helpers.empty_hint')}</p>
-          </div>
-        ) : (
-          <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {agents.data.map((a) => (
-              <ItemCard
-                key={a.id}
-                to={`/helpers/${a.id}`}
-                title={a.name}
-                lead={
-                  <Tint palette={a.avatar.palette}>
-                    <Avatar spec={a.avatar} size={56} />
-                  </Tint>
-                }
-                version={a.current_version}
-                updatedAt={a.updated_at}
-                archiving={archive.isPending}
-                onArchive={(reset) => archive.mutate(a.id, { onSettled: reset })}
-              >
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {a.description || t('helpers.no_goal')}
-                </p>
-              </ItemCard>
-            ))}
-          </ul>
-        )}
-      </section>
+  const pick = (p: Pick) =>
+    p === 'custom'
+      ? start(t('helpers.new_name'), '', localized(BLANK_SPEC, ['helpers.blank.input'], t))
+      : start(t(`helpers.role.${p}`), '', pickSpec(p))
 
-      <section aria-labelledby="starters-h" className="space-y-4">
-        <div>
-          <h2 id="starters-h" className="text-lg font-semibold tracking-tight">
-            {t('helpers.starters')}
-          </h2>
-          <p className="text-sm text-muted-foreground">{t('helpers.ui.templates_hint')}</p>
+  return (
+    <div className="space-y-8">
+      <ErrorMessage error={create.error ?? archive.error} />
+      <Modal open={picking} label={t('helpers.new')} onClose={onClose}>
+        <h2 className="mb-4 text-lg font-semibold">{t('helpers.new')}</h2>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {PICKS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              disabled={create.isPending}
+              onClick={() => pick(p)}
+              className="rounded-xl border p-3 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+            >
+              <span className="block font-medium">
+                {p === 'custom' ? t('helpers.pick.custom_title') : t(`helpers.role.${p}`)}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t(`helpers.pick.about.${p}`)}
+              </span>
+            </button>
+          ))}
         </div>
+        <Button variant="ghost" size="sm" className="mt-4" onClick={onClose}>
+          {t('helpers.cancel')}
+        </Button>
+      </Modal>
+      {agents.isPending ? (
+        <ListSkeleton />
+      ) : agents.error ? (
+        <ErrorMessage error={agents.error} />
+      ) : agents.data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t('helpers.empty')}</p>
+      ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {agents.data.map((a) => (
+            <ItemCard
+              key={a.id}
+              to={`/helpers/${a.id}`}
+              title={a.name}
+              lead={
+                <Tint palette={a.avatar.palette}>
+                  <Avatar spec={a.avatar} size={48} />
+                </Tint>
+              }
+              version={a.current_version}
+              updatedAt={a.updated_at}
+              archiving={archive.isPending}
+              onArchive={(reset) => archive.mutate(a.id, { onSettled: reset })}
+            >
+              <p className="line-clamp-2 text-sm text-muted-foreground">
+                {a.description || t('helpers.no_goal')}
+              </p>
+            </ItemCard>
+          ))}
+        </ul>
+      )}
+
+      <section aria-labelledby="starters-h" className="space-y-3">
+        <h2 id="starters-h" className="text-sm font-medium text-muted-foreground">
+          {t('helpers.starters')}
+        </h2>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {STARTERS.map((s) => {
             const av = avatarFromSeed(s.id)
             return (
               <li
                 key={s.id}
-                className={cn(
-                  'flex flex-col gap-3 rounded-2xl border bg-muted/30 p-4 hover:bg-card',
-                  LIFT,
-                )}
+                className={cn('flex items-center gap-3 rounded-2xl border bg-card p-3', LIFT)}
               >
-                <div className="flex items-center gap-3">
-                  <Tint palette={av.palette}>
-                    <Avatar spec={av} size={44} />
-                  </Tint>
-                  <div className="min-w-0">
-                    <p className="font-semibold">{t(s.name)}</p>
-                    <p className="text-sm text-muted-foreground">{t(s.goal)}</p>
-                  </div>
+                <Tint palette={av.palette}>
+                  <Avatar spec={av} size={36} />
+                </Tint>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{t(s.name)}</p>
+                  <p className="truncate text-xs text-muted-foreground">{t(s.goal)}</p>
                 </div>
-                <TemplateChips s={s} />
                 <Button
                   variant="outline"
                   size="sm"
-                  className="mt-auto self-start"
+                  aria-label={`${t('helpers.use_starter')}: ${t(s.name)}`}
                   disabled={create.isPending}
                   onClick={() => start(t(s.name), t(s.goal), localized(s.spec, s.inputLabels, t))}
                 >
                   {t('helpers.use_starter')}
-                  <ArrowRight data-icon="inline-end" />
                 </Button>
               </li>
             )

@@ -5,8 +5,8 @@ import pytest
 
 from recruitai.ai.gateway import FakeLLMGateway, TextPart
 from recruitai.ai.prompts import helper
-from recruitai.modules.agents import runner
-from recruitai.modules.agents.schemas import OutputSpec
+from recruitai.modules.agents.helpers import runner
+from recruitai.modules.agents.helpers.schemas import OutputSpec
 from tests.integration.test_matching_router import _add_job, _add_profile
 
 BASE = "/api/v1/agents"
@@ -157,9 +157,19 @@ async def test_context_sources_exclude_identity_and_stay_in_the_org(
     assert 'name="profile"' in sent and 'name="job"' in sent
     assert "personal_info" not in sent  # identity never reaches a helper
 
+    # no fit analysis yet: a test run makes one (the tested fit prompts) instead of refusing
+    from recruitai.ai.prompts import fit as fit_prompts
+    from recruitai.modules.matching.schemas import FitCheck
+    from tests.unit.test_schemas import VALID
+
     fit = {**spec, "context_sources": ["fit"]}
-    missing = await client.post(url, headers=ada, json={"spec": fit, "job_id": job_id})
-    assert missing.status_code == 422  # no fit analysis yet
+    fake_llm.queue(fit_prompts.PROMPT_VERSION, FitCheck.model_validate(VALID))
+    fake_llm.queue(feature, runner.output_model(OutputSpec(kind="text"))(text="ok"))
+    made = await client.post(url, headers=ada, json={"spec": fit, "job_id": job_id})
+    assert made.status_code == 200, made.text
+    assert 'name="fit"' in " ".join(
+        p.text for p in fake_llm.calls[-1].parts if isinstance(p, TextPart)
+    )
 
 
 @pytest.mark.parametrize(
@@ -294,3 +304,32 @@ async def test_a_built_in_role_keeps_its_default_prompt_and_format_and_only_adds
         BASE, headers=ada, json={"name": "Plain", "spec": {"role": "letter"}}
     )
     assert no_extra.status_code == 201  # a role needs no instructions of its own
+
+
+async def test_a_helper_that_reads_the_fit_can_be_tried_before_any_fit_analysis_exists(
+    client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada
+):
+    from recruitai.ai.prompts import fit
+    from recruitai.modules.matching.schemas import FitCheck
+    from tests.unit.test_schemas import VALID
+
+    await _add_profile(client, fake_llm, ada)
+    job_id = await _add_job(client, fake_llm, ada)
+    a = await _create(client, ada, "Letter", {"role": "letter"})
+    assert (await client.get("/api/v1/fit-analyses", headers=ada)).json() == []
+
+    fake_llm.queue(fit.PROMPT_VERSION, FitCheck.model_validate(VALID))
+    fake_llm.queue(
+        helper.feature(a["id"], "draft"),
+        runner.output_model(OutputSpec(kind="text"))(text="Dear team"),
+    )
+    r = await client.post(
+        f"{BASE}/{a['id']}/trial",
+        headers=ada,
+        json={"spec": {"role": "letter"}, "job_id": job_id},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["result"]["text"] == "Dear team"
+    assert (
+        len((await client.get("/api/v1/fit-analyses", headers=ada)).json()) == 1
+    )  # made on the way

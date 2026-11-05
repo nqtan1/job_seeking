@@ -96,6 +96,30 @@ type = "forbidden"
 source_modules = ["recruitai.config"]
 forbidden_modules = ["recruitai.main"]
 
+[[tool.importlinter.contracts]]
+name = "agents.helpers does not depend on flows, blocks, contacts or connections"
+type = "forbidden"
+source_modules = ["recruitai.modules.agents.helpers"]
+forbidden_modules = ["recruitai.modules.agents.flows", "recruitai.modules.agents.blocks", "recruitai.modules.agents.contacts", "recruitai.modules.agents.connections"]
+# the neutral agents.versioning (used by flows too) knows both models: indirect links are fine
+allow_indirect_imports = true
+[[tool.importlinter.contracts]]
+name = "agents.blocks does not depend on the flow service, engine, schedules or any router"
+type = "forbidden"
+source_modules = ["recruitai.modules.agents.blocks"]
+forbidden_modules = ["recruitai.modules.agents.flows.service", "recruitai.modules.agents.flows.runs", "recruitai.modules.agents.flows.router", "recruitai.modules.agents.flows.engine", "recruitai.modules.agents.flows.schedules", "recruitai.modules.agents.flows.starters", "recruitai.modules.agents.helpers.service", "recruitai.modules.agents.helpers.router", "recruitai.modules.agents.contacts.router", "recruitai.modules.agents.connections.router"]
+
+[[tool.importlinter.contracts]]
+name = "agents.contacts and agents.connections do not depend on flows or helpers"
+type = "forbidden"
+source_modules = ["recruitai.modules.agents.contacts", "recruitai.modules.agents.connections"]
+forbidden_modules = ["recruitai.modules.agents.flows", "recruitai.modules.agents.helpers"]
+[[tool.importlinter.contracts]]
+name = "outside code reaches agents only through its public entry points"
+type = "forbidden"
+source_modules = ["recruitai.modules.applications", "recruitai.modules.candidates", "recruitai.modules.coach", "recruitai.modules.documents", "recruitai.modules.identity", "recruitai.modules.jobs", "recruitai.modules.letters", "recruitai.modules.matching", "recruitai.modules.privacy", "recruitai.modules.radar", "recruitai.main", "recruitai.worker", "recruitai.models"]
+forbidden_modules = ["recruitai.modules.agents.deps", "recruitai.modules.agents.base", "recruitai.modules.agents.versioning", "recruitai.modules.agents.flows.engine", "recruitai.modules.agents.flows.graph", "recruitai.modules.agents.flows.repository", "recruitai.modules.agents.flows.schedules", "recruitai.modules.agents.flows.schemas", "recruitai.modules.agents.flows.starters", "recruitai.modules.agents.helpers.repository", "recruitai.modules.agents.helpers.runner", "recruitai.modules.agents.helpers.schemas", "recruitai.modules.agents.contacts.service", "recruitai.modules.agents.contacts.repository", "recruitai.modules.agents.connections.service", "recruitai.modules.agents.connections.repository", "recruitai.modules.agents.blocks.catalogue", "recruitai.modules.agents.blocks.tools"]
+allow_indirect_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
