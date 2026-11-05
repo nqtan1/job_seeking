@@ -16,6 +16,7 @@ services:
       retries: 10
 
   firebase-emulator:
+    image: recruitai-firebase-emulator:local   # a fixed name, so CI can build it once with a cache
     build:
       context: ./docker
       dockerfile: firebase-emulator.Dockerfile

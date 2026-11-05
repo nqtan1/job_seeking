@@ -1,0 +1,20 @@
+name: Start the Firebase Auth emulator
+description: >
+  Builds the emulator image with the GitHub cache (so Java and firebase-tools are not installed
+  from scratch in every job) and waits until it answers on localhost:9099.
+
+runs:
+  using: composite
+  steps:
+    - uses: docker/setup-buildx-action@v4
+    - uses: docker/build-push-action@v7
+      with:
+        context: backend/docker
+        file: backend/docker/firebase-emulator.Dockerfile
+        load: true
+        tags: recruitai-firebase-emulator:local   # the name docker-compose.yaml expects
+        cache-from: type=gha,scope=firebase-emulator
+        cache-to: type=gha,scope=firebase-emulator,mode=max,ignore-error=true   # several jobs write it at once
+    - shell: bash
+      working-directory: backend
+      run: docker compose up -d --no-build --wait firebase-emulator

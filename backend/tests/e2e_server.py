@@ -98,9 +98,20 @@ CANNED: dict[str, Any] = {
 }
 
 
+def _canned_field(annotation: Any) -> Any:
+    if getattr(annotation, "__origin__", None) is list:
+        return ["A canned item."]
+    return "A canned answer."
+
+
 class CannedLLMGateway(FakeLLMGateway):
     async def generate(self, *, schema: type, **_: object) -> Any:  # type: ignore[override]
-        return CANNED[schema.__name__]
+        if schema.__name__ in CANNED:
+            return CANNED[schema.__name__]
+        # a helper's own result shape (a role's fields): a plain canned answer for each field
+        return schema(
+            **{n: _canned_field(f.annotation) for n, f in schema.model_fields.items()}
+        )
 
     async def stream(self, **_: object) -> AsyncGenerator[str]:  # type: ignore[override]
         for chunk in ("Votre ", "profil ", "est solide."):

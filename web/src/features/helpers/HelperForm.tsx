@@ -426,6 +426,13 @@ export function TryPanel({
     inputs.some((i) => (i.required ?? true) && !(values[i.name] ?? '').trim()) ||
     (needsJob && !jobId)
   const left = use.data ? Math.max(use.data.quota - use.data.used, 0) : null
+  // a disabled button must say why: the first thing still missing
+  const why =
+    needsJob && !jobId
+      ? t('helpers.ui.try_need_job')
+      : missing
+        ? t('helpers.ui.try_need_text')
+        : null
 
   return (
     <section aria-labelledby="try-h" className="space-y-4 rounded-xl border bg-card p-5 shadow-xs">
@@ -470,6 +477,7 @@ export function TryPanel({
           </span>
         )}
       </div>
+      {why && left !== 0 && <p className="text-xs text-muted-foreground">{why}</p>}
       <ErrorMessage error={trial.error} />
       <div aria-live="polite">
         {trial.data ? (

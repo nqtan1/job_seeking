@@ -76,6 +76,21 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
     await expect(page.getByTitle('Letter PDF preview')).toBeVisible({ timeout: 120_000 })
   }
 
+  // Helpers: an Interview prep helper tried on this job. Run says what is missing, then works.
+  await nav(page, 'Helpers').click()
+  await page.getByRole('button', { name: 'New helper' }).click()
+  await page
+    .getByRole('button', { name: /Interview prep/ })
+    .first()
+    .click()
+  const run = page.getByRole('button', { name: 'Run', exact: true })
+  await expect(run).toBeDisabled()
+  await expect(page.getByText('Pick a job to run it.')).toBeVisible()
+  await page.locator('#try-job').selectOption({ index: 1 })
+  await expect(run).toBeEnabled()
+  await run.click()
+  await expect(page.getByText('A canned item.').first()).toBeVisible({ timeout: 30_000 })
+
   // Tracker: add, move, see the timeline.
   await nav(page, 'Tracker').click()
   await page.getByRole('button', { name: 'Track an application' }).first().click()

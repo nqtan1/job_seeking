@@ -3,9 +3,8 @@ name: CI
 # Runs on pull requests, and is called by cd.yml for every push to main / tag, so a deploy
 # can never start from a red commit (and CI runs once per push, not twice).
 #
-# One job per question, so the Checks tab says at a glance what failed and a single job can be
-# re-run alone: Backend (lint, types, import rules, audit, tests), Docker (api, worker),
-# Web (lint, types, unit, build, audit, API types), E2E, and "CI passed" as the one summary.
+# One job per question, named "Group · what it checks", so the Checks tab says what kind of problem
+# it is and one job can be re-run alone. "CI passed" is the single summary status.
 on:
   pull_request:
   workflow_call:
@@ -20,9 +19,9 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ---------------------------------------------------------------- backend
-  backend-lint:
-    name: Backend · lint and format
+  # ---------------------------------------------------------------- quality
+  quality-backend-lint:
+    name: Quality · backend lint and format
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -36,8 +35,8 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check .
 
-  backend-types:
-    name: Backend · types (mypy strict)
+  quality-backend-types:
+    name: Quality · backend types (mypy strict)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -49,8 +48,37 @@ jobs:
       - name: mypy
         run: uv run mypy --strict src
 
-  backend-imports:
-    name: Backend · import rules
+  quality-web-lint:
+    name: Quality · web lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Lint
+        run: pnpm lint
+      - name: Format check
+        run: pnpm exec prettier --check .
+
+  quality-web-types:
+    name: Quality · web types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Typecheck
+        run: pnpm typecheck
+
+  # ----------------------------------------------------------- architecture
+  architecture-imports:
+    name: Architecture · import rules
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -62,8 +90,9 @@ jobs:
       - name: import-linter
         run: uv run lint-imports
 
-  backend-audit:
-    name: Backend · dependency audit
+  # ---------------------------------------------------------------- security
+  security-backend:
+    name: Security · backend dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -79,10 +108,37 @@ jobs:
           uv export --frozen --no-dev --no-emit-project -o /tmp/req.txt
           uvx pip-audit -r /tmp/req.txt --no-deps --disable-pip
 
-  backend-tests:
-    name: Backend · tests
+  security-web:
+    name: Security · web dependencies
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+        with:
+          install: "false"
+      - name: Audit (production dependencies)
+        run: pnpm audit --prod
+
+  # ------------------------------------------------------------------- tests
+  # One job per test group (which file is in which group: backend/tests/ci_group.sh). The database
+  # group also proves that an empty database reaches the newest schema, one step back and forward.
+  tests-backend:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { group: database, name: "Database · migrations and constraints" }
+          - { group: unit, name: "Tests · backend unit" }
+          - { group: platform, name: "Tests · platform (helpers, flows, connections)", emulator: true }
+          - { group: accounts, name: "Tests · accounts and privacy", emulator: true }
+          - { group: product, name: "Tests · product (jobs, letters, coach, radar)", emulator: true }
     services:
       postgres:
         image: postgres:16
@@ -100,90 +156,30 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      ENV: local
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitai_test
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-backend
-
-      # 22 test files mint real ID tokens from the Firebase Auth emulator (localhost:9099).
-      - name: Start the Firebase Auth emulator
-        run: docker compose up -d --build --wait firebase-emulator
-
-      - name: pytest (tests)
+      - if: matrix.emulator
+        uses: ./.github/actions/start-emulator
+      - if: matrix.group == 'database'
+        name: Migrations apply, roll back one step and apply again
         env:
-          ENV: local
-          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitai_test
-        run: uv run pytest
-
-  # ----------------------------------------------------------------- docker
-  docker-api:
-    name: Docker · api image
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build api image
-        run: docker build -f Dockerfile.api -t recruitai-api:ci .
-      - name: api image runs as non-root
+          FIREBASE_PROJECT_ID: demo-recruitai
+          PGPASSWORD: postgres
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/recruitai_migrations
         run: |
-          user="$(docker run --rm recruitai-api:ci whoami)"
-          test "$user" = "app"
+          psql -h localhost -U postgres -c "CREATE DATABASE recruitai_migrations"
+          uv run alembic upgrade head
+          uv run alembic downgrade -1
+          uv run alembic upgrade head
+      - name: pytest (${{ matrix.group }})
+        run: bash tests/ci_group.sh ${{ matrix.group }}
 
-  docker-worker:
-    name: Docker · worker image (offline letters)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build worker image
-        run: docker build -f Dockerfile.worker -t recruitai-worker:ci .
-      - name: worker image runs as non-root
-        run: |
-          user="$(docker run --rm recruitai-worker:ci whoami)"
-          test "$user" = "app"
-      - name: Tectonic compiles offline (package bundle pre-warmed at build time, ADR 0010)
-        run: |
-          docker run --rm --network none recruitai-worker:ci sh -c \
-            "mkdir -p /tmp/out && cp /app/docker/sample.tex /tmp/out/ && cp /app/docker/sample-signature.png /tmp/out/signature.png && tectonic -X compile --untrusted --outdir /tmp/out /tmp/out/sample.tex && test -s /tmp/out/sample.pdf"
-      - name: worker image compiles every letter template offline (P2-20)
-        run: docker run --rm --network none recruitai-worker:ci python /app/docker/render_check.py
-
-  # -------------------------------------------------------------------- web
-  web-lint:
-    name: Web · lint and format
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-web
-      - name: Lint
-        run: pnpm lint
-      - name: Format check
-        run: pnpm exec prettier --check .
-
-  web-types:
-    name: Web · types
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-web
-      - name: Typecheck
-        run: pnpm typecheck
-
-  web-unit:
-    name: Web · unit tests
+  tests-web:
+    name: Tests · web unit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -195,38 +191,11 @@ jobs:
       - name: Unit tests
         run: pnpm test --run
 
-  web-build:
-    name: Web · build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-web
-      - name: Build
-        run: pnpm build
-
-  web-audit:
-    name: Web · dependency audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-web
-        with:
-          install: "false"
-      - name: Audit (production dependencies)
-        run: pnpm audit --prod
-
+  # ---------------------------------------------------------------- contract
   # Drift check: regenerate the API types from the real app's OpenAPI and fail if the
   # committed schema.d.ts differs (a backend response-model change without `pnpm gen:api`).
-  web-api-types:
-    name: Web · API types in sync
+  contract-api-types:
+    name: Contract · API types in sync
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -263,13 +232,58 @@ jobs:
         working-directory: web
         run: pnpm check:api
 
-  # -------------------------------------------------------------------- e2e
-  # Only worth the minutes once the cheap web checks are green.
-  web-e2e:
+  # ------------------------------------------------------------------- build
+  build-web:
+    name: Build · web bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Build
+        run: pnpm build
+
+  # ------------------------------------------------------------------ docker
+  docker:
+    name: "Docker · ${{ matrix.name }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: api, name: api image }
+          - { image: worker, name: worker image (offline letters) }
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build ${{ matrix.image }} image
+        run: docker build -f Dockerfile.${{ matrix.image }} -t recruitai-${{ matrix.image }}:ci .
+      - name: ${{ matrix.image }} image runs as non-root
+        run: |
+          user="$(docker run --rm recruitai-${{ matrix.image }}:ci whoami)"
+          test "$user" = "app"
+      - if: matrix.image == 'worker'
+        name: Tectonic compiles offline (package bundle pre-warmed at build time, ADR 0010)
+        run: |
+          docker run --rm --network none recruitai-worker:ci sh -c \
+            "mkdir -p /tmp/out && cp /app/docker/sample.tex /tmp/out/ && cp /app/docker/sample-signature.png /tmp/out/signature.png && tectonic -X compile --untrusted --outdir /tmp/out /tmp/out/sample.tex && test -s /tmp/out/sample.pdf"
+      - if: matrix.image == 'worker'
+        name: worker image compiles every letter template offline (P2-20)
+        run: docker run --rm --network none recruitai-worker:ci python /app/docker/render_check.py
+
+  # --------------------------------------------------------------------- e2e
+  # Runs at the same time as everything else: it is the longest job, so waiting for the cheap
+  # checks would only make the whole run slower.
+  e2e:
     name: E2E · browser journeys (Playwright, canned LLM)
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: [web-lint, web-types, web-unit, web-build]
     env:
       E2E_WEB_PORT: "5174"
       E2E_API_URL: http://localhost:8011
@@ -281,11 +295,11 @@ jobs:
       - uses: ./.github/actions/setup-backend
         with:
           sync: "false"
+      - uses: ./.github/actions/start-emulator
 
-      # Postgres + Firebase emulator; --wait uses their healthchecks.
-      - name: Start Postgres + Firebase emulator
+      - name: Start Postgres
         working-directory: backend
-        run: docker compose up -d --build --wait
+        run: docker compose up -d --no-build --wait postgres
 
       # The same isolated stack as locally: own database, API on :8011, scripted worker
       # (canned LLM and job-search data), queue schema applied.
@@ -314,27 +328,26 @@ jobs:
             web/test-results
             backend/.e2e-run/*.log
 
-  # --------------------------------------------------------------- summary
+  # ----------------------------------------------------------------- summary
   # The one status to look at (and, later, to require in branch protection). It runs even when a
-  # job failed, and fails if any job failed or was cancelled.
+  # job failed, and fails if any job failed, was cancelled or was skipped.
   ci-passed:
     name: CI passed
     if: always()
     needs:
-      - backend-lint
-      - backend-types
-      - backend-imports
-      - backend-audit
-      - backend-tests
-      - docker-api
-      - docker-worker
-      - web-lint
-      - web-types
-      - web-unit
-      - web-build
-      - web-audit
-      - web-api-types
-      - web-e2e
+      - quality-backend-lint
+      - quality-backend-types
+      - quality-web-lint
+      - quality-web-types
+      - architecture-imports
+      - security-backend
+      - security-web
+      - tests-backend
+      - tests-web
+      - contract-api-types
+      - build-web
+      - docker
+      - e2e
     runs-on: ubuntu-latest
     steps:
       - name: Every job must have succeeded

@@ -4839,6 +4839,13 @@ export interface components {
             minutes?: number | null;
             /** Flow Id */
             flow_id?: string | null;
+            /**
+             * Fixed
+             * @default {}
+             */
+            fixed: {
+                [key: string]: string;
+            };
         };
         /** TransformNode */
         TransformNode: {

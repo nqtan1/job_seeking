@@ -130,6 +130,11 @@ export function ItemCard({
 }
 
 /** "Pick a job" for helpers that read one (Try it, Run flow). */
+const JOB_LABEL_CHARS = 60 // a native list is as wide as its longest line: keep it inside the window
+
+const shorten = (text: string, max: number) =>
+  text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+
 export function JobSelect({
   id,
   value,
@@ -141,6 +146,9 @@ export function JobSelect({
 }) {
   const t = useT()
   const jobs = useJobs()
+  const full = (j: { data: { title: string; company: { name: string } } }) =>
+    `${j.data.title} · ${j.data.company.name}`
+  const chosen = (jobs.data ?? []).find((j) => j.id === value)
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{t('helpers.pick_job')}</Label>
@@ -152,11 +160,12 @@ export function JobSelect({
       >
         <option value="">{t('helpers.pick_job_none')}</option>
         {(jobs.data ?? []).map((j) => (
-          <option key={j.id} value={j.id}>
-            {j.data.title} · {j.data.company.name}
+          <option key={j.id} value={j.id} title={full(j)}>
+            {shorten(full(j), JOB_LABEL_CHARS)}
           </option>
         ))}
       </NativeSelect>
+      {chosen && <p className="text-xs break-words text-muted-foreground">{full(chosen)}</p>}
       {jobs.data?.length === 0 && (
         <p className="text-xs text-muted-foreground">
           {t('helpers.pick_job_empty')}{' '}

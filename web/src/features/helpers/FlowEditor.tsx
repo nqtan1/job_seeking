@@ -294,6 +294,7 @@ function Editor({ detail }: { detail: FlowDetail }) {
               const id = newId()
               insert(id, (n) => ({
                 type: 'tool',
+                fixed: {},
                 id,
                 tool,
                 position: place(n),

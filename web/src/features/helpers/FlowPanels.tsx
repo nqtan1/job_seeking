@@ -28,12 +28,16 @@ import {
   patchNode,
   setMap,
   typeKey,
+  MAX_FIXED_CHARS,
+  mappedInputs,
+  typeableInputs,
 } from './graph'
 import type { Selection } from './Canvas'
 import { KIND } from './nodeKind'
 import { type OutField, outputFields } from './samples'
 import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Link, useParams } from 'react-router'
 import { TryPanel } from './HelperForm'
@@ -605,6 +609,7 @@ export function NodeInspector({
   const [testing, setTesting] = useState(false)
   const patch = (p: Partial<GraphNode>) => onGraph(patchNode(graph, node.id, p))
   const Icon = KIND[node.type].icon
+  const linked = mappedInputs(graph, node.id) // a linked input is not typed here
   const agent = useAgent(node.type === 'agent' ? node.agent_id : undefined)
   return (
     <section
@@ -641,6 +646,31 @@ export function NodeInspector({
           </p>
         </div>
       </header>
+      {node.type === 'tool' && typeableInputs(node.tool).length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{t('helpers.fixed.hint')}</p>
+          {typeableInputs(node.tool).map((name) => (
+            <div key={name} className="space-y-1">
+              <Label htmlFor={`fixed-${node.id}-${name}`}>{t(`helpers.fixed.${name}`)}</Label>
+              <Input
+                id={`fixed-${node.id}-${name}`}
+                value={node.fixed?.[name] ?? ''}
+                disabled={linked.has(name)}
+                maxLength={MAX_FIXED_CHARS}
+                placeholder={t(`helpers.fixed.${name}.example`)}
+                onChange={(e) => {
+                  const fixed = { ...node.fixed, [name]: e.target.value }
+                  if (!e.target.value) delete fixed[name]
+                  patch({ fixed } as Partial<GraphNode>)
+                }}
+              />
+              {linked.has(name) && (
+                <p className="text-xs text-muted-foreground">{t('helpers.fixed.linked')}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {(node.type === 'input' || node.type === 'output') && (
         <>
           <p className="text-xs text-muted-foreground">

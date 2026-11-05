@@ -3,6 +3,14 @@ name: CD
 # main -> staging (GitHub environment "staging"); tag v* -> prod (environment "production", set
 # required reviewers on it = the approval gate). Tags only deploy when vars.PROD_DEPLOY == "true".
 # Auth is Workload Identity Federation: no keys.
+#
+# Reads top to bottom as the pipeline:
+#   ci ........ the whole CI workflow (a red commit never deploys)
+#   gate ...... after CI: checks the environment's variables; the only job bound to the GitHub
+#               environment, so a production approval is asked once, for a green commit. Its outputs
+#               carry the (non-secret) variables. PROD_DEPLOY must stay a repository variable.
+#   build-image (api, worker) / build-web ... run at the same time
+#   release ... migrate, roll api + worker, Hosting, smoke test
 # Per-environment GitHub variables (outputs of `terraform output github_vars`):
 #   GCP_PROJECT, GCP_REGION, WIF_PROVIDER, DEPLOY_SA
 
@@ -21,21 +29,29 @@ concurrency:
 
 jobs:
   ci:
-    uses: ./.github/workflows/ci.yml   # a red commit never reaches a deploy
+    uses: ./.github/workflows/ci.yml   # a red commit never reaches a release
 
-  deploy:
-    needs: ci
+  gate:
+    name: Deploy · check settings
+    needs: ci   # the approval (production) is asked only for a commit whose CI is green
     # main always deploys to staging; a v* tag deploys to production only once the repository
     # variable PROD_DEPLOY is "true" (set it after the production project and environment exist).
     if: github.ref == 'refs/heads/main' || vars.PROD_DEPLOY == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging' }}
-    env:
-      IMG: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT }}/recruitai
+    # Variables are per environment, so the jobs below (which do not use the environment) read
+    # them from here.
+    outputs:
+      project: ${{ vars.GCP_PROJECT }}
+      region: ${{ vars.GCP_REGION }}
+      wif_provider: ${{ vars.WIF_PROVIDER }}
+      deploy_sa: ${{ vars.DEPLOY_SA }}
+      firebase_api_key: ${{ vars.VITE_FIREBASE_API_KEY }}
+      firebase_auth_domain: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      firebase_app_id: ${{ vars.VITE_FIREBASE_APP_ID }}
+      appcheck_site_key: ${{ vars.VITE_APPCHECK_SITE_KEY }}
     steps:
-      - uses: actions/checkout@v7
-
       - name: Check the GitHub environment variables
         env:
           GCP_PROJECT: ${{ vars.GCP_PROJECT }}
@@ -55,77 +71,106 @@ jobs:
           done
           exit $bad
 
+  # Layer cache in the GitHub Actions cache: a fresh runner restores the dependency layers,
+  # so a commit that did not touch pyproject.toml/uv.lock pushes only the small code
+  # layers (a few MB), not ~180 MB of identical dependencies every deploy.
+  # provenance/sbom off: keep a plain single-image manifest, as `docker build` pushed.
+  build-image:
+    name: Build · ${{ matrix.image }} image
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, worker]
+    env:
+      IMG: ${{ needs.gate.outputs.region }}-docker.pkg.dev/${{ needs.gate.outputs.project }}/recruitai
+    steps:
+      - uses: actions/checkout@v7
       - uses: google-github-actions/auth@v3
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOY_SA }}
+          workload_identity_provider: ${{ needs.gate.outputs.wif_provider }}
+          service_account: ${{ needs.gate.outputs.deploy_sa }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud auth configure-docker "${{ needs.gate.outputs.region }}-docker.pkg.dev" -q
+      - uses: docker/setup-buildx-action@v4
+      - name: Build and push ${{ matrix.image }}
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          file: backend/Dockerfile.${{ matrix.image }}
+          push: true
+          tags: ${{ env.IMG }}/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          provenance: false
+          sbom: false
+
+  build-web:
+    name: Build · web bundle
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-web
+      - name: Build web
+        working-directory: web
+        env:
+          VITE_FIREBASE_PROJECT_ID: ${{ needs.gate.outputs.project }}
+          VITE_FIREBASE_API_KEY: ${{ needs.gate.outputs.firebase_api_key }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ needs.gate.outputs.firebase_auth_domain }}
+          VITE_FIREBASE_APP_ID: ${{ needs.gate.outputs.firebase_app_id }}
+          VITE_APPCHECK_SITE_KEY: ${{ needs.gate.outputs.appcheck_site_key }}
+        run: pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    name: Release · migrate, roll out, Hosting
+    needs: [ci, gate, build-image, build-web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IMG: ${{ needs.gate.outputs.region }}-docker.pkg.dev/${{ needs.gate.outputs.project }}/recruitai
+      PROJECT: ${{ needs.gate.outputs.project }}
+      REGION: ${{ needs.gate.outputs.region }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ needs.gate.outputs.wif_provider }}
+          service_account: ${{ needs.gate.outputs.deploy_sa }}
 
       - uses: google-github-actions/setup-gcloud@v3
         with:
           install_components: beta   # worker pools are a beta command group
-      - run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" -q
 
-      # Layer cache in the GitHub Actions cache: a fresh runner restores the dependency layers,
-      # so a commit that did not touch pyproject.toml/uv.lock pushes only the small code
-      # layers (a few MB), not ~180 MB of identical dependencies every deploy.
-      # provenance/sbom off: keep a plain single-image manifest, as `docker build` pushed.
-      - uses: docker/setup-buildx-action@v4
-
-      - name: Build and push api
-        uses: docker/build-push-action@v7
+      - uses: actions/download-artifact@v4
         with:
-          context: backend
-          file: backend/Dockerfile.api
-          push: true
-          tags: ${{ env.IMG }}/api:${{ github.sha }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-          provenance: false
-          sbom: false
-
-      - name: Build and push worker
-        uses: docker/build-push-action@v7
-        with:
-          context: backend
-          file: backend/Dockerfile.worker
-          push: true
-          tags: ${{ env.IMG }}/worker:${{ github.sha }}
-          cache-from: type=gha,scope=worker
-          cache-to: type=gha,scope=worker,mode=max
-          provenance: false
-          sbom: false
+          name: web-dist
+          path: web/dist
 
       - name: Migrate database
         run: |
-          gcloud run jobs update recruitai-migrate --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$GITHUB_SHA"
-          gcloud run jobs execute recruitai-migrate --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --wait
+          gcloud run jobs update recruitai-migrate --project "$PROJECT" --region "$REGION" --image "$IMG/api:$GITHUB_SHA"
+          gcloud run jobs execute recruitai-migrate --project "$PROJECT" --region "$REGION" --wait
 
       - name: Roll api and worker
         run: |
-          gcloud run services update recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$GITHUB_SHA"
-          gcloud beta run worker-pools update recruitai-worker --quiet --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/worker:$GITHUB_SHA"
+          gcloud run services update recruitai-api --project "$PROJECT" --region "$REGION" --image "$IMG/api:$GITHUB_SHA"
+          gcloud beta run worker-pools update recruitai-worker --quiet --project "$PROJECT" --region "$REGION" --image "$IMG/worker:$GITHUB_SHA"
 
-      - uses: pnpm/action-setup@v5
-        with:
-          package_json_file: web/package.json
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-
-      - name: Build web and deploy Hosting
-        env:
-          VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT }}
-          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
-          VITE_APPCHECK_SITE_KEY: ${{ vars.VITE_APPCHECK_SITE_KEY }}
-        run: |
-          (cd web && pnpm install --frozen-lockfile && pnpm build)
-          npx --yes firebase-tools@15 deploy --only hosting --project "${{ vars.GCP_PROJECT }}"
+      - name: Deploy Hosting
+        run: npx --yes firebase-tools@15 deploy --only hosting --project "$PROJECT"
 
       - name: Smoke test
         run: |
-          url=$(gcloud run services describe recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --format='value(status.url)')
+          url=$(gcloud run services describe recruitai-api --project "$PROJECT" --region "$REGION" --format='value(status.url)')
           curl -fsS --retry 5 --retry-delay 5 "$url/health"

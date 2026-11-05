@@ -269,6 +269,7 @@ def test_the_web_limits_equal_the_servers():
         "MAX_FIELDS": schemas.MAX_FIELDS,
         "MAX_NODES": g.MAX_NODES,
         "MAX_EDGES": g.MAX_EDGES,
+        "MAX_FIXED_CHARS": g.MAX_FIXED_CHARS,
         "MAX_HELPERS": service.MAX_AGENTS_PER_ORG,
         "MAX_SCHEDULES": schedules.MAX_SCHEDULES_PER_ORG,
     }

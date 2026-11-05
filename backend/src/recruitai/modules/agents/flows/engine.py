@@ -268,14 +268,23 @@ async def _advance(
             await db.commit()
             continue
 
-        values: dict[str, str] = {}
+        # text typed on a step fills an input no link maps; a link owns its input, so one on a branch
+        # not taken leaves the input empty and the step is skipped as before
+        mapped = {m.input for e in incoming[nid] for m in e.map}
+        values: dict[str, str] = (
+            {k: v for k, v in node.fixed.items() if k not in mapped}
+            if isinstance(node, g.ToolNode)
+            else {}
+        )
+        linked: set[str] = set()
         for e in active:
             payload, truncated = g.render_map(e.map, outputs[e.from_.node])
             for key in payload:
                 if (
-                    key in values
+                    key in linked
                 ):  # two live edges into one input: never guess which wins
                     await _fail(db, run, step, "ambiguous_input")
+            linked.update(payload)
             values.update(payload)
             await flow_repo.record_handoff(
                 db,

@@ -67,6 +67,29 @@ export const TOOL_IO = {
 type ToolKind = keyof typeof TOOL_IO
 export const TOOL_KINDS = Object.keys(TOOL_IO) as ToolKind[]
 
+/** Inputs whose text can be typed on a step (an allow-list, so never an address to open and never
+ *  the engine's own list: the server refuses the rest too). */
+const TYPEABLE = [
+  'query',
+  'department',
+  'employer',
+  'subject',
+  'body',
+  'to',
+  'company',
+  'title',
+  'notes',
+  'text',
+] as const
+type Typeable = (typeof TYPEABLE)[number]
+export const typeableInputs = (tool: ToolKind): Typeable[] =>
+  TYPEABLE.filter((name) => TOOL_IO[tool].in.some(([n]) => n === name))
+export const MAX_FIXED_CHARS = 500
+
+/** The inputs of a step that some link maps: a link owns its input, so typed text is not used there. */
+export const mappedInputs = (g: Graph, id: string) =>
+  new Set(g.edges.filter((e) => e.to === id).flatMap((e) => e.map.map((m) => m.input)))
+
 export function inputsOf(node: GraphNode, specs: Specs): { name: string; required: boolean }[] {
   switch (node.type) {
     case 'output':

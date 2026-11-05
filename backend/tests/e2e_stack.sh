@@ -17,7 +17,7 @@ export ENV=local DATABASE_URL="postgresql+psycopg://postgres:postgres@localhost:
 case "${1:-}" in
 up)
   mkdir -p "$RUN"
-  docker exec backend-postgres-1 psql -U postgres -q -c "DROP DATABASE IF EXISTS $DB" -c "CREATE DATABASE $DB"
+  docker compose exec -T postgres psql -U postgres -q -c "DROP DATABASE IF EXISTS $DB" -c "CREATE DATABASE $DB"
   uv run alembic upgrade head > "$RUN/migrate.log" 2>&1
   uv run procrastinate --app=recruitai.worker.app schema --apply >> "$RUN/migrate.log" 2>&1
   nohup uv run uvicorn tests.e2e_server:app --port 8011 > "$RUN/api.log" 2>&1 &
@@ -32,7 +32,7 @@ down)
     [ -f "$RUN/$p.pid" ] && pkill -P "$(cat "$RUN/$p.pid")" 2>/dev/null; [ -f "$RUN/$p.pid" ] && kill "$(cat "$RUN/$p.pid")" 2>/dev/null || true
   done
   sleep 1
-  docker exec backend-postgres-1 psql -U postgres -q -c "DROP DATABASE IF EXISTS $DB WITH (FORCE)"
+  docker compose exec -T postgres psql -U postgres -q -c "DROP DATABASE IF EXISTS $DB WITH (FORCE)"
   rm -rf "$RUN" .data-e2e
   echo "stack stopped, database dropped"
   ;;

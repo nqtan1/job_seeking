@@ -28,6 +28,7 @@ import {
   type Refusal,
   type Specs,
   connect,
+  mappedInputs,
   moveNode,
   outputsOf,
   refusal,
@@ -46,6 +47,7 @@ type StepData = {
   mood: Mood
   statusLabel: string
   outs: string[]
+  typed?: string // text typed on the step that no link overrides
   [k: string]: unknown
 }
 type FlowEdgeData = {
@@ -123,6 +125,7 @@ function StepNode({ data, selected }: NodeProps<Node<StepData>>) {
           {data.outs.length > 3 ? ` +${data.outs.length - 3}` : ''}
         </p>
       )}
+      {data.typed && <p className="mt-1.5 truncate text-[11px] font-medium">“{data.typed}”</p>}
       {n.type === 'condition' ? (
         <>
           <Handle type="source" position={Position.Right} id="true" style={{ top: '30%' }} />
@@ -293,9 +296,15 @@ function Inner(p: CanvasProps) {
           mood: p.moods?.get(n.id) ?? 'idle',
           statusLabel: p.statusLabels?.get(n.id) ?? subtitleOf(n, t),
           outs: outputsOf(n, p.specs),
+          typed:
+            n.type === 'tool'
+              ? Object.entries(n.fixed ?? {}).find(
+                  ([k, v]) => v && !mappedInputs(graph, n.id).has(k),
+                )?.[1]
+              : undefined,
         },
       })),
-    [graph.nodes, p.specs, p.titles, p.avatars, p.moods, p.statusLabels, p.selection, readOnly, t],
+    [graph, p.specs, p.titles, p.avatars, p.moods, p.statusLabels, p.selection, readOnly, t],
   )
 
   const edges: Edge<FlowEdgeData>[] = useMemo(() => {

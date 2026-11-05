@@ -120,11 +120,20 @@ UNTRUSTED_TOOLS = {
 }  # their output is text written by outsiders
 
 
+MAX_FIXED_CHARS = 500
+# What can be typed on a step: plain text for an input. Never an address to open (``url``: the page
+# reader only follows what an earlier step handed over) and never the engine's own list (``items``).
+NOT_TYPEABLE = {"url", "items"}
+
+
 class ToolNode(_Node):
     type: Literal["tool"] = "tool"
     tool: ToolKind
     minutes: int | None = Field(None, ge=1, le=7 * 24 * 60)  # wait only
     flow_id: UUID | None = None  # for_each only: the automation started for each item
+    # Text typed on the step for one of its inputs (e.g. the keywords of a search). Used only when no
+    # link maps that input: a link, even one on a branch not taken, owns the input.
+    fixed: dict[str, Annotated[str, StringConstraints(max_length=MAX_FIXED_CHARS)]] = {}
 
     @model_validator(mode="after")
     def _config(self) -> "ToolNode":
@@ -132,6 +141,10 @@ class ToolNode(_Node):
             raise ValueError("only wait takes minutes, and it needs them")
         if self.flow_id is not None and self.tool != "for_each":
             raise ValueError("only for_each takes a flow")
+        names = {name for name, _ in BLOCKS[self.tool].inputs}
+        if not set(self.fixed) <= names - NOT_TYPEABLE:
+            raise ValueError("a typed value must belong to an input that can be typed")
+        self.fixed = {k: v.strip() for k, v in self.fixed.items() if v.strip()}
         return self
 
 
@@ -367,6 +380,9 @@ def validate(graph: Graph, agents: dict[UUID, AgentInfo]) -> list[Issue]:
                         )
                     )
     issues += _shared_inputs(graph, nodes)
+    for step in graph.nodes:
+        if isinstance(step, ToolNode):  # text typed on a step feeds its input too
+            fed[step.id] |= set(step.fixed)
     for n in graph.nodes:
         for name, required in input_names(n, agents):
             if required and name not in fed[n.id] and n.id not in blind:
