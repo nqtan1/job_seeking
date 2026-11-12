@@ -53,6 +53,10 @@ test('radar: a run interrupted by the AI is explained, loses nothing and is retr
     { timeout: 60_000 },
   )
   await expect(page.getByRole('alert').filter({ hasText: 'interrupted' })).toHaveCount(0)
-  await expect(page.getByRole('region', { name: 'Radar status' })).toContainText('2 new matches')
+  // The two kept offers are listed at once (opening the list marks them seen, so the strip's
+  // unseen counter is already back to zero).
+  await expect(
+    page.getByRole('region', { name: 'New matches' }).getByRole('button', { name: 'Keep' }),
+  ).toHaveCount(2)
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, '7-retried.png'), fullPage: true })
 })
