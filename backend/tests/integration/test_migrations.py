@@ -57,6 +57,7 @@ def test_identity_tables_columns_constraints_and_indexes(scratch_migration_db):
             "created_at",
             "email_reminders",
             "language",
+            "job_views",
             "email_verified",
         }
         assert required(mem) == {"id", "org_id", "user_id", "role", "created_at"}

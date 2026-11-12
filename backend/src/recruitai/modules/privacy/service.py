@@ -1,8 +1,8 @@
 """Data export (GDPR Art. 20), account deletion and retention sweeps. Each module exports its own
 rows via ``service.export_data``; the document row is created only after the object is stored."""
 
+import io
 import json
-import tempfile
 import zipfile
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
@@ -96,7 +96,7 @@ async def build_export(
 
     counts = {k: len(v) for k, v in data.items() if isinstance(v, list)}
     missing_files: list[str] = []
-    with tempfile.SpooledTemporaryFile(max_size=32 * 1024 * 1024) as spool:
+    with io.BytesIO() as spool:  # memory only: nothing spills to local disk
         with zipfile.ZipFile(spool, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, content in data.items():
                 archive.writestr(f"{name}.json", _dump(content))

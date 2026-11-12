@@ -119,6 +119,15 @@ async def test_language_is_a_preference_and_the_digest_follows_it(
     )  # null never clears it
     assert (await service.get_me(db_session, ada_ctx)).language == "vi"
 
+    view = dict.fromkeys(["name", "group", "range", "sort", "chip", "q"], "x")
+    await service.set_preferences(
+        db_session, user_id=ada_ctx.user_id, changes={"job_views": [view]}
+    )
+    await service.set_preferences(
+        db_session, user_id=ada_ctx.user_id, changes={"job_views": None}
+    )  # null never clears them
+    assert (await service.get_me(db_session, ada_ctx)).job_views == [view]
+
     await _application(
         db_session, ada_ctx.org_id, "Sent Co", applied_at=date(2026, 10, 1)
     )

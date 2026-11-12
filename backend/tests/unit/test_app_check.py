@@ -67,7 +67,9 @@ async def test_disabled_in_local_skips_verification_entirely():
 async def test_disabling_only_applies_to_local():
     """app_check_enforced=False on a non-local env (dev/staging) still enforces — only
     ENV=local gets the escape hatch, matching the task's literal wording."""
-    settings = _settings(env="dev", app_check_enforced=False)
+    settings = _settings(
+        env="dev", app_check_enforced=False, storage_backend="gcs", gcs_bucket="b"
+    )
     with pytest.raises(Unauthorized, match="Missing"):
         await verify_app_check(
             settings, get_firebase_app(settings), x_firebase_appcheck=None

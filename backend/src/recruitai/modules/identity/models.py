@@ -17,6 +17,7 @@ from sqlalchemy import (
     func,
     true,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from recruitai.core.db import Base
@@ -65,6 +66,10 @@ class User(Base):
     # UI, AI answers and e-mails all follow it (core/language.py).
     language: Mapped[str] = mapped_column(
         String(2), nullable=False, server_default="en"
+    )
+    # Saved filters of the Jobs screen: kept with the account, not in one browser.
+    job_views: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

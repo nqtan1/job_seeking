@@ -17,6 +17,7 @@ import { cn } from 'cn'
 import { DeleteJobButton } from './DeleteJobButton'
 import { JobDetailsFix } from './JobDetailsFix'
 import { isStale, postingAgeDays } from './age'
+import { useMe, useSetJobViews } from '@/features/settings/api'
 import { useJobs, type Job } from './api'
 import {
   companyKey,
@@ -125,7 +126,9 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
   const [chip, setChip] = useState<Chip>('')
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})
-  const [custom, setCustom] = useState<View[]>(() => load('jobs-views', []))
+  const me = useMe()
+  const setViews = useSetJobViews()
+  const custom = (me.data?.job_views ?? []) as View[]
   const [naming, setNaming] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -234,14 +237,12 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
   }
   const addView = (name: string) => {
     const next = [...custom.filter((v) => v.name !== name), { name, ...state }]
-    setCustom(next)
-    save('jobs-views', next)
+    setViews.mutate(next)
     setNaming(false)
   }
   const removeView = (name: string) => {
     const next = custom.filter((v) => v.name !== name)
-    setCustom(next)
-    save('jobs-views', next)
+    setViews.mutate(next)
   }
   const filtered = range !== 'all' || chip !== '' || needle !== ''
   const clear = () => {

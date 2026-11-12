@@ -1,6 +1,7 @@
 """Response DTOs for the identity module (ARCHITECTURE.md §4.2, walkthrough §3 Flow A)."""
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -27,6 +28,12 @@ class SessionPolicyOut(BaseModel):
     stepup_max_age_seconds: int
 
 
+# A saved Jobs filter is a small string map (the UI owns its keys); bounded at the API edge.
+JobViews = list[
+    Annotated[dict[str, Annotated[str, Field(max_length=100)]], Field(max_length=8)]
+]
+
+
 class MeResponse(BaseModel):
     user: UserOut
     active_org_id: UUID
@@ -35,6 +42,7 @@ class MeResponse(BaseModel):
     email_reminders: bool = True
     weekly_goal: int | None = None
     language: Language = "en"
+    job_views: JobViews = []
     helpers_enabled: bool = False
     session: SessionPolicyOut
 
@@ -97,6 +105,7 @@ class PreferencesIn(BaseModel):
     email_reminders: bool | None = None
     weekly_goal: int | None = Field(None, ge=1, le=50)
     language: Language | None = None
+    job_views: JobViews | None = Field(None, max_length=20)
 
 
 class AiFeatureOut(BaseModel):

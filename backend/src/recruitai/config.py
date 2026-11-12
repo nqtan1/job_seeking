@@ -210,8 +210,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _forbid_local_storage_in_prod(self) -> Self:
-        if self.env == "prod" and self.storage_backend == "local":
-            raise ValueError("STORAGE_BACKEND must be 'gcs' when ENV=prod")
+        if self.env != "local" and self.storage_backend == "local":
+            raise ValueError("STORAGE_BACKEND must be 'gcs' outside ENV=local")
         return self
 
     @model_validator(mode="after")

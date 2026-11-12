@@ -40,6 +40,7 @@ class MeResult:
     email_reminders: bool
     weekly_goal: int | None
     language: Language
+    job_views: list[dict[str, str]]
 
 
 async def get_me(db: AsyncSession, ctx: OrgContext) -> MeResult:
@@ -53,6 +54,7 @@ async def get_me(db: AsyncSession, ctx: OrgContext) -> MeResult:
         email_reminders=user.email_reminders,
         weekly_goal=user.weekly_goal,
         language=user.language,  # type: ignore[arg-type]
+        job_views=user.job_views,
     )
 
 
@@ -72,6 +74,7 @@ async def export_data(
             "email": user.email,
             "display_name": user.display_name,
             "created_at": user.created_at.isoformat(),
+            "job_views": user.job_views,
         },
         "organization": {"name": org.name, "kind": org.kind},
     }
@@ -324,8 +327,8 @@ async def set_preferences(
     values = {
         k: v
         for k, v in changes.items()
-        if k in ("email_reminders", "weekly_goal", "language")
-        and not (k in ("email_reminders", "language") and v is None)
+        if k in ("email_reminders", "weekly_goal", "language", "job_views")
+        and not (k in ("email_reminders", "language", "job_views") and v is None)
     }
     if values:
         await db.execute(update(User).where(User.id == user_id).values(**values))

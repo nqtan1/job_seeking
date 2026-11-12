@@ -3653,6 +3653,13 @@ export interface components {
              */
             language: "en" | "fr" | "vi";
             /**
+             * Job Views
+             * @default []
+             */
+            job_views: {
+                [key: string]: string;
+            }[];
+            /**
              * Helpers Enabled
              * @default false
              */
@@ -3897,6 +3904,10 @@ export interface components {
             weekly_goal?: number | null;
             /** Language */
             language?: ("en" | "fr" | "vi") | null;
+            /** Job Views */
+            job_views?: {
+                [key: string]: string;
+            }[] | null;
         };
         /**
          * PreviewIn

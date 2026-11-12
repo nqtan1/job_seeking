@@ -52,3 +52,13 @@ export function useSetLanguage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }
+
+/** Saved Jobs filters live on the account, so they follow the user to every device. */
+export function useSetJobViews() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (job_views: Record<string, string>[]) =>
+      void unwrap(await api.PATCH('/api/v1/me/preferences', { body: { job_views } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
