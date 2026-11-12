@@ -361,7 +361,6 @@ export function RadarPage() {
       <StatusStrip />
       {count > 0 && (
         <>
-          <Insights />
           <section aria-label={t('radar.page.new_matches')} className="space-y-3">
             <h2 className="text-sm font-semibold text-muted-foreground">
               {t('radar.page.new_matches')}
@@ -369,6 +368,7 @@ export function RadarPage() {
             <NewMatches />
           </section>
           <InProgress />
+          <Insights />
           <Rejected minScore={minScore} />
         </>
       )}

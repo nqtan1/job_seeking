@@ -42,16 +42,30 @@ const pollRadarFast = () => {
  * page asks for closer following (`follow`): every 5 s while a run goes on, every 3 s in the 20 s
  * after a run was requested. Browsers stop polling hidden tabs by themselves.
  */
-export const useRadarStatus = (follow = false) =>
-  useQuery({
+export const useRadarStatus = (follow = false) => {
+  const qc = useQueryClient()
+  return useQuery({
     queryKey: STATUS,
-    queryFn: async () => unwrap(await api.GET('/api/v1/radar/status')),
+    queryFn: async () => {
+      const next = unwrap(await api.GET('/api/v1/radar/status'))
+      // A scheduled run happens on the server while the page (or the installed app) stays open:
+      // when it shows a new run or a different number of matches, reload what depends on it.
+      const mark = (s?: typeof next) =>
+        `${s?.last_run?.id}|${s?.last_run?.finished_at}|${s?.new_matches}`
+      const prev = qc.getQueryData<typeof next>(STATUS)
+      if (prev && mark(prev) !== mark(next))
+        REFRESH_AFTER_RUN.filter((k) => k !== STATUS).forEach((queryKey) =>
+          qc.invalidateQueries({ queryKey }),
+        )
+      return next
+    },
     refetchInterval: (q) => {
       if (!follow) return 60_000
       if (q.state.data?.running) return 5_000
       return Date.now() < pollFastUntil ? 3_000 : 60_000
     },
   })
+}
 
 export const useInsights = () =>
   useQuery({
