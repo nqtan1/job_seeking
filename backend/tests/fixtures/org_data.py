@@ -20,6 +20,8 @@ from recruitai.core.tasks import TaskRun
 from recruitai.modules.applications import service as applications
 from recruitai.modules.applications.schemas import ApplicationIn
 from recruitai.modules.coach import service as coach
+from recruitai.modules.cvreview import repository as cv_repo
+from recruitai.modules.cvreview.schemas import LlmSummary, ReviewData, Strength
 from recruitai.modules.documents import service as documents
 from recruitai.modules.identity.models import Membership, Organization, User
 from recruitai.modules.letters import service as letters
@@ -115,6 +117,14 @@ async def seed_org(
     await usage.finish_call(
         db, ai_call_id, input_tokens=5, output_tokens=7, latency_ms=3, status="ok"
     )
+    await cv_repo.add(
+        db, org_id=org.id, document_id=cv.id, parent_id=None,
+        track="backend", level="mid", score=70, model="m", prompt_version="cv@1",
+        data=ReviewData(
+            blocks=[], comments=[], dimensions={}, pages=1,
+            summary=LlmSummary(strengths=[Strength(text=f"cv-{tag}", block_id=None)], top_fixes=[]), grounding_rate=1.0,
+        ),
+    )  # fmt: skip
     db.add(TaskRun(org_id=org.id, kind="seed", status="done"))
     await db.commit()
     return OrgData(org, user, tag, [cv.storage_key, jd.storage_key], org.id, user.id)

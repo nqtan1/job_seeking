@@ -683,6 +683,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cv-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reviews */
+        get: operations["list_reviews_api_v1_cv_reviews_get"];
+        put?: never;
+        /**
+         * Create Review
+         * @description Queue a review; poll ``status_url``, then GET the review from the task's ``result_ref``.
+         */
+        post: operations["create_review_api_v1_cv_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cv-reviews/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recheck */
+        post: operations["recheck_api_v1_cv_reviews_recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cv-reviews/{review_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Review */
+        get: operations["get_review_api_v1_cv_reviews__review_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Review */
+        delete: operations["delete_review_api_v1_cv_reviews__review_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cv-reviews/{review_id}/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pdf Layout
+         * @description Where each block sits in the original PDF (404 ``cv_no_pdf`` for DOCX/text uploads).
+         */
+        get: operations["pdf_layout_api_v1_cv_reviews__review_id__layout_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cv-reviews/{review_id}/pages/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pdf Page */
+        get: operations["pdf_page_api_v1_cv_reviews__review_id__pages__page__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/coach/conversations": {
         parameters: {
             query?: never;
@@ -2355,6 +2448,75 @@ export interface components {
              */
             salary?: string | null;
         };
+        /**
+         * Block
+         * @description One line of the CV: the anchor of a comment. Also the (validated) input of an edited CV.
+         */
+        Block: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "heading" | "bullet" | "text";
+            /**
+             * Section
+             * @enum {string}
+             */
+            section: "header" | "summary" | "experience" | "projects" | "skills" | "education" | "other";
+            /** Text */
+            text: string;
+        };
+        /**
+         * BlockComment
+         * @description Guided decoding fills fields in this order: the basis first, the rating last.
+         */
+        BlockComment: {
+            /**
+             * Block Id
+             * @description Id of the reviewed block, e.g. b12.
+             */
+            block_id: string;
+            /**
+             * Criterion
+             * @description The rubric point this comment is based on.
+             * @enum {string}
+             */
+            criterion: "impact.metric" | "impact.outcome" | "scope.ownership" | "scope.level_fit" | "stack.named" | "projects.depth" | "skills.evidence" | "structure.format" | "language.concise" | "progression.growth" | "credibility.links";
+            /**
+             * Citations
+             * @description Exact quotes this comment rests on (empty if none).
+             */
+            citations: components["schemas"]["Quote"][];
+            /**
+             * Why
+             * @description Concrete reason, naming what in the quotes meets or misses the criterion.
+             */
+            why: string;
+            /**
+             * Improve
+             * @description How to improve it; null when rating is good.
+             */
+            improve: string | null;
+            /**
+             * Rewrite
+             * @description Rewrite keeping the original facts, [X%] for missing numbers; null if none.
+             */
+            rewrite: string | null;
+            /**
+             * Rating
+             * @enum {string}
+             */
+            rating: "good" | "moderate" | "poor";
+            /**
+             * Source
+             * @description Set by code: never fill.
+             * @default ai
+             * @enum {string}
+             */
+            source: "ai" | "rule";
+        };
         /** BlockEditIn */
         BlockEditIn: {
             /** Text */
@@ -2663,12 +2825,104 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * CvReviewIn
+         * @description A document to review, or (re-evaluate) a parent review plus the edited blocks.
+         */
+        CvReviewIn: {
+            /** Document Id */
+            document_id?: string | null;
+            /** Parent Review Id */
+            parent_review_id?: string | null;
+            /** Blocks */
+            blocks?: components["schemas"]["Block"][] | null;
+            /**
+             * Track
+             * @enum {string}
+             */
+            track: "backend" | "frontend" | "fullstack" | "data" | "devops" | "ml" | "mobile";
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "intern" | "junior" | "mid" | "senior" | "staff";
+        };
+        /** CvReviewListItem */
+        CvReviewListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Document Id */
+            document_id: string | null;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Track */
+            track: string;
+            /** Level */
+            level: string;
+            /** Score */
+            score: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** CvReviewOut */
+        CvReviewOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Document Id */
+            document_id: string | null;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Track */
+            track: string;
+            /** Level */
+            level: string;
+            /** Score */
+            score: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            data: components["schemas"]["ReviewData"];
+            /** Schema Version */
+            schema_version: number;
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: string;
+        };
         /** DayCount */
         DayCount: {
             /** Day */
             day: string;
             /** Count */
             count: number;
+        };
+        /** Dimension */
+        Dimension: {
+            /** Score */
+            score: number;
+            /** Weight */
+            weight: number;
+            /**
+             * Reason
+             * @description Why this score (model-scored dimensions).
+             */
+            reason?: string | null;
+            /**
+             * Block Ids
+             * @description Blocks this score is based on.
+             */
+            block_ids?: string[];
         };
         /** DocumentListItem */
         DocumentListItem: {
@@ -3608,6 +3862,16 @@ export interface components {
              */
             expires_at: string;
         };
+        /** LlmSummary */
+        LlmSummary: {
+            /** Strengths */
+            strengths: components["schemas"]["Strength"][];
+            /**
+             * Top Fixes
+             * @description Block ids, most important first.
+             */
+            top_fixes: string[];
+        };
         /** ManualJobIn */
         ManualJobIn: {
             /**
@@ -3664,6 +3928,11 @@ export interface components {
              * @default false
              */
             helpers_enabled: boolean;
+            /**
+             * Cv Review Enabled
+             * @default false
+             */
+            cv_review_enabled: boolean;
             session: components["schemas"]["SessionPolicyOut"];
         };
         /** MessageIn */
@@ -3833,6 +4102,36 @@ export interface components {
              * @default []
              */
             fields: components["schemas"]["OutputField"][];
+        };
+        /** PdfLayoutOut */
+        PdfLayoutOut: {
+            /** Ratios */
+            ratios: number[];
+            /** Boxes */
+            boxes: {
+                [key: string]: components["schemas"]["PdfLine"][];
+            };
+        };
+        /**
+         * PdfLine
+         * @description One printed line of a block in the original PDF; x, y, w, h are fractions of page ``p``
+         *     (0-based, origin top-left); ``s..e`` is the span of the block text on this line.
+         */
+        PdfLine: {
+            /** P */
+            p: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** W */
+            w: number;
+            /** H */
+            h: number;
+            /** S */
+            s: number;
+            /** E */
+            e: number;
         };
         /** PdfLinkOut */
         PdfLinkOut: {
@@ -4064,6 +4363,16 @@ export interface components {
             /** Notes */
             notes: string[];
         };
+        /**
+         * Quote
+         * @description A passage of the CV a comment rests on: ``quote`` is an exact substring of block ``block_id``.
+         */
+        Quote: {
+            /** Block Id */
+            block_id: string;
+            /** Quote */
+            quote: string;
+        };
         /** RadarResultOut */
         RadarResultOut: {
             /**
@@ -4279,6 +4588,37 @@ export interface components {
              */
             category?: string | null;
         };
+        /** RecheckIn */
+        RecheckIn: {
+            /** Blocks */
+            blocks: components["schemas"]["Block"][];
+            /**
+             * Track
+             * @enum {string}
+             */
+            track: "backend" | "frontend" | "fullstack" | "data" | "devops" | "ml" | "mobile";
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "intern" | "junior" | "mid" | "senior" | "staff";
+        };
+        /** RecheckOut */
+        RecheckOut: {
+            /**
+             * Signals
+             * @description Rule tags per block id.
+             */
+            signals: {
+                [key: string]: string[];
+            };
+            /** Dimensions */
+            dimensions: {
+                [key: string]: number;
+            };
+            /** Score */
+            score: number;
+        };
         /**
          * Recipient
          * @description Taken from the job posting.
@@ -4375,6 +4715,27 @@ export interface components {
             task_id: string;
             /** Status Url */
             status_url: string;
+        };
+        /** ReviewData */
+        ReviewData: {
+            /** Blocks */
+            blocks: components["schemas"]["Block"][];
+            /** Comments */
+            comments: components["schemas"]["BlockComment"][];
+            /** Dimensions */
+            dimensions: {
+                [key: string]: components["schemas"]["Dimension"];
+            };
+            summary: components["schemas"]["LlmSummary"];
+            /** Pages */
+            pages: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Grounding Rate */
+            grounding_rate: number;
         };
         /** RotateIn */
         RotateIn: {
@@ -4800,6 +5161,16 @@ export interface components {
             started_at: string | null;
             /** Finished At */
             finished_at: string | null;
+        };
+        /** Strength */
+        Strength: {
+            /** Text */
+            text: string;
+            /**
+             * Block Id
+             * @description Block that shows it; null if none.
+             */
+            block_id: string | null;
         };
         /** TaskAccepted */
         TaskAccepted: {
@@ -7708,6 +8079,366 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PdfLinkOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reviews_api_v1_cv_reviews_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvReviewListItem"][];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_review_api_v1_cv_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CvReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAccepted"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    recheck_api_v1_cv_reviews_recheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecheckIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecheckOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    get_review_api_v1_cv_reviews__review_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CvReviewOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_review_api_v1_cv_reviews__review_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pdf_layout_api_v1_cv_reviews__review_id__layout_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PdfLayoutOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pdf_page_api_v1_cv_reviews__review_id__pages__page__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                review_id: string;
+                page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
                 };
             };
             /** @description Authentication is required or the provided credentials are invalid. */

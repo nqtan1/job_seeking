@@ -1,0 +1,33 @@
+Mira Voskuijlen
+Junior Backend Developer
+mira.voskuijlen@example.test | github.com/mvoskuijlen-demo | Rotterdam, NL
+
+SUMMARY
+Motivated junior developer who is passionate about backend and eager to learn new technologies.
+
+EDUCATION
+BSc Computer Science, Delmar Institute of Technology, 2021 - 2024
+
+PROJECTS
+Bookshelf API
+- Built a REST API with Flask and SQLite for managing a personal book collection
+- Worked on authentication using JWT tokens
+- Helped with writing unit tests for the endpoints
+- Used Docker to run the app locally
+TaskPilot
+- Made a task manager web app with Django and PostgreSQL
+- Was responsible for the database schema and the admin panel
+- Deployed the app on a small VPS using Nginx and Gunicorn
+- Implemented rate limiting with Redis, cutting abusive requests during a class demo from 400 to under 20 per minute
+WeatherBot
+- Created a Telegram bot that sends the weather forecast every morning
+- Tried out cron jobs and a simple queue
+
+EXPERIENCE
+Software Engineering Intern, Brightfield Logistics, Jun 2023 - Sep 2023
+- Assisted the team with bug fixes in a Python service
+- Participated in code reviews and daily standups
+- Wrote 12 unit tests with pytest for the shipment tracking module
+
+SKILLS
+Python, Flask, Django, SQL, PostgreSQL, Redis, Docker, Git, Linux, REST

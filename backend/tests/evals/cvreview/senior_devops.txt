@@ -1,0 +1,31 @@
+Ingrid Palavicini
+Senior Site Reliability Engineer
+ingrid.palavicini@example.test | linkedin.com/in/ipalavicini-demo | Lisbon, PT
+
+SUMMARY
+Results-driven, dynamic SRE and thought leader with a proven track record of synergizing cloud-native solutions and driving digital transformation.
+
+EXPERIENCE
+Senior SRE, Halcyon Payments Cloud, Jan 2020 - Present
+- Led the migration of 90 services from VM-based deploys to Kubernetes across 3 regions, achieving 99.95% availability
+- Defined SLOs and error budgets for 40 services and cut paging incidents by 55% in 12 months
+- Owned the Terraform module library used by 14 teams, replacing hand-built infrastructure
+- Reduced CI pipeline time from 38 to 11 minutes by introducing remote caching and test sharding
+- Spearheaded innovative best-practice initiatives to leverage cutting-edge DevOps paradigms
+- Passionate team player and go-to person for all things cloud
+- Ran blameless postmortems for 22 incidents and tracked action items to closure
+- Built a cost dashboard that exposed 280k USD of yearly idle spend
+SRE, Orbit Streaming Ltd, Feb 2016 - Dec 2019
+- Managed Linux servers and monitoring with Nagios and Prometheus
+- Wrote Bash scripts to automate deployments
+- Introduced Prometheus and Grafana alerting that replaced 200 noisy Nagios checks
+- Mentored 5 engineers in on-call practices
+
+SKILLS
+Kubernetes, Terraform, AWS, GCP, Prometheus, Grafana, Jenkins, GitHub Actions, Git, Linux, Bash, Python, Microsoft Office, Docker, Excel
+
+EDUCATION
+BEng Computer Engineering, Tagus Polytechnic, 2011 - 2015
+
+CERTIFICATIONS
+CKA, AWS Solutions Architect Professional

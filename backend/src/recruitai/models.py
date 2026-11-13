@@ -8,6 +8,7 @@ from recruitai.modules.agents import models as _agents
 from recruitai.modules.applications import models as _applications
 from recruitai.modules.candidates import models as _candidates
 from recruitai.modules.coach import models as _coach
+from recruitai.modules.cvreview import models as _cvreview
 from recruitai.modules.documents import models as _documents
 from recruitai.modules.identity import models as _identity
 from recruitai.modules.jobs import models as _jobs
@@ -20,6 +21,7 @@ __all__ = [
     "_applications",
     "_candidates",
     "_coach",
+    "_cvreview",
     "_documents",
     "_identity",
     "_jobs",

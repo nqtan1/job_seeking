@@ -2,13 +2,13 @@
 Any accepted upload becomes ONE trimmed transparent RGBA PNG; SVG is rejected."""
 
 import io
-import threading
 from dataclasses import dataclass
 
-import pypdfium2  # type: ignore[import-untyped]
+import pypdfium2
 from PIL import Image, ImageFilter, ImageOps
 
 from recruitai.core.errors import ValidationFailed
+from recruitai.core.pdfium import lock as _pdfium_lock
 from recruitai.modules.documents.signature_spec import (
     MAX_SIDE_PX,
     SIDEWAYS_RATIO,
@@ -26,7 +26,6 @@ MAX_PDF_PAGES = 20
 PDF_RENDER_SIDE_PX = 3000
 BLANK_INK_RATIO = 0.002
 _INK_ALPHA = 40  # alpha above this counts as ink (bounding box, ink ratio)
-_pdfium_lock = threading.Lock()  # pdfium is not thread-safe
 
 _BAD_TYPE = "Unsupported or unrecognized file type."
 _BAD_FILE = "The file could not be read as an image."

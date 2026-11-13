@@ -3,6 +3,7 @@ import type { helpers } from './messages/helpers'
 import { admin } from './messages/admin'
 import { candidate } from './messages/candidate'
 import { coach } from './messages/coach'
+import { cvreview } from './messages/cvreview'
 import { common } from './messages/common'
 import { jobs } from './messages/jobs'
 import { letters } from './messages/letters'
@@ -30,6 +31,7 @@ const modules = [
   settings,
   admin,
   signature,
+  cvreview,
 ]
 /** Messages that load with their feature (see `registerMessages`): typed here, shipped there. */
 type LazyModules = typeof helpers

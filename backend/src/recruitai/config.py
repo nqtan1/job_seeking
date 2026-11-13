@@ -20,6 +20,7 @@ AGENTS = (
     "job_query",
     "interview_prep",
     "fit",
+    "cv_review",
     "letter",
     "letter_assist",
     "coach",
@@ -145,6 +146,8 @@ class Settings(BaseSettings):
     # Helpers and flows (ADR 0031): off = every /agents and /flows route answers 404 and the menu
     # entry is hidden; runs already queued still finish. The rollout switch, one per environment.
     helpers_enabled: bool = False
+    # CV review for technical roles (docs/design/cv-review-technical.md): off = all its routes answer 503 cv_review_disabled.
+    cv_review_enabled: bool = False
     coach_max_steps: int = Field(5, ge=1, le=8)
     coach_turn_timeout_s: float = Field(50.0, gt=0)
 

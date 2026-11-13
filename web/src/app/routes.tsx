@@ -114,6 +114,13 @@ export const routes: RouteObject[] = [
               import('@/features/admin/AdminAiPage').then((m) => ({ Component: m.AdminAiPage })),
           },
           {
+            path: '/cv-review/:reviewId?',
+            lazy: () =>
+              import('@/features/cv-review/CvReviewPage').then((m) => ({
+                Component: m.CvReviewPage,
+              })),
+          },
+          {
             path: '/letters',
             lazy: () =>
               import('@/features/letters/LettersPage').then((m) => ({ Component: m.LettersPage })),

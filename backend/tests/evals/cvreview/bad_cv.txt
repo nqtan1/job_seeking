@@ -1,0 +1,32 @@
+Dennis Okonkwo-Reyes
+Software Developer / Programmer / IT Specialist
+phone 555-0100
+
+OBJECTIVE
+Seeking challenging position in a dynamic company where I can utilize my skills and grow.
+
+EXPERIENCE
+Programmer, Lumen Soft Solutions, 2015 - 2017
+- Responsible for coding
+- Duties included fixing bugs and attending meetings
+- Worked on many projects using various technologies
+- Team player with good communication skills
+IT Specialist, Vantage Office Systems, 2020 - 2021
+- Responsible for maintaining the company website
+- Helped users with computer problems
+- Responsible for databases
+Software Developer, Pinecrest Digital, 2021 - 2022
+- Developed software for clients
+- Participated in agile process
+- Tasks included testing and documentation
+- Various other duties as assigned
+- Used Microsoft Office daily
+
+SKILLS
+Java, C++, C#, Python, JavaScript, PHP, Ruby, Go, Rust, React, Angular, Vue, Node, Spring, Django, .NET, SQL, NoSQL, MongoDB, Oracle, AWS, Azure, GCP, Docker, Kubernetes, AI, ML, Big Data, Blockchain, Microsoft Word
+
+EDUCATION
+Bachelor degree, Computer Science
+
+HOBBIES
+Reading, football, travelling, music

@@ -68,6 +68,7 @@ async def read_me(
         language=result.language,
         job_views=result.job_views,
         helpers_enabled=settings.helpers_enabled,
+        cv_review_enabled=settings.cv_review_enabled,
         session=SessionPolicyOut(
             idle_minutes=settings.session_idle_minutes,
             idle_minutes_remembered=settings.session_idle_minutes_remembered,

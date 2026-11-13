@@ -44,6 +44,7 @@ class MeResponse(BaseModel):
     language: Language = "en"
     job_views: JobViews = []
     helpers_enabled: bool = False
+    cv_review_enabled: bool = False
     session: SessionPolicyOut
 
 

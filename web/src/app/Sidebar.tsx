@@ -17,7 +17,7 @@ import { RadarBadge } from '@/features/radar/RadarBadge'
 import { useMe, useSetLanguage } from '@/features/settings/api'
 import { cn } from 'cn'
 import { AccountMenu } from './AccountMenu'
-import { HELPER_PAGES, NAV } from './nav'
+import { CV_PAGE, HELPER_PAGES, NAV } from './nav'
 
 const row = 'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors'
 const active = ({ isActive }: { isActive: boolean }) =>
@@ -148,15 +148,17 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?
         <Label collapsed={collapsed}>{t('nav.new_chat')}</Label>
       </NavLink>
       <nav aria-label={t('nav.main')} className="space-y-0.5 pt-2">
-        {NAV.filter(({ to }) => !HELPER_PAGES.includes(to) || me?.helpers_enabled).map(
-          ({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={active} title={t(label)}>
-              <Icon className="size-4 shrink-0" />
-              <Label collapsed={collapsed}>{t(label)}</Label>
-              {to === '/radar' && <RadarBadge collapsed={collapsed} />}
-            </NavLink>
-          ),
-        )}
+        {NAV.filter(
+          ({ to }) =>
+            (!HELPER_PAGES.includes(to) || me?.helpers_enabled) &&
+            (to !== CV_PAGE || me?.cv_review_enabled),
+        ).map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} className={active} title={t(label)}>
+            <Icon className="size-4 shrink-0" />
+            <Label collapsed={collapsed}>{t(label)}</Label>
+            {to === '/radar' && <RadarBadge collapsed={collapsed} />}
+          </NavLink>
+        ))}
         {isAdmin && (
           <NavLink to="/admin" className={active} title={t('nav.admin')}>
             <LayoutDashboard className="size-4 shrink-0" />

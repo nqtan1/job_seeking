@@ -1,10 +1,12 @@
 helpers_enabled: true
+cv_review_enabled: true
 agents:
   cv_extract: {provider: gemini}
   job_extract: {provider: gemini}
   job_query: {provider: gemini}
   interview_prep: {provider: gemini}
   fit: {provider: gemini}
+  cv_review: {provider: gemini}
   letter: {provider: gemini}
   letter_assist: {provider: gemini}
   coach: {provider: gemini}

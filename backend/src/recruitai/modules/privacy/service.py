@@ -23,6 +23,7 @@ from recruitai.modules.agents.helpers import service as agents
 from recruitai.modules.applications import service as applications
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.coach import service as coach
+from recruitai.modules.cvreview import service as cvreview
 from recruitai.modules.documents import service as documents
 from recruitai.modules.identity import service as identity
 from recruitai.modules.jobs import service as jobs
@@ -87,6 +88,7 @@ async def build_export(
         letters,
         applications,
         coach,
+        cvreview,
         documents,
         radar,
         agents,

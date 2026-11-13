@@ -1,0 +1,32 @@
+Tomasz Whitcombe
+Data Engineer
+tomasz.whitcombe@example.test | linkedin.com/in/twhitcombe-demo | github.com/twhitcombe-demo | Leeds, UK
+
+SUMMARY
+Data engineer with 4 years of experience building batch and streaming pipelines on AWS and Spark for retail analytics.
+
+EXPERIENCE
+Data Engineer, Northgate Retail Analytics, Mar 2022 - Present
+- Migrated 38 legacy cron-based ETL jobs to Airflow, reducing failed nightly runs from 15% to 2%
+- Built a Kafka and Spark Structured Streaming pipeline processing about 4 million events per day for the pricing team
+- Designed a dbt model layer of 120 models with tests, adopted by 3 analytics squads
+- Cut Redshift monthly cost by 31% by rewriting the five most expensive queries and adding sort keys
+- Worked on improving data quality across the platform
+- Responsible for various reporting tasks and ad hoc requests
+- Collaborated with stakeholders to deliver data solutions
+- Mentored 2 junior engineers on SQL performance tuning
+Junior Data Engineer, Kestrel Telecom Data, Aug 2020 - Feb 2022
+- Maintained Python ingestion scripts loading call detail records into PostgreSQL
+- Helped with the migration to a cloud data warehouse
+- Wrote data validation checks with Great Expectations covering 25 tables
+
+PROJECTS
+Open-source: lakehouse-lint
+- Wrote a small CLI that checks Parquet schemas for drift, 140 GitHub stars
+- Improved performance of the tool
+
+EDUCATION
+MSc Data Science, Pennine University, 2018 - 2020
+
+SKILLS
+Python, SQL, Spark, Kafka, Airflow, dbt, AWS (S3, Glue, Redshift), Terraform, Docker

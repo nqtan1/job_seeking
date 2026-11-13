@@ -51,12 +51,16 @@ async def test_the_zip_has_every_module_and_the_original_files(
         "account.json", "profile.json", "jobs.json", "fit_analyses.json", "letters.json",
         "letter_versions.json", "applications.json", "application_events.json",
         "coach_conversations.json", "coach_messages.json", "documents.json", "ai_usage.json",
-        "radar_searches.json", "radar_results.json", "radar_runs.json", "agents.json", "agent_versions.json", "flows.json", "flow_runs.json", "flow_schedules.json", "email_recipients.json", "connections.json", "manifest.json",
+        "radar_searches.json", "radar_results.json", "radar_runs.json", "agents.json", "agent_versions.json", "flows.json", "flow_runs.json", "flow_schedules.json", "email_recipients.json", "connections.json", "cv_reviews.json", "manifest.json",
     } <= names  # fmt: skip
     read = lambda n: json.loads(archive.read(n))
     assert read("account.json")["user"]["email"] == "alpha@example.test"
     assert read("profile.json")[0]["name"] == "Lucas Martel"
     assert read("fit_analyses.json")[0]["data"]["summary"] == "fit-alpha"
+    assert (
+        read("cv_reviews.json")[0]["data"]["summary"]["strengths"][0]["text"]
+        == "cv-alpha"
+    )
     assert len(read("letter_versions.json")) == 2  # generated + the edit
     assert read("letters.json")[0]["content"]["opening"] == "edited-alpha"
     assert read("applications.json")[0]["notes"] == "notes-alpha"

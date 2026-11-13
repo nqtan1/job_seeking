@@ -28,6 +28,7 @@ from recruitai.modules.agents.helpers.router import router as helpers_router
 from recruitai.modules.applications.router import router as applications_router
 from recruitai.modules.candidates.router import router as candidates_router
 from recruitai.modules.coach.router import router as coach_router
+from recruitai.modules.cvreview.router import router as cvreview_router
 from recruitai.modules.documents.router import router as documents_router
 from recruitai.modules.documents.router import signature_router
 from recruitai.modules.identity.router import admin_router
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router)
     app.include_router(matching_router)
     app.include_router(letters_router)
+    app.include_router(cvreview_router)
     app.include_router(coach_router)
     app.include_router(applications_router)
     app.include_router(privacy_router)

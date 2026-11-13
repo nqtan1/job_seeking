@@ -47,7 +47,7 @@ module = "firebase_admin.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["google.cloud.*", "google.api_core.*"]
+module = ["google.cloud.*", "google.api_core.*", "pypdfium2"]
 ignore_missing_imports = true
 
 [tool.importlinter]
@@ -117,7 +117,7 @@ forbidden_modules = ["recruitai.modules.agents.flows", "recruitai.modules.agents
 [[tool.importlinter.contracts]]
 name = "outside code reaches agents only through its public entry points"
 type = "forbidden"
-source_modules = ["recruitai.modules.applications", "recruitai.modules.candidates", "recruitai.modules.coach", "recruitai.modules.documents", "recruitai.modules.identity", "recruitai.modules.jobs", "recruitai.modules.letters", "recruitai.modules.matching", "recruitai.modules.privacy", "recruitai.modules.radar", "recruitai.main", "recruitai.worker", "recruitai.models"]
+source_modules = ["recruitai.modules.applications", "recruitai.modules.candidates", "recruitai.modules.coach", "recruitai.modules.cvreview", "recruitai.modules.documents", "recruitai.modules.identity", "recruitai.modules.jobs", "recruitai.modules.letters", "recruitai.modules.matching", "recruitai.modules.privacy", "recruitai.modules.radar", "recruitai.main", "recruitai.worker", "recruitai.models"]
 forbidden_modules = ["recruitai.modules.agents.deps", "recruitai.modules.agents.base", "recruitai.modules.agents.versioning", "recruitai.modules.agents.flows.engine", "recruitai.modules.agents.flows.graph", "recruitai.modules.agents.flows.repository", "recruitai.modules.agents.flows.schedules", "recruitai.modules.agents.flows.schemas", "recruitai.modules.agents.flows.starters", "recruitai.modules.agents.helpers.repository", "recruitai.modules.agents.helpers.runner", "recruitai.modules.agents.helpers.schemas", "recruitai.modules.agents.contacts.service", "recruitai.modules.agents.contacts.repository", "recruitai.modules.agents.connections.service", "recruitai.modules.agents.connections.repository", "recruitai.modules.agents.blocks.catalogue", "recruitai.modules.agents.blocks.tools"]
 allow_indirect_imports = true
 [tool.pytest.ini_options]

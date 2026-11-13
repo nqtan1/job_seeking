@@ -1,0 +1,474 @@
+{
+  "junior_backend": {
+    "file": "junior_backend.txt",
+    "track": "backend",
+    "level": "junior",
+    "band": [
+      35,
+      62
+    ],
+    "must_flag": [
+      {
+        "quote": "Worked on authentication using JWT tokens",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "weak verb",
+          "vague",
+          "outcome",
+          "metric"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Helped with writing unit tests for the endpoints",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "helped",
+          "ownership",
+          "metric",
+          "coverage"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Motivated junior developer who is passionate about backend and eager to learn new technologies.",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "generic",
+          "buzzword",
+          "specific",
+          "stack"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "language.concise",
+          "scope.level_fit"
+        ]
+      },
+      {
+        "quote": "Assisted the team with bug fixes in a Python service",
+        "expected_rating": "moderate",
+        "reason_keywords": [
+          "assisted",
+          "scope",
+          "impact",
+          "number"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.level_fit",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Tried out cron jobs and a simple queue",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "tried",
+          "vague",
+          "outcome"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership",
+          "skills.evidence",
+          "stack.named"
+        ]
+      }
+    ],
+    "must_praise": [
+      {
+        "quote": "Implemented rate limiting with Redis, cutting abusive requests during a class demo from 400 to under 20 per minute",
+        "expected_rating": "good"
+      },
+      {
+        "quote": "Wrote 12 unit tests with pytest for the shipment tracking module",
+        "expected_rating": "good"
+      }
+    ],
+    "must_not_invent": [
+      "99",
+      "50",
+      "10000",
+      "35",
+      "70",
+      "200"
+    ]
+  },
+  "mid_data_engineer": {
+    "file": "mid_data_engineer.txt",
+    "track": "data",
+    "level": "mid",
+    "band": [
+      60,
+      82
+    ],
+    "must_flag": [
+      {
+        "quote": "Worked on improving data quality across the platform",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "vague",
+          "metric",
+          "how",
+          "worked on"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Responsible for various reporting tasks and ad hoc requests",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "responsible",
+          "duty",
+          "various",
+          "outcome"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Collaborated with stakeholders to deliver data solutions",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "generic",
+          "stakeholders",
+          "specific",
+          "outcome"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "language.concise"
+        ]
+      },
+      {
+        "quote": "Improved performance of the tool",
+        "expected_rating": "moderate",
+        "reason_keywords": [
+          "how much",
+          "metric",
+          "vague",
+          "improved"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome"
+        ]
+      },
+      {
+        "quote": "Helped with the migration to a cloud data warehouse",
+        "expected_rating": "moderate",
+        "reason_keywords": [
+          "helped",
+          "ownership",
+          "scope"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      }
+    ],
+    "must_praise": [
+      {
+        "quote": "Migrated 38 legacy cron-based ETL jobs to Airflow, reducing failed nightly runs from 15% to 2%",
+        "expected_rating": "good"
+      },
+      {
+        "quote": "Cut Redshift monthly cost by 31% by rewriting the five most expensive queries and adding sort keys",
+        "expected_rating": "good"
+      },
+      {
+        "quote": "Built a Kafka and Spark Structured Streaming pipeline processing about 4 million events per day for the pricing team",
+        "expected_rating": "good"
+      }
+    ],
+    "must_not_invent": [
+      "95",
+      "60%",
+      "10 million",
+      "500",
+      "99.9",
+      "40%"
+    ]
+  },
+  "senior_devops": {
+    "file": "senior_devops.txt",
+    "track": "devops",
+    "level": "senior",
+    "band": [
+      62,
+      85
+    ],
+    "must_flag": [
+      {
+        "quote": "Results-driven, dynamic SRE and thought leader with a proven track record of synergizing cloud-native solutions and driving digital transformation.",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "buzzword",
+          "generic",
+          "cliche",
+          "specific"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "language.concise"
+        ]
+      },
+      {
+        "quote": "Spearheaded innovative best-practice initiatives to leverage cutting-edge DevOps paradigms",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "buzzword",
+          "vague",
+          "no outcome",
+          "metric"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "language.concise"
+        ]
+      },
+      {
+        "quote": "Passionate team player and go-to person for all things cloud",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "cliche",
+          "generic",
+          "claim",
+          "evidence"
+        ],
+        "expected_criteria": [
+          "credibility.links",
+          "impact.outcome",
+          "language.concise"
+        ]
+      },
+      {
+        "quote": "Managed Linux servers and monitoring with Nagios and Prometheus",
+        "expected_rating": "moderate",
+        "reason_keywords": [
+          "scope",
+          "scale",
+          "how many",
+          "metric"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.level_fit",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Wrote Bash scripts to automate deployments",
+        "expected_rating": "moderate",
+        "reason_keywords": [
+          "scale",
+          "impact",
+          "time saved",
+          "metric"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.level_fit",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Microsoft Office, Docker, Excel",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "basic",
+          "irrelevant",
+          "noise",
+          "skills"
+        ],
+        "expected_criteria": [
+          "skills.evidence",
+          "stack.named"
+        ]
+      }
+    ],
+    "must_praise": [
+      {
+        "quote": "Led the migration of 90 services from VM-based deploys to Kubernetes across 3 regions, achieving 99.95% availability",
+        "expected_rating": "good"
+      },
+      {
+        "quote": "Reduced CI pipeline time from 38 to 11 minutes by introducing remote caching and test sharding",
+        "expected_rating": "good"
+      },
+      {
+        "quote": "Defined SLOs and error budgets for 40 services and cut paging incidents by 55% in 12 months",
+        "expected_rating": "good"
+      }
+    ],
+    "must_not_invent": [
+      "99.99",
+      "500",
+      "70%",
+      "1 million",
+      "60",
+      "10 years"
+    ]
+  },
+  "bad_cv": {
+    "file": "bad_cv.txt",
+    "track": "backend",
+    "level": "mid",
+    "band": [
+      5,
+      40
+    ],
+    "must_flag": [
+      {
+        "quote": "Responsible for coding",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "duty",
+          "responsible",
+          "outcome",
+          "no result"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Duties included fixing bugs and attending meetings",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "duty",
+          "meetings",
+          "outcome",
+          "metric"
+        ],
+        "expected_criteria": [
+          "impact.metric",
+          "impact.outcome",
+          "scope.ownership"
+        ]
+      },
+      {
+        "quote": "Worked on many projects using various technologies",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "vague",
+          "which",
+          "specific",
+          "stack"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "projects.depth",
+          "stack.named"
+        ]
+      },
+      {
+        "quote": "Team player with good communication skills",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "cliche",
+          "generic",
+          "evidence"
+        ],
+        "expected_criteria": [
+          "credibility.links",
+          "impact.outcome",
+          "language.concise"
+        ]
+      },
+      {
+        "quote": "Seeking challenging position in a dynamic company where I can utilize my skills and grow.",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "objective",
+          "generic",
+          "employer",
+          "value"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "language.concise",
+          "structure.format"
+        ]
+      },
+      {
+        "quote": "Java, C++, C#, Python, JavaScript, PHP, Ruby, Go, Rust, React, Angular, Vue, Node, Spring, Django, .NET, SQL, NoSQL, MongoDB, Oracle, AWS, Azure, GCP, Docker, Kubernetes, AI, ML, Big Data, Blockchain, Microsoft Word",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "keyword",
+          "too many",
+          "credib",
+          "unsupported",
+          "grouped"
+        ],
+        "expected_criteria": [
+          "skills.evidence",
+          "stack.named"
+        ]
+      },
+      {
+        "quote": "Developed software for clients",
+        "expected_rating": "poor",
+        "reason_keywords": [
+          "vague",
+          "what",
+          "stack",
+          "impact"
+        ],
+        "expected_criteria": [
+          "impact.outcome",
+          "projects.depth",
+          "stack.named"
+        ]
+      },
+      {
+        "quote": "Bachelor degree, Computer Science",
+        "expected_rating": "moderate",
+        "reason_keywords": [
+          "missing",
+          "university",
+          "year",
+          "date"
+        ],
+        "expected_criteria": [
+          "credibility.links",
+          "structure.format"
+        ]
+      }
+    ],
+    "must_praise": [],
+    "must_not_invent": [
+      "30%",
+      "50%",
+      "1000",
+      "99",
+      "2018",
+      "2019",
+      "10 years"
+    ]
+  }
+}
