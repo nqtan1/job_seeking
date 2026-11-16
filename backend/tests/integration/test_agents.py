@@ -191,6 +191,9 @@ async def test_context_sources_exclude_identity_and_stay_in_the_org(
         {"inputs": [{"name": "a", "label": "x\u0000y"}]},
         {"instructions": "x" * 4001},
         {"context_sources": ["profile", "profile"]},
+        {"tools": ["send_email"]},  # chat=False: acts outside the app
+        {"tools": ["run_shell"]},
+        {"tools": ["web_search", "web_search"]},
     ],
 )
 async def test_invalid_specs_are_refused(client: httpx.AsyncClient, ada, patch):

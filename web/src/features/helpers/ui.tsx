@@ -2,9 +2,8 @@ import { Check, ChevronRight, Copy, type LucideIcon } from 'lucide-react'
 import { type ReactNode, type RefObject, useEffect, useState } from 'react'
 import { cn } from 'cn'
 import { Link, useBlocker } from 'react-router'
-import { useI18n, useT } from '@/i18n'
-import { ConfirmButton } from '@/components/ConfirmButton'
-import { LIFT, relTime } from './lib'
+import { useT } from '@/i18n'
+import { LIFT } from './lib'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useJobs } from '@/features/job-search/api'
@@ -73,57 +72,27 @@ export function ChoiceCard({
 /** A helper or a flow in the gallery: the whole card opens it (stretched link), the quiet
  *  archive action sits above the link. `lead` is the avatar or icon, `children` the detail line. */
 export function ItemCard({
-  to,
   title,
   lead,
-  version,
-  updatedAt,
-  archiving,
-  onArchive,
+  footer,
   children,
 }: {
-  to: string
   title: string
   lead: ReactNode
-  version: number
-  updatedAt: string
-  archiving: boolean
-  onArchive: (reset: () => void) => void
-  children: ReactNode
+  footer: ReactNode
+  children?: ReactNode
 }) {
-  const { t, locale } = useI18n()
   return (
-    <li
-      className={cn('relative flex flex-col gap-4 rounded-2xl border bg-card p-4 shadow-xs', LIFT)}
-    >
+    <li className={cn('flex flex-col gap-4 rounded-2xl border bg-card p-4 shadow-xs', LIFT)}>
       <div className="flex items-start gap-3">
         {lead}
-        <div className="min-w-0">
-          <Link
-            to={to}
-            className="block truncate font-semibold outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
-          >
-            {title}
-          </Link>
+        <div className="min-w-0 space-y-1">
+          <h3 className="truncate font-semibold">{title}</h3>
           {children}
         </div>
       </div>
-      <div className="mt-auto flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
-        <span className="rounded-full bg-muted px-2 py-0.5 font-medium tabular-nums">
-          v{version}
-        </span>
-        <span className="min-w-0 flex-1 truncate">
-          {t('helpers.ui.updated', { when: relTime(updatedAt, locale) })}
-        </span>
-        <ConfirmButton
-          variant="ghost"
-          className="relative z-10 text-muted-foreground"
-          label={t('helpers.archive')}
-          confirmLabel={t('helpers.archive_confirm')}
-          cancelLabel={t('helpers.cancel')}
-          pending={archiving}
-          onConfirm={onArchive}
-        />
+      <div className="mt-auto flex flex-wrap items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+        {footer}
       </div>
     </li>
   )

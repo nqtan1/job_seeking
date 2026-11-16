@@ -47,7 +47,12 @@ test('consent, withdrawal, step-up before export, and the idle sign-out', async 
   await signUp(page, false)
 
   // Consent: unticked, disabled until ticked, then radars are on.
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Radar' }).click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tools' }).click()
+  await page.getByRole('region', { name: 'Career' }).getByRole('link', { name: /^Jobs/ }).click()
+  await page
+    .getByRole('navigation', { name: 'Section' })
+    .getByRole('link', { name: 'Radar' })
+    .click()
   await page.getByRole('button', { name: 'Review and enable' }).click()
   const enable = page.getByRole('button', { name: 'Enable background radars' })
   await expect(page.getByRole('checkbox', { name: /I agree/ })).not.toBeChecked()

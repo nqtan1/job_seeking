@@ -46,9 +46,10 @@ export const criterion = (id: Criterion) => {
   return { dim, ...(SOURCE[dim] ?? THI) }
 }
 
-export const useReviews = () =>
+export const useReviews = (enabled = true) =>
   useQuery({
     queryKey: ['cv-reviews'],
+    enabled,
     queryFn: async () => unwrap(await api.GET('/api/v1/cv-reviews')),
   })
 

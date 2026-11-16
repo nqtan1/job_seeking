@@ -3,6 +3,7 @@ it cannot reach a web search. Character caps stand in for tokens (about 4 charac
 
 from typing import Any
 
+from recruitai.ai import text
 from recruitai.ai.text import compact_json
 
 JOB_CHARS = 10_000
@@ -13,9 +14,7 @@ _TRUNCATED = " […truncated]"
 _IDENTITY_KEYS = ("personal_info", "references")
 
 
-def fence(text: str) -> str:
-    """Untrusted text goes between our markers: it must not be able to close one or open another."""
-    return text.replace("<", "‹").replace(">", "›")
+fence = text.fence
 
 
 def identity_free(profile: dict[str, Any]) -> dict[str, Any]:

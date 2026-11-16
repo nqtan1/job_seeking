@@ -1,15 +1,17 @@
 import '@/features/helpers/lib'
-import { Plus } from 'lucide-react'
+import { MessageCircle, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { cn } from 'cn'
 import { useI18n, useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Modal } from '@/components/Modal'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
-import { Button } from '@/components/ui/button'
-import { useAgents, useArchiveAgent, useCreateAgent } from './api'
+import { ConfirmButton } from '@/components/ConfirmButton'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { toolText, useTools } from '@/features/tools/api'
+import { useAgent, useAgents, useArchiveAgent, useCreateAgent } from './api'
 import { Avatar } from './Avatar'
 import { ItemCard } from './ui'
 import { LIFT } from './lib'
@@ -22,7 +24,7 @@ export function HelpersPage() {
   const [picking, setPicking] = useState(false)
   return (
     <Page
-      title={t('helpers.title')}
+      title={t('nav.agents')}
       actions={
         <Button size="sm" onClick={() => setPicking(true)}>
           <Plus data-icon="inline-start" />
@@ -47,12 +49,50 @@ function Tint({ palette, children }: { palette: number; children: React.ReactNod
   )
 }
 
+const COACH = avatarFromSeed('coach')
+const COACH_TOOLS = ['profile_read', 'job_lookup', 'fit_read', 'web_search'] // backend DEFAULT_TOOLS
+
+function ChatLink({ to, name }: { to: string; name: string }) {
+  const t = useT()
+  return (
+    <Link
+      to={to}
+      aria-label={`${t('helpers.chat')}: ${name}`}
+      className={buttonVariants({ variant: 'outline', size: 'sm' })}
+    >
+      <MessageCircle data-icon="inline-start" />
+      {t('helpers.chat')}
+    </Link>
+  )
+}
+
+/** The tools an agent may use in chat, by name. */
+function ToolChips({ ids }: { ids: string[] }) {
+  const t = useT()
+  if (!ids.length) return null
+  return (
+    <ul aria-label={t('nav.tools')} className="flex flex-wrap gap-1">
+      {ids.map((id) => (
+        <li key={id} className="rounded bg-muted px-1.5 text-xs leading-5">
+          {toolText(t, id, 'name')}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// ponytail: one detail request per card (the list has no spec); add tools to AgentOut if lists grow
+function AgentTools({ id }: { id: string }) {
+  return <ToolChips ids={useAgent(id).data?.spec.tools ?? []} />
+}
+
 function HelpersTab({ picking, onClose }: { picking: boolean; onClose: () => void }) {
   const { t } = useI18n()
   const navigate = useNavigate()
   const agents = useAgents()
   const create = useCreateAgent()
   const archive = useArchiveAgent()
+  const tools = useTools()
 
   const start = (name: string, description: string, spec: VersionSpec) =>
     create.mutate(
@@ -62,7 +102,7 @@ function HelpersTab({ picking, onClose }: { picking: boolean; onClose: () => voi
 
   const pick = (p: Pick) =>
     p === 'custom'
-      ? start(t('helpers.new_name'), '', localized(BLANK_SPEC, ['helpers.blank.input'], t))
+      ? start(t('helpers.new_name'), '', localized(BLANK_SPEC, ['helpers.fixed.notes'], t))
       : start(t(`helpers.role.${p}`), '', pickSpec(p))
 
   return (
@@ -82,9 +122,6 @@ function HelpersTab({ picking, onClose }: { picking: boolean; onClose: () => voi
               <span className="block font-medium">
                 {p === 'custom' ? t('helpers.pick.custom_title') : t(`helpers.role.${p}`)}
               </span>
-              <span className="block text-xs text-muted-foreground">
-                {t(`helpers.pick.about.${p}`)}
-              </span>
             </button>
           ))}
         </div>
@@ -92,35 +129,70 @@ function HelpersTab({ picking, onClose }: { picking: boolean; onClose: () => voi
           {t('helpers.cancel')}
         </Button>
       </Modal>
+      <ul aria-label={t('nav.agents')} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ItemCard
+          title={t('nav.coach')}
+          lead={
+            <Tint palette={COACH.palette}>
+              <Avatar spec={COACH} size={48} />
+            </Tint>
+          }
+          footer={<ChatLink to="/chat" name={t('nav.coach')} />}
+        >
+          <ToolChips
+            ids={(tools.data ?? []).filter((x) => COACH_TOOLS.includes(x.id)).map((x) => x.id)}
+          />
+        </ItemCard>
+        {agents.data?.map((a) => (
+          <ItemCard
+            key={a.id}
+            title={a.name}
+            lead={
+              <Tint palette={a.avatar.palette}>
+                <Avatar spec={a.avatar} size={48} />
+              </Tint>
+            }
+            footer={
+              <>
+                <ChatLink to={`/chat?agent=${a.id}`} name={a.name} />
+                <Link
+                  to={`/helpers/${a.id}`}
+                  aria-label={`${t('helpers.edit')}: ${a.name}`}
+                  className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+                >
+                  <Pencil data-icon="inline-start" />
+                  {t('helpers.edit')}
+                </Link>
+                <span className="ml-auto rounded-full bg-muted px-2 py-0.5 font-medium tabular-nums">
+                  v{a.current_version}
+                </span>
+                <ConfirmButton
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  label={t('helpers.archive')}
+                  confirmLabel={t('helpers.archive_confirm')}
+                  cancelLabel={t('helpers.cancel')}
+                  pending={archive.isPending}
+                  onConfirm={(reset) => archive.mutate(a.id, { onSettled: reset })}
+                />
+              </>
+            }
+          >
+            <p className="line-clamp-2 text-sm text-muted-foreground">
+              {a.description || t('helpers.no_goal')}
+            </p>
+            <AgentTools id={a.id} />
+          </ItemCard>
+        ))}
+      </ul>
       {agents.isPending ? (
         <ListSkeleton />
       ) : agents.error ? (
         <ErrorMessage error={agents.error} />
-      ) : agents.data.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('helpers.empty')}</p>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {agents.data.map((a) => (
-            <ItemCard
-              key={a.id}
-              to={`/helpers/${a.id}`}
-              title={a.name}
-              lead={
-                <Tint palette={a.avatar.palette}>
-                  <Avatar spec={a.avatar} size={48} />
-                </Tint>
-              }
-              version={a.current_version}
-              updatedAt={a.updated_at}
-              archiving={archive.isPending}
-              onArchive={(reset) => archive.mutate(a.id, { onSettled: reset })}
-            >
-              <p className="line-clamp-2 text-sm text-muted-foreground">
-                {a.description || t('helpers.no_goal')}
-              </p>
-            </ItemCard>
-          ))}
-        </ul>
+        agents.data.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t('helpers.empty')}</p>
+        )
       )}
 
       <section aria-labelledby="starters-h" className="space-y-3">

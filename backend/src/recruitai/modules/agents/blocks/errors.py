@@ -1,22 +1,16 @@
 """Failures a flow tool may raise: fixed codes, never exception text."""
 
-from recruitai.core.errors import AppError
+from recruitai.core.tools import NoJob, ToolFailed
 
-
-class ToolFailed(AppError):
-    status_code = 502
-    code = "tool_failed"
-    default_detail = "This step could not finish."
+__all__ = [
+    "NoJob",
+    "ToolFailed",
+]  # defined in core.tools: any module's tool may raise them
 
 
 class UrlNotAllowed(ToolFailed):
     code = "url_not_allowed"
     default_detail = "That address cannot be opened."
-
-
-class NoJob(ToolFailed):
-    code = "no_job"
-    default_detail = "This step needs a job: pick one when you run it."
 
 
 class RecipientNotAllowed(ToolFailed):

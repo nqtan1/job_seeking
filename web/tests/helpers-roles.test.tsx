@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { InstructionsField, SpecForm } from '@/features/helpers/HelperForm'
@@ -15,7 +16,12 @@ const custom: VersionSpec = {
 test('a built-in role keeps its own prompt and format: only extra preferences are editable', async () => {
   const onChange = vi.fn()
   const user = userEvent.setup()
-  const { rerender } = render(<SpecForm spec={custom} onChange={onChange} />)
+  const client = new QueryClient() // the tool picker asks for /tools (off here: no /me)
+  const { rerender } = render(<SpecForm spec={custom} onChange={onChange} />, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  })
   expect(screen.getByText('What you give it')).toBeInTheDocument()
 
   await user.selectOptions(screen.getByLabelText('Type of helper'), 'letter')

@@ -37,7 +37,7 @@ export function HelperEditor() {
   const agent = useAgent(agentId)
   return (
     <Page
-      title={agent.data?.name ?? t('helpers.title')}
+      title={agent.data?.name ?? t('nav.agents')}
       back={{ to: '/helpers', label: t('helpers.back') }}
       wide
     >
@@ -256,7 +256,7 @@ function Editor({ detail }: { detail: AgentDetail }) {
             ) : (
               <>
                 <Check className="size-4 text-success" aria-hidden />
-                <span className="text-muted-foreground">{t('helpers.ui.saved_state')}</span>
+                <span className="text-muted-foreground">{t('helpers.flow.status_saved')}</span>
               </>
             )}
           </span>

@@ -34,6 +34,7 @@ import {
   useRun,
   useSpecs,
   useStartRun,
+  useToolTable,
   useValidate,
 } from './api'
 import { clearDraft, loadDraft, saveDraft, useLabels } from './lib'
@@ -46,12 +47,12 @@ import {
   MAX_INPUT_CHARS,
   MAX_NODES,
   type Refusal,
-  TOOL_KINDS,
   type Specs,
   addNode,
   aiCalls,
   autoLayout,
   newId,
+  toolOf,
   typeKey,
 } from './graph'
 import { LiveRunPanel, RecentRuns } from './RunParts'
@@ -63,6 +64,7 @@ import { Modal } from '@/components/Modal'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useAiUse } from '@/features/radar/api'
+import { toolText, useTools } from '@/features/tools/api'
 
 const Canvas = lazy(() => import('./Canvas')) // React Flow is large: only this page pays for it
 const NO_HANDOFFS: Handoff[] = []
@@ -72,14 +74,19 @@ export function FlowEditor() {
   const t = useT()
   const { flowId } = useParams()
   const flow = useFlow(flowId)
-  if (flow.data) return <Editor key={flow.data.id} detail={flow.data} />
+  const tools = useToolTable() // the ports of every action step
+  if (flow.data && tools.data) return <Editor key={flow.data.id} detail={flow.data} />
   return (
     <Page
       title={t('helpers.flow.title')}
       back={{ to: '/automations', label: t('helpers.back_flows') }}
       wide
     >
-      {flow.error ? <ErrorMessage error={flow.error} /> : <ListSkeleton />}
+      {flow.error || tools.error ? (
+        <ErrorMessage error={flow.error ?? tools.error} />
+      ) : (
+        <ListSkeleton />
+      )}
     </Page>
   )
 }
@@ -117,7 +124,7 @@ function Editor({ detail }: { detail: FlowDetail }) {
     const m = new Map(labels.titles)
     for (const n of graph.nodes) {
       if (n.type === 'transform') m.set(n.id, t(typeKey(n.type)))
-      if (n.type === 'tool') m.set(n.id, t(`helpers.tool.${n.tool}.name`))
+      if (n.type === 'tool') m.set(n.id, toolText(t, n.tool, 'name'))
     }
     return m
   }, [labels.titles, graph.nodes, t])
@@ -541,7 +548,7 @@ function RunDialog({
   const fields = input?.type === 'input' ? input.fields : []
   const needsJob = graph.nodes.some(
     (n) =>
-      (n.type === 'tool' && (n.tool === 'job_lookup' || n.tool === 'fit_check')) ||
+      (n.type === 'tool' && !!toolOf(n.tool)?.needs_job) ||
       (n.type === 'agent' &&
         (specs.get(n.agent_version_id)?.context_sources ?? []).some(
           (s) => s === 'job' || s === 'fit',
@@ -622,11 +629,12 @@ function AddMenu({
   disabled: boolean
   helpers: { id: string; name: string }[]
   onHelper: (id: string) => void
-  onTool: (tool: (typeof TOOL_KINDS)[number]) => void
+  onTool: (tool: string) => void
   onCondition: () => void
   onTransform: () => void
 }) {
   const t = useT()
+  const tools = useTools()
   const ref = useRef<HTMLDetailsElement>(null)
   const item =
     'block w-full rounded-lg px-2 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -669,9 +677,9 @@ function AddMenu({
           </>
         )}
         <p className={head}>{t('helpers.node.tool')}</p>
-        {TOOL_KINDS.map((k) => (
-          <button key={k} type="button" className={item} onClick={pick(() => onTool(k))}>
-            {t(`helpers.tool.${k}.name`)}
+        {(tools.data ?? []).map(({ id }) => (
+          <button key={id} type="button" className={item} onClick={pick(() => onTool(id))}>
+            {toolText(t, id, 'name')}
           </button>
         ))}
         <button type="button" className={item} onClick={pick(onCondition)}>

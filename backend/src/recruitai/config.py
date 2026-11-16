@@ -26,6 +26,7 @@ AGENTS = (
     "coach",
     "helper",
     "helper_smart",
+    "summarise",
 )
 
 
@@ -148,8 +149,10 @@ class Settings(BaseSettings):
     helpers_enabled: bool = False
     # CV review for technical roles (docs/design/cv-review-technical.md): off = all its routes answer 503 cv_review_disabled.
     cv_review_enabled: bool = False
+    # Notes and the web & research tools (save_note, summarise): off = /notes answers 503 notes_disabled.
+    notes_enabled: bool = False
     coach_max_steps: int = Field(5, ge=1, le=8)
-    coach_turn_timeout_s: float = Field(50.0, gt=0)
+    coach_turn_timeout_s: float = Field(90.0, gt=0)
 
     # Session policy (ADR 0024). The server enforces the absolute lifetime and the step-up age
     # from the token's ``auth_time``; the idle timeouts are enforced by the web app, which reads

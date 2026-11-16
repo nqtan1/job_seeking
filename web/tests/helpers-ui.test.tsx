@@ -9,6 +9,7 @@ import { AutomationsPage } from '@/features/helpers/AutomationsPage'
 import { HelpersPage } from '@/features/helpers/HelpersPage'
 import { RecentRuns } from '@/features/helpers/RunParts'
 import { RunPage } from '@/features/helpers/RunPage'
+import { RunsTab } from '@/features/helpers/RunsPage'
 import { FlowEditor } from '@/features/helpers/FlowEditor'
 import { NodeInspector, ValidationPanel } from '@/features/helpers/FlowPanels'
 import { emptyGraph, resultLast, typeKey } from '@/features/helpers/graph'
@@ -19,7 +20,29 @@ const mocks = vi.hoisted(() => ({
   PATCH: vi.fn(),
   DELETE: vi.fn(),
 }))
-vi.mock('@/lib/api/client', () => ({ api: mocks }))
+const tools = vi.hoisted(() =>
+  ['job_search', 'web_search', 'for_each', 'wait'].map((id) => ({
+    id,
+    pack: 'core',
+    inputs: [{ name: 'query', required: true }],
+    outputs: ['text', 'count'],
+    effect: 'read',
+    ai_uses: id === 'web_search' ? 1 : 0,
+    daily_cap: null,
+    needs_job: false,
+    chat: id === 'web_search',
+    page: null,
+  })),
+)
+// every page that draws a graph waits for the tool table (GET /tools)
+vi.mock('@/lib/api/client', () => ({
+  api: {
+    ...mocks,
+    GET: (url: string, ...rest: unknown[]) =>
+      url === '/api/v1/tools' ? Promise.resolve({ data: tools }) : mocks.GET(url, ...rest),
+  },
+}))
+vi.mock('@/features/settings/api', () => ({ useMe: () => ({ data: { helpers_enabled: true } }) }))
 vi.mock('@/features/helpers/Canvas', () => ({ default: () => <div>canvas</div> })) // no layout in jsdom
 
 const AVATAR = { seed: 'a1', body: 0, palette: 0, eyes: 0, accessory: 0 }
@@ -73,6 +96,9 @@ test('editing a helper: a version is saved on the version it started from, and a
 
   await user.clear(box)
   await user.type(box, 'Shorter.')
+  // the tool picker offers only chat tools and saves their ids on the version
+  await user.click(await screen.findByRole('checkbox', { name: 'Search the web' }))
+  expect(screen.queryByRole('checkbox', { name: 'Search jobs' })).not.toBeInTheDocument()
   expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
   mocks.POST.mockResolvedValueOnce({ error: { status: 409, code: 'conflict', detail: 'changed' } })
   await user.click(save)
@@ -81,6 +107,7 @@ test('editing a helper: a version is saved on the version it started from, and a
   expect(url).toBe('/api/v1/agents/{agent_id}/versions')
   expect(init.body.based_on).toBe(3)
   expect(init.body.spec.instructions).toBe('Shorter.')
+  expect(init.body.spec.tools).toEqual(['web_search'])
   // the edit is still there, not lost, and the conflict is explained instead of a silent overwrite
   expect(await screen.findByText(/changed somewhere else/)).toBeInTheDocument()
   expect(box).toHaveValue('Shorter.')
@@ -470,10 +497,10 @@ describe('platform pages', () => {
     mocks.POST.mockResolvedValueOnce({ data: { id: 'new-run' } })
     const router = createMemoryRouter(
       [
-        { path: '/automations', element: <AutomationsPage /> },
+        { path: '/activity', element: <RunsTab /> },
         { path: '/automations/runs/:runId', element: <div>run page</div> },
       ],
-      { initialEntries: ['/automations?tab=runs'] },
+      { initialEntries: ['/activity'] },
     )
     render(
       <QueryClientProvider
@@ -483,7 +510,7 @@ describe('platform pages', () => {
       </QueryClientProvider>,
     )
     expect(
-      await screen.findByText('The AI took too long. Resume to try again.'),
+      await screen.findByText('This step failed. Resume to try again: finished steps are kept.'),
     ).toBeInTheDocument()
     expect(screen.getByText('Scheduled')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Load more' }))

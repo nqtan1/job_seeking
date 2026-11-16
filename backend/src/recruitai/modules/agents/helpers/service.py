@@ -15,11 +15,13 @@ from recruitai.modules.agents import versioning
 from recruitai.modules.agents.helpers import repository, runner
 from recruitai.modules.agents.helpers.models import Agent, AgentVersion
 from recruitai.modules.agents.helpers.schemas import (
+    DEFAULT_TOOLS,
     AgentCreate,
     AgentPatch,
     Avatar,
     VersionCreate,
     VersionSpec,
+    chat_tool,
 )
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.jobs import service as jobs
@@ -29,6 +31,7 @@ MAX_AGENTS_PER_ORG = 20
 MAX_AGENTS_EVER = 100  # archived ones count too: archiving is not a way around the cap
 PROFILE_CHARS, JOB_CHARS, FIT_CHARS = 6_000, 10_000, 4_000
 _IDENTITY_KEYS = ("personal_info", "references")
+COACH_TOOLS = DEFAULT_TOOLS  # the coach's chat tools: a helper's default set too
 
 
 def default_avatar(agent_id: UUID) -> Avatar:
@@ -52,6 +55,8 @@ def spec_of(version: AgentVersion) -> VersionSpec:
             "inputs": version.inputs,
             "context_sources": version.context_sources,
             "output": version.output_spec,
+            # a tool no longer offered in chat is dropped, so an old version still reads
+            "tools": [t for t in version.tools if chat_tool(t)],
         }
     )
 
@@ -66,6 +71,7 @@ def _values(spec: VersionSpec, note: str, version: int) -> dict[str, Any]:
         "inputs": dumped["inputs"],
         "context_sources": dumped["context_sources"],
         "output_spec": dumped["output"],
+        "tools": dumped["tools"],
         "note": note,
     }
 

@@ -5,9 +5,16 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from recruitai.ai.prompts.roles import MAX_PREFERENCES, ROLES
+from recruitai.core import tools as registry
 from recruitai.modules.agents.base import Strict
 
 # Every helper step also takes this optional input, so anything can be handed to any helper (a helper
@@ -22,6 +29,17 @@ MAX_INPUT_CHARS = (
     20_000  # per run, all inputs together (also the hand-off cap, ADR 0031)
 )
 ContextSource = Literal["profile", "job", "fit"]
+# The tools a helper may call in chat (ADR 0039): registry ids with chat=True. 12 at most (AP-01
+# spike: tool choice slips beyond that). The default is the coach's own set.
+MAX_TOOLS = 12
+DEFAULT_TOOLS = ["profile_read", "job_lookup", "fit_read", "web_search"]
+
+
+def chat_tool(id: str) -> bool:
+    tool = registry.all().get(id)
+    return tool is not None and tool.chat and tool.cap is None  # no daily cap in chat
+
+
 FieldName = Annotated[str, StringConstraints(pattern=NAME)]
 
 
@@ -104,6 +122,18 @@ class VersionSpec(BaseModel):
     inputs: list[InputField] = Field(default=[], max_length=MAX_INPUTS)
     context_sources: list[ContextSource] = []
     output: OutputSpec = OutputSpec(kind="text")
+    tools: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_TOOLS), max_length=MAX_TOOLS
+    )
+
+    @field_validator("tools")
+    @classmethod
+    def _tools(cls, tools: list[str]) -> list[str]:
+        if len(set(tools)) != len(tools):
+            raise ValueError("duplicate tools")
+        if bad := [t for t in tools if not chat_tool(t)]:
+            raise ValueError(f"'{bad[0]}' is not a tool a helper can use in chat")
+        return tools
 
     @model_validator(mode="after")
     def _check(self) -> Self:

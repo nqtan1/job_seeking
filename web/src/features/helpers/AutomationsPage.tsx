@@ -1,7 +1,7 @@
 import '@/features/helpers/lib'
 import { Ellipsis, Plus, Sparkles, Target } from 'lucide-react'
 import { type ReactNode, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router'
 import { cn } from 'cn'
 import { useI18n, useT } from '@/i18n'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -22,9 +22,9 @@ import {
   useFlows,
   type AgentDetail,
   useInstallJobHunter,
+  useSchedules,
 } from './api'
 import { Avatar } from './Avatar'
-import { RunsTab } from './RunsPage'
 import { ConnectionsTab } from './Connections'
 import { ContactsTab } from './Recipients'
 import { RunStatusBadge } from './ui'
@@ -33,11 +33,10 @@ import { avatarFromSeed } from './avatar'
 import { MAX_HELPERS, emptyGraph } from './graph'
 import { STARTERS, TEMPLATES, type Template, localized, templateGraph } from './starters'
 
-const TABS = ['flows', 'runs', 'accounts'] as const
+const TABS = ['flows', 'accounts'] as const
 
 const LABEL = {
-  flows: 'helpers.tab.flows',
-  runs: 'helpers.tab.history',
+  flows: 'nav.flows',
   accounts: 'helpers.tab.accounts',
 } as const
 
@@ -53,9 +52,10 @@ export function AutomationsPage() {
   const q = params.get('tab') ?? ''
   const tab = TABS.find((k) => k === q) ?? ALIAS[q] ?? 'flows'
   const [naming, setNaming] = useState(false)
+  if (q === 'runs') return <Navigate to="/activity" replace /> // runs moved to Activity
   return (
     <Page
-      title={t('helpers.auto.title')}
+      title={t('nav.flows')}
       actions={
         tab === 'flows' && (
           <Button onClick={() => setNaming(true)}>
@@ -83,8 +83,6 @@ export function AutomationsPage() {
       </nav>
       {tab === 'flows' ? (
         <FlowsTab naming={naming} setNaming={setNaming} />
-      ) : tab === 'runs' ? (
-        <RunsTab />
       ) : (
         <div className="space-y-10">
           <ConnectionsTab />
@@ -114,7 +112,7 @@ function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boole
         description: '',
         graph: emptyGraph('notes', 'result', [
           t('helpers.flow.input_label'),
-          t('helpers.flow.output_label'),
+          t('helpers.node.output'),
         ]),
         note: '',
       },
@@ -143,6 +141,7 @@ function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boole
                 >
                   {f.name}
                 </Link>
+                <NextRun flowId={f.id} />
                 {run && (
                   <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                     <RunStatusBadge status={run.status} />
@@ -206,6 +205,22 @@ function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boole
         </form>
       </Modal>
     </div>
+  )
+}
+
+/** "next run …" of a flow's soonest active schedule, or nothing. */
+// ponytail: one schedules request per flow row; an org-wide schedules endpoint if lists grow long
+function NextRun({ flowId }: { flowId: string }) {
+  const { t, locale } = useI18n()
+  const next = (useSchedules(flowId).data ?? [])
+    .filter((s) => s.enabled)
+    .map((s) => s.next_run_at)
+    .sort()[0]
+  if (!next) return null
+  return (
+    <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+      {t('helpers.pages.sched.next', { when: relTime(next, locale) })}
+    </span>
   )
 }
 
@@ -273,7 +288,7 @@ function Tile({
         onClick={onUse}
       >
         {busy ? <Spinner /> : <Sparkles data-icon="inline-start" />}
-        {busy ? busyLabel : t('helpers.pages.tpl.use')}
+        {busy ? busyLabel : t('helpers.use_starter')}
       </Button>
       {children}
     </li>

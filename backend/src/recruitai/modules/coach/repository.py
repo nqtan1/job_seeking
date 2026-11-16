@@ -11,9 +11,16 @@ from recruitai.modules.coach.models import Conversation, Message
 
 
 async def create_conversation(
-    session: AsyncSession, *, org_id: UUID, candidate_id: UUID, job_id: UUID | None
+    session: AsyncSession,
+    *,
+    org_id: UUID,
+    candidate_id: UUID,
+    job_id: UUID | None,
+    agent_id: UUID | None = None,
 ) -> Conversation:
-    conversation = Conversation(org_id=org_id, candidate_id=candidate_id, job_id=job_id)
+    conversation = Conversation(
+        org_id=org_id, candidate_id=candidate_id, job_id=job_id, agent_id=agent_id
+    )
     session.add(conversation)
     await session.flush()
     await session.refresh(conversation)  # server-side started_at

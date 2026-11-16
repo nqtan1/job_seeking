@@ -969,12 +969,13 @@ def tool_node(kind: str) -> dict:
 
 
 async def test_action_blocks_search_read_look_up_a_job_and_fill_the_tracker_once(
-    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     from recruitai.ai.gateway import BackendCapabilities, GroundedAnswer, Source
     from recruitai.core.email import FakeEmailSender
     from recruitai.modules.agents.blocks import tools
     from recruitai.modules.agents.flows import repository as repo
+    from recruitai.modules.jobs.providers import factory
     from tests.e2e_radar_fakes import Provider
     from tests.integration.test_matching_router import _add_job
 
@@ -985,7 +986,8 @@ async def test_action_blocks_search_read_look_up_a_job_and_fill_the_tracker_once
         pages.append(url)
         return "A page about Acme."
 
-    kit = tools.ToolKit(fetch=fetch, jobs=Provider(), mail=FakeEmailSender())
+    kit = tools.ToolKit(fetch=fetch, mail=FakeEmailSender())
+    monkeypatch.setattr(factory, "france_travail_provider", lambda: Provider())
     fake_llm.caps = BackendCapabilities(web_grounding=True)
     fake_llm._grounded.append(
         GroundedAnswer(
@@ -1184,12 +1186,11 @@ async def test_email_goes_only_to_confirmed_addresses_and_stops_when_asked(
     org = await org_of(client, ada)
     mail = FakeEmailSender()
     app.dependency_overrides[get_sender] = lambda: mail
-    from tests.e2e_radar_fakes import Provider
 
     async def no_fetch(url: str) -> str:
         raise AssertionError("an email flow reads no page")
 
-    kit = tools.ToolKit(fetch=no_fetch, jobs=Provider(), mail=mail)
+    kit = tools.ToolKit(fetch=no_fetch, mail=mail)
     from recruitai.modules.agents.flows import repository as repo
 
     me = (await client.get(f"{BASE}/me", headers=ada)).json()["user"]
@@ -1353,10 +1354,11 @@ async def test_confirmation_mail_cannot_be_farmed_by_removing_and_adding_again(
 
 
 async def test_find_offers_saves_new_offers_once_and_a_yes_exit_gates_what_follows(
-    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     from recruitai.core.email import FakeEmailSender
     from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.jobs.providers import factory
     from tests.e2e_radar_fakes import Provider
 
     org = await org_of(client, ada)
@@ -1364,7 +1366,8 @@ async def test_find_offers_saves_new_offers_once_and_a_yes_exit_gates_what_follo
     async def no_fetch(url: str) -> str:
         raise AssertionError("no page is read")
 
-    kit = tools.ToolKit(fetch=no_fetch, jobs=Provider(), mail=FakeEmailSender())
+    kit = tools.ToolKit(fetch=no_fetch, mail=FakeEmailSender())
+    monkeypatch.setattr(factory, "france_travail_provider", lambda: Provider())
     i, find, cond, track, o = (
         input_node("q"),
         tool_node("find_offers"),
@@ -1423,7 +1426,7 @@ async def test_any_helper_can_receive_information_even_without_declared_inputs(
 
 
 async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_the_quota(
-    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     import pytest
     from sqlalchemy import select
@@ -1432,14 +1435,15 @@ async def test_for_each_starts_one_run_per_new_offer_two_at_a_time_and_within_th
     from recruitai.modules.agents.blocks import tools
     from recruitai.modules.agents.flows import runs as flow_runs
     from recruitai.modules.agents.flows.models import FlowRun
+    from recruitai.modules.jobs.providers import factory
     from tests.e2e_radar_fakes import Provider
 
     org = await org_of(client, ada)
     kit = tools.ToolKit(
         fetch=lambda url: None,
-        jobs=Provider(),
         mail=FakeEmailSender(),  # type: ignore[arg-type]
     )
+    monkeypatch.setattr(factory, "france_travail_provider", lambda: Provider())
 
     # the per-offer flow: its Start step receives the offer's fields, the run gets its job
     ci, co = input_node("title", "url"), output_node("seen")
@@ -1630,10 +1634,11 @@ async def test_fit_check_runs_the_apps_fit_analysis_once_and_a_low_score_skips_t
 
 
 async def test_find_offers_keeps_going_when_one_offer_cannot_be_fetched(
-    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     from recruitai.core.email import FakeEmailSender
     from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.jobs.providers import factory
     from tests.e2e_radar_fakes import OFFERS, Provider
 
     bad = list(OFFERS)[1]
@@ -1649,7 +1654,8 @@ async def test_find_offers_keeps_going_when_one_offer_cannot_be_fetched(
     async def no_fetch(url: str) -> str:
         raise AssertionError("no page is read")
 
-    kit = tools.ToolKit(fetch=no_fetch, jobs=Flaky(), mail=FakeEmailSender())
+    kit = tools.ToolKit(fetch=no_fetch, mail=FakeEmailSender())
+    monkeypatch.setattr(factory, "france_travail_provider", lambda: Flaky())
     i, find, o = input_node("q"), tool_node("find_offers"), output_node("count", "left")
     flow = await make_flow(
         client, ada, [i, find, o],
@@ -1670,11 +1676,12 @@ async def test_find_offers_keeps_going_when_one_offer_cannot_be_fetched(
 
 
 async def test_find_offers_reads_a_typed_sentence_like_the_jobs_page_and_falls_back_to_the_text(
-    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     from recruitai.ai.prompts import jobs as job_prompts
     from recruitai.core.email import FakeEmailSender
     from recruitai.modules.agents.blocks import tools
+    from recruitai.modules.jobs.providers import factory
     from recruitai.modules.jobs.schemas import ParsedQuery
     from tests.e2e_radar_fakes import Provider
 
@@ -1690,7 +1697,8 @@ async def test_find_offers_reads_a_typed_sentence_like_the_jobs_page_and_falls_b
     async def no_fetch(url: str) -> str:
         raise AssertionError("no page is read")
 
-    kit = tools.ToolKit(fetch=no_fetch, jobs=Spy(), mail=FakeEmailSender())
+    kit = tools.ToolKit(fetch=no_fetch, mail=FakeEmailSender())
+    monkeypatch.setattr(factory, "france_travail_provider", lambda: Spy())
     i, find, o = input_node("q"), tool_node("find_offers"), output_node("count")
     flow = await make_flow(
         client, ada, [i, find, o],

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.config import Settings, get_settings
+from recruitai.core import tools as registry
 from recruitai.core.app_check import verify_app_check
 from recruitai.core.db import get_db
 from recruitai.core.errors import (
@@ -18,6 +19,7 @@ from recruitai.core.errors import (
 )
 from recruitai.core.ratelimit import limit_ai, rate_limit
 from recruitai.core.tenancy import OrgContext, get_org_context
+from recruitai.modules.agents.blocks.schemas import ToolOut
 from recruitai.modules.agents.deps import require_enabled
 from recruitai.modules.agents.flows import graph as g
 from recruitai.modules.agents.flows import runs as flow_runs
@@ -130,6 +132,21 @@ async def install_job_hunter(ctx: Ctx, db: Db) -> FlowDetail:
 async def list_flows(ctx: Ctx, db: Db) -> list[FlowOut]:
     items, versions = await flows.list_with_versions(db, org_id=ctx.org_id)
     return [_flow_out(f, versions[f.id]) for f in items if f.id in versions]
+
+
+# pack -> is it on for this account; a pack without a row is on whenever helpers are
+@router.get(
+    "/tools", response_model=list[ToolOut], responses=problem_responses(Unauthorized)
+)
+async def list_tools(
+    ctx: Ctx, settings: Annotated[Settings, Depends(get_settings)]
+) -> list[ToolOut]:
+    """The tools of the packs that are on (ADR 0039)."""
+    return [
+        ToolOut.of(t)
+        for t in registry.all().values()
+        if t.flag is None or getattr(settings, t.flag)
+    ]
 
 
 @router.post(

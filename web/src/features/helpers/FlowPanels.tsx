@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react'
 import { type Key, catalogs, useT } from '@/i18n'
+import { toolText } from '@/features/tools/api'
 import { Avatar } from './Avatar'
 import { type Handoff, useAgent, useFlows, usePreview } from './api'
 import { type AvatarSpec, PALETTES } from './avatar'
@@ -99,11 +100,11 @@ export function ValidationPanel({
                   {i.node_id && titles.get(i.node_id) && (
                     <strong className="font-medium">{titles.get(i.node_id)}: </strong>
                   )}
-                  {
-                    t(
-                      `helpers.issue.${i.code}` as 'helpers.issue.cycle',
-                    ) /* server codes are a closed set */
-                  }
+                  {t(
+                    (`helpers.issue.${i.code}` in catalogs.en
+                      ? `helpers.issue.${i.code}`
+                      : 'helpers.issue.generic') as Key,
+                  )}
                 </span>
               </button>
             </li>
@@ -323,7 +324,7 @@ export function EdgeInspector({
                   else update(i.name, `{{${v}}}`)
                 }}
               >
-                <option value={NONE}>{t('helpers.handoff.none')}</option>
+                <option value={NONE}>{t('helpers.connections.not_connected')}</option>
                 {outs.map((o) => (
                   <option key={o} value={o}>
                     {t('helpers.handoff.pass', { field: o })} — {example(o).slice(0, 32)}
@@ -657,7 +658,11 @@ export function NodeInspector({
                 value={node.fixed?.[name] ?? ''}
                 disabled={linked.has(name)}
                 maxLength={MAX_FIXED_CHARS}
-                placeholder={t(`helpers.fixed.${name}.example`)}
+                placeholder={
+                  `helpers.fixed.${name}.example` in catalogs.en
+                    ? t(`helpers.fixed.${name}.example` as Key)
+                    : undefined
+                }
                 onChange={(e) => {
                   const fixed = { ...node.fixed, [name]: e.target.value }
                   if (!e.target.value) delete fixed[name]
@@ -714,7 +719,7 @@ export function NodeInspector({
       )}
       {node.type === 'tool' && (
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">{t(`helpers.tool.${node.tool}.about`)}</p>
+          <p className="text-sm text-muted-foreground">{toolText(t, node.tool, 'about')}</p>
           {node.tool === 'for_each' && <FlowPicker node={node} patch={patch} />}
           {node.tool === 'wait' && (
             <div className="space-y-1">

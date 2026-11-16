@@ -71,7 +71,7 @@ type When = {
 function useSentence() {
   const { t, locale } = useI18n()
   return (s: When) => {
-    if (s.cadence === 'hourly') return t('helpers.pages.sched.hourly')
+    if (s.cadence === 'hourly') return t('helpers.pages.sched.cadence_hourly')
     const vars = { time: s.at_time ?? '', zone: city(s.timezone) }
     return s.cadence === 'daily'
       ? t('helpers.pages.sched.daily', vars)

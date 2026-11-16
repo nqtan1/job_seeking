@@ -376,3 +376,71 @@ async def test_a_silent_step_sends_heartbeats(monkeypatch):
 
     assert out[0].startswith("event: context") and out[-1].startswith("event: token")
     assert ": ping\n\n" in out
+
+
+async def test_chat_with_a_helper_uses_its_instructions_and_its_tools_only(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    from recruitai.ai.gateway import TextDelta, ToolCall, ToolCalls
+    from recruitai.config import get_settings
+    from tests.integration.coach_replies import with_tools
+
+    app.dependency_overrides[get_settings] = with_tools
+    await _add_profile(client, fake_llm, ada)
+    spec = {"instructions": "You are Mira, a blunt interview trainer.", "tools": ["profile_read"]}  # fmt: skip
+    agent = await client.post(
+        "/api/v1/agents", headers=ada, json={"name": "Mira", "spec": spec}
+    )
+    agent_id = agent.json()["id"]
+    await _add_profile(client, fake_llm, bob)
+    other = await client.post(BASE, headers=bob, json={"agent_id": agent_id})
+    assert other.status_code == 404  # another org's helper
+
+    conv = await client.post(BASE, headers=ada, json={"agent_id": agent_id})
+    assert conv.status_code == 201 and conv.json()["agent_id"] == agent_id
+    fake_llm.queue_turn(PROMPT_VERSION, [ToolCalls([ToolCall("get_profile", {})], raw=None)])  # fmt: skip
+    fake_llm.queue_turn(PROMPT_VERSION, [TextDelta("Parlons de vous.")])
+    resp = await client.post(
+        f"{BASE}/{conv.json()['id']}/messages", headers=ada, json={"content": "Go"}
+    )
+
+    events = parse_sse(resp.text)
+    assert [d["status"] for n, d in events if n == "step"] == ["running", "done"]
+    assert events[-1][0] == "done"
+    first, second = fake_llm.converse_calls
+    assert "blunt interview trainer" in first["system"]
+    assert [t.name for t in first["tools"]] == [
+        "get_profile"
+    ]  # its list, not the coach's
+    assert "profile_json" in second["turns"][-1].results[0].result
+
+
+async def test_a_switched_off_or_archived_helper_cannot_be_chatted_with(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada
+):
+    from recruitai.config import get_settings
+    from tests.integration.coach_replies import with_tools
+
+    app.dependency_overrides[get_settings] = with_tools
+    await _add_profile(client, fake_llm, ada)
+    spec = {"instructions": "Be brief.", "tools": []}
+    agent_id = (
+        await client.post(
+            "/api/v1/agents", headers=ada, json={"name": "Mira", "spec": spec}
+        )
+    ).json()["id"]
+    conv_id = (
+        await client.post(BASE, headers=ada, json={"agent_id": agent_id})
+    ).json()["id"]
+    turn = f"{BASE}/{conv_id}/messages"
+
+    off = with_tools().model_copy(update={"helpers_enabled": False})
+    app.dependency_overrides[get_settings] = lambda: off
+    assert (await client.post(BASE, headers=ada, json={"agent_id": agent_id})).status_code == 404  # fmt: skip
+    assert (await client.post(turn, headers=ada, json={"content": "hi"})).status_code == 404  # fmt: skip
+
+    app.dependency_overrides[get_settings] = with_tools
+    assert (await client.delete(f"/api/v1/agents/{agent_id}", headers=ada)).status_code == 204  # fmt: skip
+    assert (await client.post(BASE, headers=ada, json={"agent_id": agent_id})).status_code == 404  # fmt: skip
+    assert (await client.post(turn, headers=ada, json={"content": "hi"})).status_code == 404  # fmt: skip
+    assert fake_llm.converse_calls == []

@@ -11,6 +11,7 @@ coach_job_focus: true
 # Helpers and flows (ADR 0031): on for dev, off in config.prod.yaml until the owner enables it.
 helpers_enabled: true
 cv_review_enabled: true
+notes_enabled: true
 
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
@@ -28,3 +29,4 @@ agents:
   # Helpers (ADR 0031): the user's Fast/Careful choice picks the route.
   helper: {provider: gemini, model: gemini-3.5-flash-lite}
   helper_smart: {provider: gemini, model: gemini-3.8-flash}
+  summarise: {provider: gemini, model: gemini-3.5-flash-lite}

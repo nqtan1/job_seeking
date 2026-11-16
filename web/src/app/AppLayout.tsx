@@ -8,6 +8,7 @@ import { setLang, useT } from '@/i18n'
 import { useRadarTitle } from '@/features/radar/useRadarTitle'
 import { cn } from 'cn'
 import { ColdStartNotice } from './ColdStartNotice'
+import { BottomTabs, PlaceTabs } from './PlaceTabs'
 import { Sidebar } from './Sidebar'
 
 const KEY = 'sidebar-collapsed'
@@ -19,8 +20,8 @@ const readCollapsed = () => {
   }
 }
 
-/** ChatGPT/Claude-style shell: the left column holds the tools and the account; the main area
- *  takes the rest. On small screens the column is a drawer. */
+/** The shell: the left column holds the five places and the account; the main area takes the rest.
+ *  On a phone the places are a bottom tab bar and the column is a drawer. */
 export function AppLayout() {
   const t = useT()
   const [collapsed, setCollapsed] = useState(readCollapsed)
@@ -78,9 +79,11 @@ export function AppLayout() {
         <ColdStartNotice />
         {/* `relative`: screen-reader-only and other absolutely placed bits stay inside this scroll area, or
             they stretch the whole document and a second scrollbar appears */}
+        <PlaceTabs />
         <main className="relative min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
+        <BottomTabs />
       </div>
       <Toaster />
     </div>

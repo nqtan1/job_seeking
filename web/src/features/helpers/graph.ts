@@ -13,59 +13,16 @@ export type Issue = S['IssueOut']
 
 export type Specs = ReadonlyMap<string, VersionSpec> // agent_version_id -> spec
 
-/** What each action block takes and gives (backend graph.TOOLS; backend/tests/unit/test_limits_in_sync.py
- *  fails if the names drift). Inputs are `[name, required]`. */
-export const TOOL_IO = {
-  web_search: { in: [['query', true]], out: ['text', 'sources'] },
-  job_search: {
-    in: [
-      ['query', true],
-      ['department', false],
-    ],
-    out: ['text', 'count'],
-  },
-  find_offers: {
-    in: [
-      ['query', true],
-      ['department', false],
-    ],
-    out: ['items', 'text', 'count', 'remaining'],
-  },
-  fit_check: {
-    in: [
-      ['start', false],
-      ['employer', false],
-    ],
-    out: ['score', 'verdict', 'strengths', 'gaps', 'missing', 'reasons'],
-  },
-  for_each: { in: [['items', true]], out: ['started', 'text'] },
-  read_page: { in: [['url', true]], out: ['text'] },
-  job_lookup: { in: [['start', false]], out: ['title', 'company', 'place', 'description', 'url'] },
-  add_to_tracker: {
-    in: [
-      ['company', true],
-      ['title', false],
-      ['url', false],
-      ['notes', false],
-    ],
-    out: ['status'],
-  },
-  send_email: {
-    in: [
-      ['to', true],
-      ['subject', true],
-      ['body', true],
-    ],
-    out: ['status'],
-  },
-  telegram_send: { in: [['text', true]], out: ['status'] },
-  wait: { in: [['value', true]], out: ['value'] },
-} as const satisfies Record<
-  string,
-  { in: readonly (readonly [string, boolean])[]; out: readonly string[] }
->
-type ToolKind = keyof typeof TOOL_IO
-export const TOOL_KINDS = Object.keys(TOOL_IO) as ToolKind[]
+type Tool = S['ToolOut']
+// ponytail: one module-level table of the server's tools (GET /api/v1/tools, filled by
+// useToolTable); pass it as an argument if two accounts ever share one page load.
+const TOOLS = new Map<string, Tool>()
+export const setTools = (list: readonly Tool[]) => {
+  TOOLS.clear()
+  for (const tool of list) TOOLS.set(tool.id, tool)
+}
+/** A tool the server has; undefined for one switched off since the flow was saved. */
+export const toolOf = (id: string) => TOOLS.get(id)
 
 /** Inputs whose text can be typed on a step (an allow-list, so never an address to open and never
  *  the engine's own list: the server refuses the rest too). */
@@ -82,8 +39,8 @@ const TYPEABLE = [
   'text',
 ] as const
 type Typeable = (typeof TYPEABLE)[number]
-export const typeableInputs = (tool: ToolKind): Typeable[] =>
-  TYPEABLE.filter((name) => TOOL_IO[tool].in.some(([n]) => n === name))
+export const typeableInputs = (tool: string): Typeable[] =>
+  TYPEABLE.filter((name) => toolOf(tool)?.inputs.some((i) => i.name === name))
 export const MAX_FIXED_CHARS = 500
 
 /** The inputs of a step that some link maps: a link owns its input, so typed text is not used there. */
@@ -109,7 +66,7 @@ export function inputsOf(node: GraphNode, specs: Specs): { name: string; require
     case 'transform':
       return [{ name: 'text', required: true }]
     case 'tool':
-      return TOOL_IO[node.tool].in.map(([name, required]) => ({ name, required }))
+      return (toolOf(node.tool)?.inputs ?? []).map(({ name, required }) => ({ name, required }))
     default:
       return []
   }
@@ -129,7 +86,7 @@ export function outputsOf(node: GraphNode, specs: Specs): string[] {
     case 'transform':
       return ['text']
     case 'tool':
-      return [...TOOL_IO[node.tool].out]
+      return [...(toolOf(node.tool)?.outputs ?? [])]
     default:
       return []
   }
@@ -262,14 +219,13 @@ export const setMap = (g: Graph, id: string, map: MapEntry[]): Graph => ({
   edges: g.edges.map((e) => (e.id === id ? { ...e, map } : e)),
 })
 
-/** Model calls a run can make: one per helper and one per web search (backend flows.ai_calls). */
+/** Model calls a run can make: one per helper plus what each tool says it uses (backend flows.ai_calls). */
 export const aiCalls = (g: Graph) =>
-  g.nodes.filter(
-    (n) =>
-      n.type === 'agent' ||
-      (n.type === 'tool' &&
-        (n.tool === 'web_search' || n.tool === 'fit_check' || n.tool === 'find_offers')),
-  ).length
+  g.nodes.reduce(
+    (sum, n) =>
+      sum + (n.type === 'agent' ? 1 : n.type === 'tool' ? (toolOf(n.tool)?.ai_uses ?? 0) : 0),
+    0,
+  )
 
 /** Copy steps with fresh ids and the connections between them remapped (paste / duplicate). */
 export function cloneNodes(g: Graph, ids: string[], dx = 40, dy = 40): Graph {

@@ -91,6 +91,12 @@ source_modules = ["recruitai.core.tasks"]
 forbidden_modules = ["fastapi", "starlette"]
 
 [[tool.importlinter.contracts]]
+name = "core.tools has no dependency on modules"
+type = "forbidden"
+source_modules = ["recruitai.core.tools"]
+forbidden_modules = ["recruitai.modules"]
+
+[[tool.importlinter.contracts]]
 name = "config does not depend on main"
 type = "forbidden"
 source_modules = ["recruitai.config"]
@@ -114,6 +120,15 @@ name = "agents.contacts and agents.connections do not depend on flows or helpers
 type = "forbidden"
 source_modules = ["recruitai.modules.agents.contacts", "recruitai.modules.agents.connections"]
 forbidden_modules = ["recruitai.modules.agents.flows", "recruitai.modules.agents.helpers"]
+[[tool.importlinter.contracts]]
+name = "agents does not import the career modules (their tools register themselves)"
+type = "forbidden"
+source_modules = ["recruitai.modules.agents"]
+forbidden_modules = ["recruitai.modules.jobs", "recruitai.modules.matching", "recruitai.modules.applications", "recruitai.modules.cvreview", "recruitai.modules.letters", "recruitai.modules.candidates"]
+# a job's 404 check before a run, and the helper's job/profile/fit context (until AP-05)
+ignore_imports = ["recruitai.modules.agents.flows.runs -> recruitai.modules.jobs.service", "recruitai.modules.agents.helpers.service -> recruitai.modules.*.service"]
+# identity and the worker reach them in turn: only direct imports count
+allow_indirect_imports = true
 [[tool.importlinter.contracts]]
 name = "outside code reaches agents only through its public entry points"
 type = "forbidden"

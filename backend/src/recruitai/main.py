@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai import packs  # noqa: F401  registers every tool (ADR 0039)
 from recruitai.config import Settings
 from recruitai.core.auth import warm_certs
 from recruitai.core.db import close_db, get_db, init_db, warm_up
@@ -36,6 +37,7 @@ from recruitai.modules.identity.router import router as identity_router
 from recruitai.modules.jobs.router import router as jobs_router
 from recruitai.modules.letters.router import router as letters_router
 from recruitai.modules.matching.router import router as matching_router
+from recruitai.modules.notes.router import router as notes_router
 from recruitai.modules.privacy.router import router as privacy_router
 from recruitai.modules.radar.public_router import router as radar_public_router
 from recruitai.modules.radar.router import router as radar_router
@@ -73,6 +75,7 @@ def create_app() -> FastAPI:
     app.include_router(matching_router)
     app.include_router(letters_router)
     app.include_router(cvreview_router)
+    app.include_router(notes_router)
     app.include_router(coach_router)
     app.include_router(applications_router)
     app.include_router(privacy_router)

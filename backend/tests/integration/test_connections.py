@@ -7,7 +7,6 @@ from recruitai.core.telegram import FakeTelegram, Update
 from recruitai.modules.agents.blocks import tools
 from recruitai.modules.agents.connections.router import bot
 from recruitai.modules.agents.flows import engine
-from tests.e2e_radar_fakes import Provider
 from tests.integration.test_flows import (
     BASE,
     edge,
@@ -64,7 +63,6 @@ async def test_telegram_links_with_a_one_time_code_and_a_flow_messages_only_that
     )  # fmt: skip
     kit = tools.ToolKit(
         fetch=lambda url: None,  # type: ignore[arg-type,return-value]
-        jobs=Provider(),
         mail=FakeEmailSender(),  # type: ignore[arg-type]
         chat=tg,
     )

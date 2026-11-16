@@ -1,8 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
 
-const nav = (page: Page, name: string) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
-
 // the one "+ Add" menu of the flow editor (a disclosure, so not a button)
 const addMenu = (page: Page) => page.locator('summary', { hasText: /^\s*Add\s*$/ })
 
@@ -19,7 +16,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
-  await nav(page, 'Helpers').click()
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Agents' }).click()
 
   // A helper from a template opens in the editor with its own id and character.
   await expect(page.getByText('No helper yet')).toBeVisible()
@@ -94,7 +91,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(page.getByRole('slider', { name: 'Replay' })).toBeVisible()
 
   // The Runs page lists both runs; filters work and "Run again" opens a new run.
-  await page.goto('/automations?tab=runs')
+  await page.goto('/activity')
   await expect(page.getByRole('list', { name: 'Your runs' }).getByRole('listitem')).toHaveCount(2)
   await page.getByRole('button', { name: 'Failed' }).click()
   await expect(page.getByText('No run matches this filter')).toBeVisible()

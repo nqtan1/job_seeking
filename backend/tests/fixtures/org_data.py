@@ -28,6 +28,8 @@ from recruitai.modules.letters import service as letters
 from recruitai.modules.letters.schemas import LetterDraft
 from recruitai.modules.matching import service as matching
 from recruitai.modules.matching.schemas import FitCheck
+from recruitai.modules.notes import service as notes
+from recruitai.modules.notes.schemas import NoteIn
 from tests.integration.test_letters_service import _tenant
 from tests.unit.test_schemas import VALID
 
@@ -125,6 +127,9 @@ async def seed_org(
             summary=LlmSummary(strengths=[Strength(text=f"cv-{tag}", block_id=None)], top_fixes=[]), grounding_rate=1.0,
         ),
     )  # fmt: skip
+    await notes.create_note(
+        db, org_id=org.id, data=NoteIn(title=f"note-{tag}", body=f"body-{tag}")
+    )
     db.add(TaskRun(org_id=org.id, kind="seed", status="done"))
     await db.commit()
     return OrgData(org, user, tag, [cv.storage_key, jd.storage_key], org.id, user.id)

@@ -1,14 +1,16 @@
 import { FileUp, Pencil } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
 import { StepProgress } from '@/components/StepProgress'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useMe } from '@/features/settings/api'
 import { SignatureCard } from '@/features/signature/SignatureCard'
 import { useT } from '@/i18n'
 import { useExtractProfile, useProfile } from './api'
@@ -20,6 +22,7 @@ export function ProfilePage() {
   const steps = [t('candidate.p.step1'), t('candidate.p.step2'), t('candidate.p.step3')]
   const profile = useProfile()
   const extract = useExtractProfile()
+  const cvReview = useMe().data?.cv_review_enabled
   const file = useRef<HTMLInputElement>(null)
   const [editing, setEditing] = useState(false)
   const [replacing, setReplacing] = useState(false)
@@ -119,6 +122,19 @@ export function ProfilePage() {
               </Button>
             </div>
             {replacing && upload}
+            {cvReview && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('cvr.promo.title')}</CardTitle>
+                  <CardDescription>{t('cvr.promo.desc')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link to="/cv-review" className={buttonVariants()}>
+                    {t('cvr.promo.cta')}
+                  </Link>
+                </CardContent>
+              </Card>
+            )}
             <ProfileView profile={profile.data} />
             <SignatureCard name={profile.data.data.personal_info.name} />
           </div>

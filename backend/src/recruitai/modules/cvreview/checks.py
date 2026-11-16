@@ -5,8 +5,8 @@ web): Tech Interview Handbook resume guide, Google XYZ formula (L. Bock), InfoWo
 The LLM adds scope/stack/projects/progression; code never trusts what it did not copy."""
 
 import re
-import unicodedata
 
+from recruitai.ai.text import locate
 from recruitai.modules.cvreview.schemas import (
     MAX_CHARS,
     Block,
@@ -193,48 +193,13 @@ def _rule_comment(b: Block, tags: list[str]) -> BlockComment:
     )  # fmt: skip
 
 
-_PUNCT = str.maketrans("‘’“”–—", "''\"\"--")
-
-
-def _fold(s: str) -> tuple[str, list[tuple[int, int]]]:
-    """NFKC + ASCII quotes/dashes + collapsed whitespace, with the original span of each char."""
-    clusters: list[
-        tuple[str, int, int]
-    ] = []  # (raw, start, end): base char + its accents
-    for i, c in enumerate(s):
-        if clusters and (
-            unicodedata.combining(c) or (c.isspace() and clusters[-1][0].isspace())
-        ):
-            clusters[-1] = (clusters[-1][0] + c, clusters[-1][1], i + 1)
-        else:
-            clusters.append((c, i, i + 1))
-    text, spans = "", []
-    for raw, a, b in clusters:
-        f = (
-            " "
-            if raw.isspace()
-            else unicodedata.normalize("NFKC", raw).translate(_PUNCT)
-        )
-        text += f
-        spans += [(a, b)] * len(f)
-    return text, spans
-
-
 def _locate(q: Quote, by_id: dict[str, Block]) -> Quote | None:
     """The quote as the exact substring of its own block (unicode/whitespace-tolerant), else None."""
     b = by_id.get(q.block_id)
     if b is None or len(q.quote) > 2 * MAX_CHARS:  # a block holds <= MAX_CHARS
         return None
-    fq = _fold(q.quote)[0].strip()
-    fb, spans = _fold(b.text)
-    if not fq or (len(fq) < MIN_EVIDENCE and fq != fb.strip()):
-        return None
-    i = fb.find(fq)
-    if i < 0:
-        return None
-    return Quote(
-        block_id=q.block_id, quote=b.text[spans[i][0] : spans[i + len(fq) - 1][1]]
-    )
+    found = locate(q.quote, b.text, min_chars=MIN_EVIDENCE)
+    return Quote(block_id=q.block_id, quote=found) if found else None
 
 
 def ground(

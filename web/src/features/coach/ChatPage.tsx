@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { Checklist } from '@/features/pipeline/Checklist'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Skeleton } from '@/components/Skeleton'
@@ -38,6 +37,8 @@ import { stepsFromMeta, type Context, type Step } from './activity'
 import { DeleteChatButton } from './DeleteChatButton'
 import { Markdown } from './Markdown'
 import { companyOf } from '@/features/job-search/label'
+import { useAgent } from '@/features/helpers/api'
+import { Avatar } from '@/features/helpers/Avatar'
 
 const MAX = 4000
 
@@ -212,6 +213,9 @@ export function ChatPage() {
   const [params] = useSearchParams()
   // `/?job=<id>` ("Discuss this job"): the job to focus a new chat on.
   const [draftJob, setDraftJob] = useState<string | null>(params.get('job'))
+  // `/chat?agent=<id>` (Agents page): chat with that helper; a stored chat keeps its own.
+  const agentId = conversationId ? (conversation.data?.agent_id ?? null) : params.get('agent')
+  const agent = useAgent(agentId ?? undefined)
   const focusJob = conversationId ? (conversation.data?.job_id ?? null) : draftJob
   // `/?ask=…` (from the tracker) prefills the box; the user reviews it and sends.
   const [text, setText] = useState(params.get('ask') ?? '')
@@ -237,7 +241,8 @@ export function ChatPage() {
     setPending({ user, assistant: '', steps: [], citations: [], notices: [], replacing })
     abort.current = new AbortController()
     try {
-      const id = conversationId ?? (await createConversation(draftJob ?? undefined)).id
+      const id =
+        conversationId ?? (await createConversation({ job_id: draftJob, agent_id: agentId })).id
       await start(
         id,
         (name, data) => setPending((p) => p && applyEvent(p, name, data)),
@@ -302,12 +307,17 @@ export function ChatPage() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center border-b px-6">
-        <h1 className="text-lg font-semibold tracking-tight">{t('coach.title')}</h1>
+        <h1 className="flex min-w-0 items-center gap-2 text-lg font-semibold tracking-tight">
+          {agent.data && <Avatar spec={agent.data.avatar} size={28} />}
+          <span className="truncate">
+            {agentId ? (agent.data?.name ?? t('coach.agent')) : t('coach.title')}
+          </span>
+        </h1>
         {conversationId && (
           <div className="ml-auto">
             <DeleteChatButton
               id={conversationId}
-              onDeleted={() => navigate('/', { replace: true })}
+              onDeleted={() => navigate('/chat', { replace: true })}
             />
           </div>
         )}
@@ -324,7 +334,6 @@ export function ChatPage() {
           {empty && (
             <div className="space-y-6 pt-10 text-center">
               <h2 className="text-2xl font-semibold tracking-tight">{t('coach.home')}</h2>
-              <Checklist />
               <div className="mx-auto grid max-w-xl gap-2 sm:grid-cols-2">
                 {PROMPTS.map(({ icon: Icon, key }) => (
                   <button

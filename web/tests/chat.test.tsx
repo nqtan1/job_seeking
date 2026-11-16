@@ -14,6 +14,14 @@ vi.mock('@/features/job-search/api', () => ({
     data: [{ id: 'j1', data: { title: 'AI Engineer', company: { name: 'Acme' } } }],
   }),
 }))
+vi.mock('@/features/helpers/api', () => ({
+  useAgent: (id?: string) => ({
+    data: id && {
+      name: 'Mira',
+      avatar: { seed: 'a1', body: 0, palette: 0, eyes: 0, accessory: 0 },
+    },
+  }),
+}))
 vi.mock('@/features/coach/api', () => ({
   useConversation: () => ({ data: undefined }),
   useDeleteConversation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -67,6 +75,15 @@ test('"Discuss this job" opens a chat focused on that job', async () => {
   renderWithApp(<ChatPage />, { at: '/?job=j1', path: '/' })
   expect(await screen.findByText('AI Engineer')).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Review my CV' }))
-  expect(createConversation).toHaveBeenCalledWith('j1')
+  expect(createConversation).toHaveBeenCalledWith({ job_id: 'j1', agent_id: null })
+  mocks.finish()
+})
+
+test('"Chat" on an agent card opens a chat with that agent', async () => {
+  mocks.profile = { data: { id: 'p' }, isPending: false }
+  renderWithApp(<ChatPage />, { at: '/chat?agent=a1', path: '/chat' })
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Mira')
+  await userEvent.click(screen.getByRole('button', { name: 'Review my CV' }))
+  expect(createConversation).toHaveBeenLastCalledWith({ job_id: null, agent_id: 'a1' })
   mocks.finish()
 })

@@ -19,6 +19,7 @@ import {
   useResumeRun,
   useRun,
   useSpecs,
+  useToolTable,
 } from './api'
 import { DataFlowTable, EdgeInspector } from './FlowPanels'
 import { type Graph, orderOf } from './graph'
@@ -34,18 +35,15 @@ export function RunPage() {
   const t = useT()
   const { runId } = useParams()
   const run = useRun(runId)
+  const tools = useToolTable()
   return (
-    <Page
-      title={t('helpers.run.title')}
-      back={{ to: '/automations?tab=runs', label: t('helpers.back_flows') }}
-      wide
-    >
-      {run.isPending ? (
-        <ListSkeleton />
-      ) : run.error ? (
-        <ErrorMessage error={run.error} />
-      ) : (
+    <Page title={t('helpers.run')} back={{ to: '/activity', label: t('nav.activity') }} wide>
+      {run.data && tools.data ? (
         <View run={run.data} />
+      ) : run.error || tools.error ? (
+        <ErrorMessage error={run.error ?? tools.error} />
+      ) : (
+        <ListSkeleton />
       )}
     </Page>
   )
@@ -54,7 +52,8 @@ export function RunPage() {
 function View({ run }: { run: Run }) {
   const { t, locale } = useI18n()
   const versions = useFlowVersions(run.flow_id)
-  const graph: Graph | undefined = versions.data?.find((v) => v.id === run.flow_version_id)?.graph
+  const found = versions.data?.find((v) => v.id === run.flow_version_id)?.graph
+  const graph: Graph | undefined = found
   const agents = useAgents()
   const { specs } = useSpecs(graph)
   const { titles, avatars } = useLabels(graph, agents.data)

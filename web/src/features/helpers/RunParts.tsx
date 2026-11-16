@@ -102,10 +102,10 @@ export function ResultHero({ run }: { run: Run }) {
     )
   return (
     <section
-      aria-label={t('helpers.run.result')}
+      aria-label={t('helpers.node.output')}
       className="space-y-3 rounded-2xl border bg-card p-6 shadow-sm"
     >
-      <h2 className="text-xl font-semibold tracking-tight">{t('helpers.run.result')}</h2>
+      <h2 className="text-xl font-semibold tracking-tight">{t('helpers.node.output')}</h2>
       <Result value={run.result} large />
     </section>
   )

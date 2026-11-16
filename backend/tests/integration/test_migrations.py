@@ -193,6 +193,7 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "email_recipients",
         "connections",
         "cv_reviews",
+        "notes",
         "email_suppressions",
         "email_invites",
         "flow_versions",
@@ -485,7 +486,7 @@ def test_coach_tables_constraints_and_downgrade(scratch_migration_db):
     try:
         insp = inspect(engine)
         assert {c["name"] for c in insp.get_columns("conversations")} == {
-            "id", "org_id", "candidate_id", "job_id", "started_at",
+            "id", "org_id", "candidate_id", "job_id", "agent_id", "started_at",
         }  # fmt: skip
         assert {c["name"] for c in insp.get_columns("messages")} == {
             "id", "conversation_id", "org_id", "role", "content", "created_at", "meta",
@@ -498,6 +499,7 @@ def test_coach_tables_constraints_and_downgrade(scratch_migration_db):
             "organizations": "CASCADE",
             "candidate_profiles": "CASCADE",
             "job_postings": "SET NULL",
+            "agents": "SET NULL",
         }
         assert {i["name"] for i in insp.get_indexes("messages")} == {
             "ix_messages_conversation_id_created_at",

@@ -1,30 +1,43 @@
-import {
-  Bot,
-  Briefcase,
-  FileText,
-  ScanSearch,
-  Kanban,
-  Radar,
-  UserRound,
-  Workflow,
-  type LucideIcon,
-} from 'lucide-react'
-import type { Key } from '@/i18n'
+import { Bot, History, House, Workflow, Wrench, type LucideIcon } from 'lucide-react'
+import { SCREENS, type Tab } from '@/features/tools/screens'
 
-/** `label` is a message key: translate at render. */
-export const NAV: { to: string; label: Key; icon: LucideIcon }[] = [
-  { to: '/profile', label: 'nav.profile', icon: UserRound },
-  { to: '/jobs', label: 'nav.jobs', icon: Briefcase },
-  { to: '/radar', label: 'nav.radar', icon: Radar },
-  { to: '/cv-review', label: 'nav.cv_review', icon: ScanSearch },
-  { to: '/letters', label: 'nav.letters', icon: FileText },
-  { to: '/helpers', label: 'nav.helpers', icon: Bot },
-  { to: '/automations', label: 'nav.automations', icon: Workflow },
-  { to: '/tracker', label: 'nav.tracker', icon: Kanban },
+type Flags = { helpers_enabled?: boolean; cv_review_enabled?: boolean } | undefined
+type Node = Tab & { tabs?: Tab[]; screens?: Node[] }
+type Place = Node & { icon: LucideIcon }
+
+/** The five places of the app. `screens` are pages reached from a place (it stays the active one
+ *  there); `label` is a message key. */
+const HOME: Place = { to: '/', label: 'nav.today', icon: House }
+const TOOLS: Place = { to: '/tools', label: 'nav.tools', icon: Wrench, screens: SCREENS }
+const AGENTS: Place[] = [
+  // Coach is the first agent: its chat keeps /chat.
+  {
+    to: '/helpers',
+    label: 'nav.agents',
+    icon: Bot,
+    screens: [{ to: '/chat', label: 'nav.coach' }],
+  },
+  { to: '/automations', label: 'nav.flows', icon: Workflow },
+  { to: '/activity', label: 'nav.activity', icon: History },
 ]
 
-/** Pages behind the `helpers_enabled` flag. */
-/** Page behind the `cv_review_enabled` flag. */
-export const CV_PAGE = '/cv-review'
+const under = (path: string, to: string) =>
+  to === '/' ? path === '/' : path === to || path.startsWith(`${to}/`)
 
-export const HELPER_PAGES = ['/helpers', '/automations']
+/** Is `path` inside this place (itself, one of its tabs, or one of its screens)? A run page lives
+ *  under /automations but belongs to Activity. */
+export const inPlace = (p: Node, path: string): boolean =>
+  under(path, '/automations/runs')
+    ? p.to === '/activity'
+    : under(path, p.to) ||
+      !!p.tabs?.some((t) => under(path, t.to)) ||
+      !!p.screens?.some((s) => inPlace(s, path))
+
+/** The places this account may see (feature flags come from `/me`). */
+export const navFor = (me: Flags) => [HOME, TOOLS, ...(me?.helpers_enabled ? AGENTS : [])]
+
+/** The tab row of the career page holding `path` (Review only when CV review is on). */
+export const tabsFor = (me: Flags, path: string) =>
+  SCREENS.find((s) => inPlace(s, path))?.tabs?.filter(
+    (t) => t.to !== '/cv-review' || me?.cv_review_enabled,
+  )

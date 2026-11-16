@@ -8,6 +8,14 @@ const JD = fs.readFileSync(path.join(FIXTURES, 'live/jd_python_paris.txt'), 'utf
 
 const nav = (page: Page, name: string) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
+/** A career page: Tools in the menu, then its card. */
+const tool = async (page: Page, name: string) => {
+  await nav(page, 'Tools').click()
+  await page
+    .getByRole('region', { name: 'Career' })
+    .getByRole('link', { name: new RegExp(`^${name}`) })
+    .click()
+}
 
 test('v1 journey: sign up → profile → job → fit → letter → tracker → export → delete account', async ({
   page,
@@ -31,7 +39,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page).toHaveURL(/\/jobs/) // back to the page that was asked for
 
   // Profile: upload a CV, review, save.
-  await nav(page, 'Profile').click()
+  await tool(page, 'CV')
   await page.getByLabel('CV file').setInputFiles(path.join(FIXTURES, 'cv_sample.pdf'))
   await page.getByRole('button', { name: 'Extract profile' }).click()
   await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue('', { timeout: 120_000 })
@@ -39,14 +47,19 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await page.getByRole('button', { name: 'Save profile' }).click()
   await expect(page.getByText('Profile saved.')).toBeVisible()
 
-  // Coach: the home chat streams a reply and shows up in the sidebar's Recent list.
-  await page.getByRole('link', { name: 'New chat' }).click()
+  // Home is the dashboard: it names the next step of the journey.
+  await nav(page, 'Home').click()
+  await expect(page.getByRole('region', { name: 'Next step' })).toContainText('Review your CV')
+  if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/home.png` })
+
+  // Coach: the chat streams a reply and shows up in the sidebar's Recent list.
+  await page.goto('/chat') // the Agents page gets its Coach card in AP-06
   await page.getByRole('button', { name: 'Review my CV' }).click()
   await expect(page.getByText('Votre profil est solide.')).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('navigation', { name: 'Recent' })).toContainText('Review my CV')
 
   // Jobs: paste a description.
-  await nav(page, 'Jobs').click()
+  await tool(page, 'Jobs')
   await page.getByLabel('Job description text').fill(JD)
   await page.getByRole('button', { name: 'Add job' }).click()
   await expect(page.getByText(/Job added:/)).toBeVisible({ timeout: 120_000 })
@@ -77,7 +90,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   }
 
   // Helpers: an Interview prep helper tried on this job. Run says what is missing, then works.
-  await nav(page, 'Helpers').click()
+  await nav(page, 'Agents').click()
   await page.getByRole('button', { name: 'New helper' }).click()
   await page
     .getByRole('button', { name: /Interview prep/ })
@@ -92,7 +105,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page.getByText('A canned item.').first()).toBeVisible({ timeout: 30_000 })
 
   // Tracker: add, move, see the timeline.
-  await nav(page, 'Tracker').click()
+  await tool(page, 'Applications')
   await page.getByRole('button', { name: 'Track an application' }).first().click()
   await page.getByLabel('Company').fill('Fictiva Logiciels')
   await page.getByLabel('Status').selectOption('applied')

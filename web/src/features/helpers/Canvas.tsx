@@ -20,6 +20,7 @@ import {
 } from '@xyflow/react'
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react'
 import { useT } from '@/i18n'
+import { toolText } from '@/features/tools/api'
 import { Avatar } from './Avatar'
 import { type AvatarSpec, type Mood, PALETTES } from './avatar'
 import {
@@ -197,7 +198,7 @@ function subtitleOf(n: GraphNode, t: ReturnType<typeof useT>): string {
     case 'transform':
       return t(`helpers.transform.${n.op}`)
     case 'tool':
-      return t(`helpers.tool.${n.tool}.short`)
+      return toolText(t, n.tool, 'short')
     default:
       return t('helpers.node.agent')
   }

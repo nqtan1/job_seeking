@@ -6,10 +6,10 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.core import tools as registry
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.modules.agents import versioning
-from recruitai.modules.agents.blocks.catalogue import BLOCKS
 from recruitai.modules.agents.connections import repository as connections_repo
 from recruitai.modules.agents.contacts import repository as recipients_repo
 from recruitai.modules.agents.flows import engine
@@ -38,7 +38,7 @@ def ai_calls(graph: g.Graph) -> int:
     return sum(
         1
         if isinstance(n, g.AgentNode)
-        else BLOCKS[n.tool].ai_uses
+        else registry.get(n.tool).ai_uses
         if isinstance(n, g.ToolNode)
         else 0
         for n in graph.nodes
@@ -57,7 +57,7 @@ async def check(
         agents = await engine.load_agents(db, org_id=org_id, graph=graph)
     issues = g.validate(graph, agents)
     for n in graph.nodes:
-        if isinstance(n, g.ToolNode) and BLOCKS[n.tool].starts_runs:
+        if isinstance(n, g.ToolNode) and registry.get(n.tool).starts_runs:
             issues += await _target_issues(db, org_id, flow_id, n)
     return issues
 
@@ -80,7 +80,8 @@ async def _target_issues(
         return gone
     target = graph_of(version)
     if any(
-        isinstance(n, g.ToolNode) and BLOCKS[n.tool].starts_runs for n in target.nodes
+        isinstance(n, g.ToolNode) and registry.get(n.tool).starts_runs
+        for n in target.nodes
     ):
         return [g.Issue("target_nested", "That flow starts flows itself.", node.id)]
     return []

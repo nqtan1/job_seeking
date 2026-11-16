@@ -3,6 +3,7 @@ import { defineMessages } from '../define'
 export const coach = defineMessages({
   en: {
     'coach.title': 'Career coach',
+    'coach.agent': 'Helper',
     'coach.home': 'What can I help you with?',
     'coach.prompt.cv': 'Review my CV',
     'coach.prompt.cv.send': 'Review my CV and tell me what to improve.',
@@ -75,6 +76,7 @@ export const coach = defineMessages({
   },
   fr: {
     'coach.title': 'Coach carrière',
+    'coach.agent': 'Assistant',
     'coach.home': 'Comment puis-je vous aider ?',
     'coach.prompt.cv': 'Relire mon CV',
     'coach.prompt.cv.send': 'Relis mon CV et dis-moi ce que je peux améliorer.',
@@ -151,6 +153,7 @@ export const coach = defineMessages({
   },
   vi: {
     'coach.title': 'Huấn luyện viên nghề nghiệp',
+    'coach.agent': 'Trợ lý',
     'coach.home': 'Tôi có thể giúp gì cho bạn?',
     'coach.prompt.cv': 'Xem lại CV của tôi',
     'coach.prompt.cv.send': 'Hãy xem lại CV của tôi và cho tôi biết cần cải thiện gì.',

@@ -53,6 +53,7 @@ async def _conversation_out(db: AsyncSession, c: Conversation) -> ConversationOu
         id=c.id,
         candidate_id=c.candidate_id,
         job_id=c.job_id,
+        agent_id=c.agent_id,
         started_at=c.started_at,
         focus=FocusJob(job_id=focus[0], title=focus[1], company=focus[2])
         if focus
@@ -161,9 +162,14 @@ async def create_conversation(
     body: ConversationIn,
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> ConversationOut:
     conversation = await service.create_conversation(
-        db, org_id=ctx.org_id, job_id=body.job_id
+        db,
+        org_id=ctx.org_id,
+        job_id=body.job_id,
+        agent_id=body.agent_id,
+        settings=settings,
     )
     return await _conversation_out(db, conversation)
 
@@ -298,6 +304,7 @@ async def send_message(
             conversation_id=conversation_id,
             content=body.content,
             language=ctx.language,
+            user_id=ctx.user_id,
         )
     )
 
@@ -333,5 +340,6 @@ async def regenerate(
             content=None,
             replace_last=True,
             language=ctx.language,
+            user_id=ctx.user_id,
         )
     )

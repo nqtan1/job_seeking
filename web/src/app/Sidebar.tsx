@@ -1,13 +1,6 @@
-import {
-  FileText,
-  LayoutDashboard,
-  MessageSquare,
-  PanelLeft,
-  Sparkles,
-  SquarePen,
-} from 'lucide-react'
+import { FileText, LayoutDashboard, MessageSquare, PanelLeft, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Link, NavLink } from 'react-router'
+import { Link, NavLink, useLocation } from 'react-router'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { useT } from '@/i18n'
 import { useConversations } from '@/features/coach/api'
@@ -17,7 +10,7 @@ import { RadarBadge } from '@/features/radar/RadarBadge'
 import { useMe, useSetLanguage } from '@/features/settings/api'
 import { cn } from 'cn'
 import { AccountMenu } from './AccountMenu'
-import { CV_PAGE, HELPER_PAGES, NAV } from './nav'
+import { inPlace, navFor } from './nav'
 
 const row = 'flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors'
 const active = ({ isActive }: { isActive: boolean }) =>
@@ -118,12 +111,14 @@ function Recent() {
   )
 }
 
-/** The left column: new chat, tools, recent items, account. Shared by desktop and the mobile drawer. */
+/** The left column: the five places, Admin, recent items, account. Shared by desktop and the mobile drawer. */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
   const t = useT()
   const me = useMe().data
   const isAdmin = me?.is_admin
   const setLanguage = useSetLanguage()
+  const { pathname } = useLocation()
+  const places = navFor(me)
   return (
     <div className="flex h-full flex-col gap-1 p-2">
       <div className="flex items-center justify-between gap-2 px-1 pb-2">
@@ -143,29 +138,32 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?
           </button>
         )}
       </div>
-      <NavLink to="/" end className={active} title={t('nav.new_chat')}>
-        <SquarePen className="size-4 shrink-0" />
-        <Label collapsed={collapsed}>{t('nav.new_chat')}</Label>
-      </NavLink>
       <nav aria-label={t('nav.main')} className="space-y-0.5 pt-2">
-        {NAV.filter(
-          ({ to }) =>
-            (!HELPER_PAGES.includes(to) || me?.helpers_enabled) &&
-            (to !== CV_PAGE || me?.cv_review_enabled),
-        ).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={active} title={t(label)}>
-            <Icon className="size-4 shrink-0" />
-            <Label collapsed={collapsed}>{t(label)}</Label>
-            {to === '/radar' && <RadarBadge collapsed={collapsed} />}
-          </NavLink>
+        {places.map((p) => (
+          <Link
+            key={p.to}
+            to={p.to}
+            aria-current={inPlace(p, pathname) ? 'page' : undefined}
+            className={active({ isActive: inPlace(p, pathname) })}
+            title={t(p.label)}
+          >
+            <p.icon className="size-4 shrink-0" />
+            <Label collapsed={collapsed}>{t(p.label)}</Label>
+            {p.to === '/tools' && <RadarBadge collapsed={collapsed} />}
+          </Link>
         ))}
-        {isAdmin && (
+      </nav>
+      {isAdmin && (
+        <nav aria-label={t('nav.more')} className="space-y-0.5 pt-3">
+          {!collapsed && (
+            <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t('nav.more')}</p>
+          )}
           <NavLink to="/admin" className={active} title={t('nav.admin')}>
             <LayoutDashboard className="size-4 shrink-0" />
             <Label collapsed={collapsed}>{t('nav.admin')}</Label>
           </NavLink>
-        )}
-      </nav>
+        </nav>
+      )}
       {/* Always takes the free height, so the account row stays at the very bottom. */}
       <div className="min-h-0 flex-1 overflow-y-auto">{!collapsed && <Recent />}</div>
       {!collapsed && (

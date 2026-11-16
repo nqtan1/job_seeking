@@ -1,11 +1,9 @@
 """Action blocks (ADR 0032): the page reader refuses the private network, and the graph knows tools."""
 
-import re
-
 import pytest
 
-from recruitai.modules.agents.blocks import tools
-from recruitai.modules.agents.blocks.catalogue import BLOCKS
+import recruitai.packs  # noqa: F401  every pack registers its tools
+from recruitai.core import tools as registry
 from recruitai.modules.agents.blocks.errors import ToolFailed
 from recruitai.modules.agents.blocks.web import MAX_TEXT, fetch_public_page, page_text
 from recruitai.modules.agents.flows import graph as g
@@ -61,22 +59,8 @@ def test_tool_blocks_have_fixed_inputs_and_outputs_and_a_job_lookup_needs_no_wir
         g.ToolNode.model_validate({"id": t, "tool": "run_shell"})
 
 
-def test_the_web_editor_knows_exactly_the_action_blocks_the_server_has():
-    from tests.unit.test_flow_graph import LIMITS
-
-    web = LIMITS.read_text()
-    block = web[web.index("export const TOOL_IO") : web.index("} as const satisfies")]
-    for kind, (inputs, outputs) in (
-        (k, (b.inputs, b.outputs)) for k, b in BLOCKS.items()
-    ):
-        part = block[block.index(f"{kind}:") :].split("},", 1)[0]
-        names = {n for n, _ in inputs} | set(outputs)
-        assert names <= set(re.findall(r"'([a-z_]+)'", part)), kind
-        assert len(re.findall(r"\['", part.split("out:")[0])) == len(inputs), kind
-    assert set(re.findall(r"^\s{2}([a-z_]+): \{", block, re.MULTILINE)) == set(BLOCKS)
-
-
-def test_every_block_has_a_handler_unless_the_engine_owns_it():
-    """Adding a block is one catalogue row and one handler: the two lists cannot drift apart."""
-    engine_owned = {k for k, b in BLOCKS.items() if b.starts_runs or b.pauses}
-    assert set(tools.HANDLERS) == set(BLOCKS) - engine_owned
+def test_every_tool_has_a_handler_unless_the_engine_owns_it():
+    """Adding a tool is one spec and one handler, in any pack: the two cannot drift apart."""
+    for t in registry.all().values():
+        engine_owned = t.starts_runs or t.pauses
+        assert (t.id in registry._HANDLERS) != engine_owned, t.id

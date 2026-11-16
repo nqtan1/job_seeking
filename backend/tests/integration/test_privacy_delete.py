@@ -30,7 +30,7 @@ ORG_TABLES = (
     "application_events", "conversations", "messages", "radar_searches", "radar_results",
     "radar_runs", "consents", "agents", "agent_versions", "flows", "flow_versions", "flow_runs",
     "flow_run_steps", "flow_run_handoffs", "flow_schedules", "flow_effects", "email_recipients", "connections",
-    "cv_reviews",
+    "cv_reviews", "notes",
 )  # fmt: skip
 
 
@@ -154,6 +154,12 @@ async def _fill_account(
                 "INSERT INTO cv_reviews (id, org_id, track, level, score, data, schema_version,"
                 " model, prompt_version) VALUES (gen_random_uuid(), :o, 'backend', 'mid', 50,"
                 " '{}', 1, 'm', 'v@1')"
+            ),
+            {"o": me["active_org_id"]},
+        )
+        await conn.execute(
+            text(
+                "INSERT INTO notes (id, org_id, title, body) VALUES (gen_random_uuid(), :o, 't', 'b')"
             ),
             {"o": me["active_org_id"]},
         )

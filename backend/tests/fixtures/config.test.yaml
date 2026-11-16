@@ -1,5 +1,6 @@
 helpers_enabled: true
 cv_review_enabled: true
+notes_enabled: true
 agents:
   cv_extract: {provider: gemini}
   job_extract: {provider: gemini}
@@ -12,3 +13,4 @@ agents:
   coach: {provider: gemini}
   helper: {provider: gemini}
   helper_smart: {provider: gemini}
+  summarise: {provider: gemini}

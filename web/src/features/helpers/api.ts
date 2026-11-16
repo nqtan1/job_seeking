@@ -9,7 +9,8 @@ import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
 import { useInvalidating } from '@/lib/query'
-import type { Graph, Specs, VersionSpec } from './graph'
+import { useTools } from '@/features/tools/api'
+import { type Graph, type Specs, type VersionSpec, setTools } from './graph'
 
 type S = components['schemas']
 export type Agent = S['AgentOut']
@@ -272,6 +273,13 @@ export const useCancelRun = () =>
       ),
     [['helper-run'], FLOWS, RUNS],
   )
+
+/** The tool table the graph rules read (`toolOf`): pages that draw a graph wait for it. */
+export function useToolTable() {
+  const tools = useTools()
+  if (tools.data) setTools(tools.data)
+  return tools
+}
 
 /** The specs of the helper versions a graph pins, for port names (inputs/outputs of a step).
  *  `ready` is false while a newly added helper's spec is still loading: linking waits for it. */

@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai import usage
 from recruitai.config import Settings
+from recruitai.core import tools as registry
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
-from recruitai.modules.agents.blocks.catalogue import BLOCKS
 from recruitai.modules.agents.blocks.errors import DailyLimit
 from recruitai.modules.agents.flows import engine
 from recruitai.modules.agents.flows import graph as g
@@ -74,7 +74,8 @@ def _needs_job(graph: g.Graph, agents: dict[UUID, g.AgentInfo]) -> bool:
     return any(
         {"job", "fit"} & set(a.spec.context_sources) for a in agents.values()
     ) or any(
-        isinstance(n, g.ToolNode) and BLOCKS[n.tool].needs_job for n in graph.nodes
+        isinstance(n, g.ToolNode) and registry.get(n.tool).needs_job
+        for n in graph.nodes
     )
 
 

@@ -14,7 +14,6 @@ from recruitai.modules.agents.blocks import tools
 from recruitai.modules.agents.connections.router import bot
 from recruitai.modules.agents.contacts.router import get_sender
 from recruitai.modules.agents.flows import engine
-from tests.e2e_radar_fakes import Provider
 from tests.integration.test_flows import (
     BASE,
     edge,
@@ -44,7 +43,6 @@ async def test_a_resume_does_not_repeat_a_done_effect_nor_lose_one_that_never_le
     app.dependency_overrides[get_sender] = lambda: mail
     kit = tools.ToolKit(
         fetch=lambda url: None,  # type: ignore[arg-type,return-value]
-        jobs=Provider(),
         mail=mail,
         chat=tg,
     )

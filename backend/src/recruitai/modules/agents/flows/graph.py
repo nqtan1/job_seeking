@@ -9,7 +9,7 @@ import math
 import re
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Annotated, Any, Literal, get_args
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import (
@@ -20,7 +20,10 @@ from pydantic import (
     model_validator,
 )
 
-from recruitai.modules.agents.blocks.catalogue import BLOCKS
+from recruitai.core import tools as registry
+from recruitai.modules.agents.blocks import (
+    catalogue,  # noqa: F401  registers the blocks
+)
 from recruitai.modules.agents.helpers.schemas import (
     EXTRA_INPUT,
     MAX_INPUT_CHARS,
@@ -93,31 +96,15 @@ class TransformNode(_Node):
         return self
 
 
-# ADR 0032: a closed list of actions. Each has fixed inputs ``(name, required)`` and outputs; the user
-# only chooses which one and wires the edges. There is no config a user could put a URL or code in.
-ToolKind = Literal[
-    "web_search",
-    "job_search",
-    "find_offers",
-    "fit_check",
-    "for_each",
-    "read_page",
-    "job_lookup",
-    "add_to_tracker",
-    "send_email",
-    "telegram_send",
-    "wait",
-]
-if set(get_args(ToolKind)) != set(
-    BLOCKS
-):  # the type and the catalogue must never drift apart
-    raise RuntimeError("ToolKind and blocks.BLOCKS list different blocks")
+# ADR 0032, 0039: a closed list of actions, the tools of ``core.tools``. Each has fixed inputs
+# ``(name, required)`` and outputs; the user only chooses which one and wires the edges. There is no
+# config a user could put a URL or code in.
 
 
-UNTRUSTED_TOOLS = {
-    "web_search",
-    "read_page",
-}  # their output is text written by outsiders
+def _known_tool(v: str) -> str:
+    if v not in registry.all():
+        raise ValueError("unknown tool")
+    return v
 
 
 MAX_FIXED_CHARS = 500
@@ -128,7 +115,7 @@ NOT_TYPEABLE = {"url", "items"}
 
 class ToolNode(_Node):
     type: Literal["tool"] = "tool"
-    tool: ToolKind
+    tool: Annotated[str, AfterValidator(_known_tool)]
     minutes: int | None = Field(None, ge=1, le=7 * 24 * 60)  # wait only
     flow_id: UUID | None = None  # for_each only: the automation started for each item
     # Text typed on the step for one of its inputs (e.g. the keywords of a search). Used only when no
@@ -141,7 +128,7 @@ class ToolNode(_Node):
             raise ValueError("only wait takes minutes, and it needs them")
         if self.flow_id is not None and self.tool != "for_each":
             raise ValueError("only for_each takes a flow")
-        names = {name for name, _ in BLOCKS[self.tool].inputs}
+        names = {name for name, _ in registry.get(self.tool).inputs}
         if not set(self.fixed) <= names - NOT_TYPEABLE:
             raise ValueError("a typed value must belong to an input that can be typed")
         self.fixed = {k: v.strip() for k, v in self.fixed.items() if v.strip()}
@@ -217,7 +204,7 @@ def input_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[tuple[str, boo
         case TransformNode():
             return [("text", True)]
         case ToolNode():
-            return list(BLOCKS[node.tool].inputs)
+            return list(registry.get(node.tool).inputs)
     return []
 
 
@@ -236,7 +223,7 @@ def output_names(node: Any, agents: dict[UUID, AgentInfo]) -> list[str]:
         case TransformNode():
             return ["text"]
         case ToolNode():
-            return list(BLOCKS[node.tool].outputs)
+            return list(registry.get(node.tool).outputs)
     return []  # an output node is a sink
 
 
@@ -356,7 +343,7 @@ def validate(graph: Graph, agents: dict[UUID, AgentInfo]) -> list[Issue]:
                 and TOKEN.search(m.value)
                 and (
                     isinstance(src, AgentNode)
-                    or (isinstance(src, ToolNode) and src.tool in UNTRUSTED_TOOLS)
+                    or (isinstance(src, ToolNode) and registry.get(src.tool).untrusted)
                 )
             ):  # a warning only: injected text could aim the fetch at a hostile address
                 issues.append(

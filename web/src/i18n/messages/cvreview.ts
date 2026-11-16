@@ -35,6 +35,10 @@ export const cvreview = defineMessages({
     'cvr.tab.cv': 'CV',
     'cvr.tab.comments': 'Comments',
     'cvr.col.cv': 'Your CV',
+    'cvr.promo.title': 'How strong is your CV?',
+    'cvr.promo.desc':
+      'Get line-by-line feedback for technical roles: what works, what to fix, and a rewrite you can use right away.',
+    'cvr.promo.cta': 'Review my CV',
     'cvr.view.pdf': 'Original PDF',
     'cvr.view.text': 'Edit text',
     'cvr.pdf.note':
@@ -160,6 +164,10 @@ export const cvreview = defineMessages({
     'cvr.tab.cv': 'CV',
     'cvr.tab.comments': 'Commentaires',
     'cvr.col.cv': 'Votre CV',
+    'cvr.promo.title': 'Votre CV est-il convaincant ?',
+    'cvr.promo.desc':
+      'Recevez un retour ligne par ligne pour les postes techniques : ce qui marche, ce qu’il faut corriger, et une reformulation prête à l’emploi.',
+    'cvr.promo.cta': 'Analyser mon CV',
     'cvr.view.pdf': 'PDF d’origine',
     'cvr.view.text': 'Modifier le texte',
     'cvr.pdf.note':
@@ -288,6 +296,10 @@ export const cvreview = defineMessages({
     'cvr.tab.cv': 'CV',
     'cvr.tab.comments': 'Nhận xét',
     'cvr.col.cv': 'CV của bạn',
+    'cvr.promo.title': 'CV của bạn mạnh đến đâu?',
+    'cvr.promo.desc':
+      'Nhận nhận xét từng dòng cho vị trí kỹ thuật: điểm tốt, điểm cần sửa và bản viết lại dùng được ngay.',
+    'cvr.promo.cta': 'Đánh giá CV của tôi',
     'cvr.view.pdf': 'PDF gốc',
     'cvr.view.text': 'Sửa văn bản',
     'cvr.pdf.note':

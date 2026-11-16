@@ -82,6 +82,8 @@ class AgentVersion(Base):
     inputs: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     context_sources: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     output_spec: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    # registry ids of the tools it may call in chat (ADR 0039)
+    tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     note: Mapped[str] = mapped_column(String, nullable=False, server_default="")
     schema_version: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="1"

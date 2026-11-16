@@ -29,6 +29,7 @@ from recruitai.modules.identity import service as identity
 from recruitai.modules.jobs import service as jobs
 from recruitai.modules.letters import service as letters
 from recruitai.modules.matching import service as matching
+from recruitai.modules.notes import service as notes
 from recruitai.modules.radar import service as radar
 
 EXPORT_TASK_KIND = "privacy.export_user_data"
@@ -89,6 +90,7 @@ async def build_export(
         applications,
         coach,
         cvreview,
+        notes,
         documents,
         radar,
         agents,

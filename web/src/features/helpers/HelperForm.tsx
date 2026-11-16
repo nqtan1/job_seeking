@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { MAX_FIELDS, MAX_INPUTS, MAX_INPUT_CHARS, type VersionSpec, freeName } from './graph'
+import { toolText, useTools } from '@/features/tools/api'
 import { ChoiceCard, JobSelect, Result } from './ui'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Spinner } from '@/components/Spinner'
@@ -379,6 +380,8 @@ export function SpecForm({
         </>
       )}
 
+      <ToolPicker value={spec.tools ?? []} onChange={(tools) => set({ tools })} />
+
       <Block title={t('helpers.quality')}>
         <div
           role="radiogroup"
@@ -400,6 +403,33 @@ export function SpecForm({
         </div>
       </Block>
     </div>
+  )
+}
+
+const MAX_TOOLS = 12 // backend helpers/schemas.MAX_TOOLS
+
+/** The tools the helper may use when you chat with it: the chat tools of the packs that are on. */
+function ToolPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const t = useT()
+  const tools = (useTools().data ?? []).filter((x) => x.chat)
+  if (!tools.length) return null
+  const full = value.length >= MAX_TOOLS
+  return (
+    <Block title={t('nav.tools')} hint={t('helpers.tools_max', { max: MAX_TOOLS })}>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {tools.map(({ id }) => (
+          <ChoiceCard
+            key={id}
+            type="checkbox"
+            title={toolText(t, id, 'name')}
+            checked={value.includes(id)}
+            onChange={(on) =>
+              on ? !full && onChange([...value, id]) : onChange(value.filter((x) => x !== id))
+            }
+          />
+        ))}
+      </div>
+    </Block>
   )
 }
 

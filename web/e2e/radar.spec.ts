@@ -6,8 +6,20 @@ import path from 'node:path'
 const FIXTURES = path.resolve(import.meta.dirname, '../../backend/tests/fixtures')
 const SHOTS = process.env.E2E_SHOTS
 
-const menu = (page: Page, name: string | RegExp) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name })
+/** Open a career screen through the menu: Tools, its card, then its tab when the page has several. */
+const CARD: Record<string, string> = { Profile: 'CV', Radar: 'Jobs', Tracker: 'Applications' }
+const go = async (page: Page, name: string) => {
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tools' }).click()
+  await page
+    .getByRole('region', { name: 'Career' })
+    .getByRole('link', { name: new RegExp(`^${CARD[name] ?? name}`) })
+    .click()
+  if (name === 'Profile' || name === 'Radar')
+    await page
+      .getByRole('navigation', { name: 'Section' })
+      .getByRole('link', { name: new RegExp(`^${name}`) })
+      .click()
+}
 
 const shot = async (page: Page, name: string) => {
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true })
@@ -28,7 +40,7 @@ test('radar: the user sees it work, understands the matches and follows one to t
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
-  await menu(page, 'Profile').click()
+  await go(page, 'Profile')
   await page.getByLabel('CV file').setInputFiles(path.join(FIXTURES, 'cv_sample.pdf'))
   await page.getByRole('button', { name: 'Extract profile' }).click()
   await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue('', { timeout: 120_000 })
@@ -36,7 +48,7 @@ test('radar: the user sees it work, understands the matches and follows one to t
   await expect(page.getByText('Profile saved.')).toBeVisible()
 
   // First visit: explained, with a one-click start taken from the CV.
-  await menu(page, 'Radar').click()
+  await go(page, 'Radar')
   await expect(page.getByText('No radar yet')).toBeVisible()
   await expect(
     page.getByText(/It never applies for you and never contacts a company/),
@@ -84,14 +96,16 @@ test('radar: the user sees it work, understands the matches and follows one to t
   )
   // The user is looking at the matches, so the "new" badge in the menu and the tab goes away
   // (the badge showing up for unseen matches is covered by tests/radar-badge.test.tsx).
-  await expect(menu(page, /Radar/).getByLabel(/new matches/)).toHaveCount(0)
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).getByLabel(/new matches/),
+  ).toHaveCount(0)
   await expect(page).toHaveTitle('RecruitAI')
   await shot(page, '3-results')
 
   // Keep the best one: it goes on to the letter, and the radar keeps following it.
   await page.getByRole('button', { name: 'Keep and write a letter' }).first().click()
   await expect(page).toHaveURL(/\/letters\?job=/)
-  await menu(page, /Radar/).click()
+  await go(page, 'Radar')
   const following = page.getByRole('region', { name: 'Following up' })
   await expect(following.getByText('Développeur Python Backend')).toBeVisible()
   await following.getByRole('button', { name: 'I applied' }).click()
@@ -111,17 +125,17 @@ test('radar: the user sees it work, understands the matches and follows one to t
     /candidat\.francetravail\.fr\/offres\/recherche\/detail\/E1/,
   )
   await shot(page, '8-job-and-analysis')
-  await menu(page, /Radar/).click()
+  await go(page, 'Radar')
 
   // It shows in the tracker, and the jobs list says where it came from.
-  await menu(page, 'Tracker').click()
+  await go(page, 'Tracker')
   await expect(page.getByRole('region', { name: 'Applied' })).toContainText('Fictiva Logiciels')
-  await menu(page, 'Jobs').click()
+  await go(page, 'Jobs')
   await expect(page.getByText('From radar').first()).toBeVisible()
   await shot(page, '5-jobs')
 
   // Disagree with a rejection: review it anyway, with no new AI call.
-  await menu(page, /Radar/).click()
+  await go(page, 'Radar')
   await page.getByText(/Checked but not shortlisted/).click()
   await page.getByRole('button', { name: 'Review Ingénieur Java Senior anyway' }).click()
   await expect(page).toHaveURL(/\/jobs\/.+\/fit/)

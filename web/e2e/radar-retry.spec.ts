@@ -8,8 +8,20 @@ const FIXTURES = path.resolve(import.meta.dirname, '../../backend/tests/fixtures
 const AI_OFF = path.resolve(import.meta.dirname, '../../backend/.e2e-run/fail-ai')
 const SHOTS = process.env.E2E_SHOTS
 
-const menu = (page: Page, name: string | RegExp) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name })
+/** Open a career screen through the menu: Tools, its card, then its tab when the page has several. */
+const CARD: Record<string, string> = { Profile: 'CV', Radar: 'Jobs', Tracker: 'Applications' }
+const go = async (page: Page, name: string) => {
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tools' }).click()
+  await page
+    .getByRole('region', { name: 'Career' })
+    .getByRole('link', { name: new RegExp(`^${CARD[name] ?? name}`) })
+    .click()
+  if (name === 'Profile' || name === 'Radar')
+    await page
+      .getByRole('navigation', { name: 'Section' })
+      .getByRole('link', { name: new RegExp(`^${name}`) })
+      .click()
+}
 
 test.afterEach(() => fs.rmSync(AI_OFF, { force: true }))
 
@@ -23,13 +35,13 @@ test('radar: a run interrupted by the AI is explained, loses nothing and is retr
   await page.getByLabel('Password', { exact: true }).fill('password123')
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await menu(page, 'Profile').click()
+  await go(page, 'Profile')
   await page.getByLabel('CV file').setInputFiles(path.join(FIXTURES, 'cv_sample.pdf'))
   await page.getByRole('button', { name: 'Extract profile' }).click()
   await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue('', { timeout: 120_000 })
   await page.getByRole('button', { name: 'Save profile' }).click()
   await expect(page.getByText('Profile saved.')).toBeVisible()
-  await menu(page, 'Radar').click()
+  await go(page, 'Radar')
   await page.getByRole('button', { name: 'Start this radar' }).click()
 
   // The AI is down: the run finds offers but cannot score them.

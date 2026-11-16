@@ -26,6 +26,11 @@ export const routes: RouteObject[] = [
           {
             index: true,
             lazy: () =>
+              import('@/features/today/TodayPage').then((m) => ({ Component: m.TodayPage })),
+          },
+          {
+            path: '/chat',
+            lazy: () =>
               import('@/features/coach/ChatPage').then((m) => ({ Component: m.ChatPage })),
           },
           {
@@ -49,6 +54,20 @@ export const routes: RouteObject[] = [
             path: '/helpers',
             lazy: () =>
               import('@/features/helpers/HelpersPage').then((m) => ({ Component: m.HelpersPage })),
+          },
+          {
+            path: '/tools',
+            lazy: () =>
+              import('@/features/tools/ToolsPage').then((m) => ({ Component: m.ToolsPage })),
+          },
+          {
+            path: '/tools/:id',
+            lazy: () =>
+              import('@/features/tools/ToolPage').then((m) => ({ Component: m.ToolPage })),
+          },
+          {
+            path: '/activity',
+            lazy: () => import('./ActivityPage').then((m) => ({ Component: m.ActivityPage })),
           },
           {
             path: '/automations',

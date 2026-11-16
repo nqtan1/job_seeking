@@ -776,6 +776,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notes */
+        get: operations["list_notes_api_v1_notes_get"];
+        put?: never;
+        /** Create Note */
+        post: operations["create_note_api_v1_notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Note */
+        get: operations["get_note_api_v1_notes__note_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Note */
+        delete: operations["delete_note_api_v1_notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/coach/conversations": {
         parameters: {
             query?: never;
@@ -1177,6 +1213,26 @@ export interface paths {
          *     Asking again returns the one that exists.
          */
         post: operations["install_job_hunter_api_v1_flows_starters_job_hunter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tools
+         * @description The tools of the packs that are on (ADR 0039).
+         */
+        get: operations["list_tools_api_v1_tools_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2775,6 +2831,11 @@ export interface components {
              * @description A job from the inbox to discuss. Optional: general career advice.
              */
             job_id?: string | null;
+            /**
+             * Agent Id
+             * @description A helper to chat with. Optional: null is the default coach.
+             */
+            agent_id?: string | null;
         };
         /** ConversationOut */
         ConversationOut: {
@@ -2790,6 +2851,8 @@ export interface components {
             candidate_id: string;
             /** Job Id */
             job_id: string | null;
+            /** Agent Id */
+            agent_id: string | null;
             /**
              * Started At
              * Format: date-time
@@ -4048,6 +4111,34 @@ export interface components {
             /** Questions */
             questions: components["schemas"]["MotivationQuestion"][];
         };
+        /** NoteIn */
+        NoteIn: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Source Url */
+            source_url?: string | null;
+        };
+        /** NoteOut */
+        NoteOut: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Source Url */
+            source_url?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** OnboardingOut */
         OnboardingOut: {
             /** Has Profile */
@@ -5193,6 +5284,13 @@ export interface components {
             /** Download Url */
             download_url?: string | null;
         };
+        /** ToolInput */
+        ToolInput: {
+            /** Name */
+            name: string;
+            /** Required */
+            required: boolean;
+        };
         /** ToolNode */
         ToolNode: {
             /**
@@ -5212,11 +5310,8 @@ export interface components {
              * @enum {string}
              */
             type: "tool";
-            /**
-             * Tool
-             * @enum {string}
-             */
-            tool: "web_search" | "job_search" | "find_offers" | "fit_check" | "for_each" | "read_page" | "job_lookup" | "add_to_tracker" | "send_email" | "telegram_send" | "wait";
+            /** Tool */
+            tool: string;
             /** Minutes */
             minutes?: number | null;
             /** Flow Id */
@@ -5228,6 +5323,32 @@ export interface components {
             fixed: {
                 [key: string]: string;
             };
+        };
+        /** ToolOut */
+        ToolOut: {
+            /** Id */
+            id: string;
+            /** Pack */
+            pack: string;
+            /** Inputs */
+            inputs: components["schemas"]["ToolInput"][];
+            /** Outputs */
+            outputs: string[];
+            /**
+             * Effect
+             * @enum {string}
+             */
+            effect: "read" | "write" | "outside";
+            /** Ai Uses */
+            ai_uses: number;
+            /** Daily Cap */
+            daily_cap: number | null;
+            /** Needs Job */
+            needs_job: boolean;
+            /** Chat */
+            chat: boolean;
+            /** Page */
+            page: string | null;
         };
         /** TransformNode */
         TransformNode: {
@@ -5506,6 +5627,8 @@ export interface components {
              *     }
              */
             output: components["schemas"]["OutputSpec"];
+            /** Tools */
+            tools?: string[];
         };
     };
     responses: never;
@@ -8470,6 +8593,206 @@ export interface operations {
             };
         };
     };
+    list_notes_api_v1_notes_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"][];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_note_api_v1_notes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description A service we depend on is temporarily unavailable. Please try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    get_note_api_v1_notes__note_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_note_api_v1_notes__note_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_conversations_api_v1_coach_conversations_get: {
         parameters: {
             query?: {
@@ -10251,6 +10574,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    list_tools_api_v1_tools_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolOut"][];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

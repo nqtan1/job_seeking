@@ -4,6 +4,7 @@
 
 from uuid import UUID
 
+from recruitai import packs  # noqa: F401  registers every tool (ADR 0039)
 from recruitai.config import get_settings
 from recruitai.core.db import create_engine, create_session_factory
 from recruitai.core.logging import configure_logging

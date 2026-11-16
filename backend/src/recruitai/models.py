@@ -14,6 +14,7 @@ from recruitai.modules.identity import models as _identity
 from recruitai.modules.jobs import models as _jobs
 from recruitai.modules.letters import models as _letters
 from recruitai.modules.matching import models as _matching
+from recruitai.modules.notes import models as _notes
 from recruitai.modules.radar import models as _radar
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "_jobs",
     "_letters",
     "_matching",
+    "_notes",
     "_overrides",
     "_radar",
     "_tasks",

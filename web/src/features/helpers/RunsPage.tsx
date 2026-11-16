@@ -23,7 +23,7 @@ function useOutcome() {
     if (r.status === 'queued') return t('helpers.pages.runs.waiting')
     if (r.status === 'waiting')
       return t('helpers.run.waiting_until', { time: when(r.wake_at, locale) })
-    if (r.status === 'running') return t('helpers.pages.runs.working')
+    if (r.status === 'running') return t('helpers.ui.working')
     if (r.status === 'done') return t('helpers.pages.runs.done')
     const key = `helpers.rerr.${r.status === 'cancelled' ? 'cancelled' : r.error_code}`
     return t((key in catalogs.en ? key : 'helpers.rerr.generic') as Key)
@@ -87,7 +87,7 @@ function RunRow({ run }: { run: RunListItem }) {
         }
       >
         {again.isPending ? <Spinner /> : <Play data-icon="inline-start" />}
-        {t('helpers.pages.runs.again')}
+        {t('helpers.live.again')}
       </Button>
     </li>
   )

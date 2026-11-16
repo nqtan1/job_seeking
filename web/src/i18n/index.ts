@@ -11,6 +11,7 @@ import { pipeline } from './messages/pipeline'
 import { radar } from './messages/radar'
 import { settings } from './messages/settings'
 import { signature } from './messages/signature'
+import { tools } from './messages/tools'
 import { tracker } from './messages/tracker'
 
 export const LANGS = ['en', 'fr', 'vi'] as const
@@ -32,6 +33,7 @@ const modules = [
   admin,
   signature,
   cvreview,
+  tools,
 ]
 /** Messages that load with their feature (see `registerMessages`): typed here, shipped there. */
 type LazyModules = typeof helpers

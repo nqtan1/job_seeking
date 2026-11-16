@@ -10,7 +10,10 @@ coach_job_focus: false
 
 # Helpers and flows (ADR 0031): on. Set to false to hide the menu entry and make the API answer 404.
 helpers_enabled: true
-cv_review_enabled: false
+# CV review (technical CVs): on. Set to false to hide the menu entry and make the API answer 503.
+cv_review_enabled: true
+# Notes (web & research pack): off until it has its privacy line (TASKS_assistant_platform risk 6).
+notes_enabled: false
 
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}
@@ -28,3 +31,4 @@ agents:
   # Helpers (ADR 0031): the user's Fast/Careful choice picks the route.
   helper: {provider: gemini, model: gemini-3.5-flash-lite}
   helper_smart: {provider: gemini, model: gemini-3.8-flash}
+  summarise: {provider: gemini, model: gemini-3.5-flash-lite}

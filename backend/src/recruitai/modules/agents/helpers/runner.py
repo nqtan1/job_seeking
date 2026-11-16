@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, create_model
 
 from recruitai.ai.gateway import LLMGateway, Part, TextPart, generate_retrying_invalid
 from recruitai.ai.prompts import helper
+from recruitai.ai.text import fence
 from recruitai.core.errors import ValidationFailed
 from recruitai.modules.agents.helpers.schemas import (
     EXTRA_INPUT,
@@ -22,11 +23,6 @@ MAX_TEXT = 20_000
 
 class TextResult(BaseModel):
     text: Annotated[str, Field(max_length=MAX_TEXT)]
-
-
-def fence(text: str) -> str:
-    """Untrusted text must not be able to close a <data> block or open another."""
-    return text.replace("<", "‹").replace(">", "›")
 
 
 def output_model(spec: OutputSpec) -> type[BaseModel]:

@@ -45,7 +45,7 @@ export function ContactsTab() {
                   variant="ghost"
                   label={
                     <>
-                      <Trash2 aria-hidden /> {t('helpers.contacts.remove')}
+                      <Trash2 aria-hidden /> {t('helpers.remove')}
                     </>
                   }
                   aria-label={t('helpers.contacts.remove_for', { email: c.email })}
@@ -103,7 +103,7 @@ function AddContact() {
         />
         <Button type="submit" disabled={!value || add.isPending}>
           {add.isPending && <Spinner />}
-          {t('helpers.contacts.add_button')}
+          {t('helpers.flow.add')}
         </Button>
       </div>
       <ErrorMessage error={add.error} />

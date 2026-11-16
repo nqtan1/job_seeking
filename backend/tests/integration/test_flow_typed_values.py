@@ -6,6 +6,7 @@ from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.core.email import FakeEmailSender
 from recruitai.modules.agents.blocks import tools
 from recruitai.modules.agents.flows import engine
+from recruitai.modules.jobs.providers import factory
 from tests.e2e_radar_fakes import Provider
 from tests.integration.test_flows import (
     BASE,
@@ -28,15 +29,15 @@ class Recording(Provider):
 
 
 async def test_text_typed_on_a_step_is_its_input_and_a_link_wins_over_it(
-    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, monkeypatch
 ):
     org = await org_of(client, ada)
     provider = Recording()
     kit = tools.ToolKit(
         fetch=lambda url: None,  # type: ignore[arg-type,return-value]
-        jobs=provider,
         mail=FakeEmailSender(),  # type: ignore[arg-type]
     )
+    monkeypatch.setattr(factory, "france_travail_provider", lambda: provider)
     i, search, o = input_node("q"), tool_node("job_search"), output_node("n")
     search["fixed"] = {"query": "AI engineer Paris"}
 

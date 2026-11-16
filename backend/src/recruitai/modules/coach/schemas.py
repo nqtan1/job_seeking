@@ -16,6 +16,9 @@ class ConversationIn(BaseModel):
         None,
         description="A job from the inbox to discuss. Optional: general career advice.",
     )
+    agent_id: UUID | None = Field(
+        None, description="A helper to chat with. Optional: null is the default coach."
+    )
 
 
 class ConversationPatch(BaseModel):
@@ -96,5 +99,6 @@ class ConversationOut(BaseModel):
     id: UUID
     candidate_id: UUID
     job_id: UUID | None
+    agent_id: UUID | None
     started_at: datetime
     focus: FocusJob | None = None

@@ -19,10 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recruitai.ai.gateway import LLMGateway
 from recruitai.ai.prompts import helper
 from recruitai.config import get_settings
+from recruitai.core import tools as registry
 from recruitai.core.errors import AppError
 from recruitai.core.tasks import enqueue
 from recruitai.modules.agents.blocks import tools
-from recruitai.modules.agents.blocks.catalogue import BLOCKS
 from recruitai.modules.agents.blocks.errors import ToolFailed
 from recruitai.modules.agents.flows import graph as g
 from recruitai.modules.agents.flows import repository as flow_repo
@@ -311,7 +311,7 @@ async def _advance(
             await db.commit()
             continue
 
-        if isinstance(node, g.ToolNode) and BLOCKS[node.tool].pauses:
+        if isinstance(node, g.ToolNode) and registry.get(node.tool).pauses:
             await _park(db, run, step, node, values.get("value", ""))
 
         if not await flow_repo.claim_step(db, org_id=org_id, step_id=step.id):
@@ -400,7 +400,11 @@ async def _run_tool(
 ) -> tuple[dict[str, Any], str | None, int | None]:
     began = time.monotonic()
     try:
-        spec = BLOCKS[node.tool]
+        spec = registry.get(node.tool)
+        if spec.flag and not getattr(
+            get_settings(), spec.flag
+        ):  # its pack was switched off
+            await _fail(db, run, step, "tool_off")
         if spec.starts_runs and run.trigger == "flow":
             await _fail(
                 db, run, step, "nested_not_allowed"

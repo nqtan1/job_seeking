@@ -309,6 +309,7 @@ class FakeLLMGateway:
                 "tools": tools,
                 "allow_tools": allow_tools,
                 "system": system,
+                "continuation": continuation,
             }
         )
         queued = self._turns.get(feature)

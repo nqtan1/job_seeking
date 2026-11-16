@@ -63,8 +63,11 @@ export const useMessages = (id: string | undefined) =>
       ),
   })
 
-export const createConversation = async (jobId?: string) =>
-  unwrap(await api.POST('/api/v1/coach/conversations', { body: { job_id: jobId ?? null } }))
+/** A new chat, focused on a job and/or with a helper (null: the default coach). */
+export const createConversation = async (body: {
+  job_id: string | null
+  agent_id: string | null
+}) => unwrap(await api.POST('/api/v1/coach/conversations', { body }))
 
 export type Citation = components['schemas']['Citation']
 export type StreamData = Record<string, unknown>

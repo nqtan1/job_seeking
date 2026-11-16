@@ -1,50 +1,30 @@
-import type { GraphNode, Specs, TOOL_IO } from './graph'
+import { type GraphNode, type Specs, outputsOf } from './graph'
 
 /** What a step gives back, as a user can picture it: each field with an example value. The
  *  examples are fixed illustrations (a finished run shows the real values). */
 export type OutField = { name: string; example: string }
 
-type ToolKind = keyof typeof TOOL_IO
-// Typed from TOOL_IO: adding an output there fails to compile until it has an example here.
-const TOOL_EXAMPLE: { [K in ToolKind]: Record<(typeof TOOL_IO)[K]['out'][number], string> } = {
-  web_search: {
-    text: 'Acme is hiring two data analysts in Lyon, hybrid, from 45k€.',
-    sources: 'Acme careers: https://acme.example/careers',
-  },
-  job_search: {
-    text: 'Data analyst · Acme · Lyon · https://acme.example/jobs/42\nBI developer · Beta · Paris · https://beta.example/jobs/7',
-    count: '2',
-  },
-  find_offers: {
-    items:
-      '[{"job_id":"…","title":"Data analyst","company":"Acme","place":"Lyon","url":"https://acme.example/jobs/42"}, …]',
-    text: 'Data analyst · Acme · Lyon · https://acme.example/jobs/42\n…',
-    count: '2',
-    remaining: '1',
-  },
-  fit_check: {
-    score: '78',
-    verdict: 'go',
-    strengths: '- 3 years of Python and SQL\n- Dashboards for a similar team',
-    gaps: '- No Airflow experience',
-    missing: '- Airflow',
-    reasons: '- Strong match on the core skills\n- One tool to learn',
-  },
-  for_each: { started: '3', text: 'the ids of the runs that were started' },
-  read_page: {
-    text: 'Acme is looking for a data analyst to join its team in Lyon… (the page text)',
-  },
-  job_lookup: {
-    title: 'Data analyst',
-    company: 'Acme',
-    place: 'Lyon',
-    description: 'You will build dashboards and… (the job description)',
-    url: 'https://acme.example/jobs/42',
-  },
-  add_to_tracker: { status: 'added:…' },
-  send_email: { status: 'sent' },
-  telegram_send: { status: 'sent' },
-  wait: { value: '(what the step received, passed on after the wait)' },
+/** Examples by output name, whatever tool gives it: a tool a pack adds shows "…" for new names. */
+const EXAMPLE: Record<string, string> = {
+  text: 'Data analyst · Acme · Lyon · https://acme.example/jobs/42\n…',
+  sources: 'Acme careers: https://acme.example/careers',
+  count: '2',
+  items: '[{"job_id":"…","title":"Data analyst","company":"Acme","place":"Lyon"}, …]',
+  remaining: '1',
+  score: '78',
+  verdict: 'go',
+  strengths: '- 3 years of Python and SQL\n- Dashboards for a similar team',
+  gaps: '- No Airflow experience',
+  missing: '- Airflow',
+  reasons: '- Strong match on the core skills\n- One tool to learn',
+  started: '3',
+  title: 'Data analyst',
+  company: 'Acme',
+  place: 'Lyon',
+  description: 'You will build dashboards and… (the job description)',
+  url: 'https://acme.example/jobs/42',
+  status: 'sent',
+  value: '(what the step received, passed on)',
 }
 
 const BY_TYPE: Record<string, string> = {
@@ -71,10 +51,8 @@ export function outputFields(node: GraphNode, specs: Specs): OutField[] {
       return [{ name: 'value', example: '(the text it received, unchanged)' }]
     case 'transform':
       return [{ name: 'text', example: '(the text, tidied)' }]
-    case 'tool': {
-      const ex: Record<string, string> = TOOL_EXAMPLE[node.tool]
-      return Object.entries(ex).map(([name, example]) => ({ name, example }))
-    }
+    case 'tool':
+      return outputsOf(node, specs).map((name) => ({ name, example: EXAMPLE[name] ?? '…' }))
     default:
       return []
   }
