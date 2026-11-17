@@ -1,6 +1,7 @@
 """Firebase ID token verification only (ARCHITECTURE.md §4.4, ADR 0007).
 
-No DB access: provisioning is ``core/tenancy.py``'s job, so first login is one atomic transaction.
+No DB session: provisioning is ``core/tenancy.py``'s job, so first login is one atomic
+transaction (the per-user rate limit counts in its own short one, ``core/throttle.py``).
 """
 
 import base64
@@ -19,7 +20,7 @@ from starlette.concurrency import run_in_threadpool
 
 from recruitai.config import Settings, get_settings
 from recruitai.core.errors import Forbidden, RateLimited, ReauthRequired, Unauthorized
-from recruitai.core.throttle import hit
+from recruitai.core.throttle import hit_shared
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,9 @@ async def _verify(
         email_verified=bool(claims.get("email_verified")),
         auth_time=int(claims.get("auth_time") or 0),
     )
-    wait = hit("api", user.firebase_uid, limit=settings.api_rate_limit_per_min)
+    wait = await hit_shared(
+        "api", user.firebase_uid, limit=settings.api_rate_limit_per_min
+    )
     if (
         wait is not None
     ):  # a script hammering the API: every route is covered, not only AI ones

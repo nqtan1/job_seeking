@@ -5,7 +5,7 @@ import { Page } from '@/components/Page'
 import { StepProgress } from '@/components/StepProgress'
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, type UseFormSetValue } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -66,14 +66,9 @@ const ALLOWED_TYPE = new Set([
 const isAllowed = (f: File) => ALLOWED_NAME.test(f.name) || ALLOWED_TYPE.has(f.type)
 const fileKey = (f: File) => `${f.name}|${f.size}|${f.lastModified}`
 
-function FileEntry() {
-  const t = useT()
-  const steps = useSteps()
-  const add = useAddJobFiles()
+function useFileBatch(add: ReturnType<typeof useAddJobFiles>) {
   const [files, setFiles] = useState<File[]>([])
   const [skipped, setSkipped] = useState<string[]>([])
-  const [dragging, setDragging] = useState(false)
-  const tooMany = files.length > MAX_FILES
 
   // Every pick (dialog or drop) ADDS to the batch: the user builds it up in as many picks as
   // they like; a file already in the batch is not added twice.
@@ -90,6 +85,16 @@ function FileEntry() {
     setFiles([])
     setSkipped([])
   }
+  return { files, setFiles, skipped, addFiles, clear }
+}
+
+function FileEntry() {
+  const t = useT()
+  const steps = useSteps()
+  const add = useAddJobFiles()
+  const { files, setFiles, skipped, addFiles, clear } = useFileBatch(add)
+  const [dragging, setDragging] = useState(false)
+  const tooMany = files.length > MAX_FILES
 
   return (
     <Card>
@@ -125,24 +130,11 @@ function FileEntry() {
           }}
         />
         <p className="text-xs text-muted-foreground">{t('jobs.upload_hint')}</p>
-        {files.length > 0 && (
-          <ul className="space-y-1 text-sm">
-            {files.map((f) => (
-              <li key={fileKey(f)} className="flex items-center justify-between gap-2">
-                <span className="truncate">{f.name}</span>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label={t('jobs.remove_aria', { name: f.name })}
-                  disabled={add.isPending}
-                  onClick={() => setFiles((cur) => cur.filter((x) => x !== f))}
-                >
-                  <X />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <FileBatchList
+          files={files}
+          disabled={add.isPending}
+          onRemove={(f) => setFiles((cur) => cur.filter((x) => x !== f))}
+        />
         {skipped.length > 0 && (
           <p role="alert" className="text-sm text-destructive">
             {t('jobs.skipped', { names: skipped.join(', ') })}
@@ -178,12 +170,41 @@ function FileEntry() {
   )
 }
 
+function FileBatchList({
+  files,
+  disabled,
+  onRemove,
+}: {
+  files: File[]
+  disabled: boolean
+  onRemove: (f: File) => void
+}) {
+  const t = useT()
+  if (files.length === 0) return null
+  return (
+    <ul className="space-y-1 text-sm">
+      {files.map((f) => (
+        <li key={fileKey(f)} className="flex items-center justify-between gap-2">
+          <span className="truncate">{f.name}</span>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label={t('jobs.remove_aria', { name: f.name })}
+            disabled={disabled}
+            onClick={() => onRemove(f)}
+          >
+            <X />
+          </Button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
   const [params, setParams] = useState<SearchParams>()
   const search = useSearchJobs(params)
   const { register, handleSubmit, control, setValue } = useForm<SearchParams>()
-  const parse = useParseQuery()
-  const [sentence, setSentence] = useState('')
   const t = useT()
   return (
     <Card>
@@ -191,43 +212,7 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
         <CardTitle>{t('jobs.search_title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-1">
-          <Label htmlFor="sentence">{t('jobs.describe_label')}</Label>
-          <div className="flex gap-2">
-            <Input
-              id="sentence"
-              value={sentence}
-              maxLength={300}
-              placeholder={t('jobs.describe_placeholder')}
-              onChange={(e) => setSentence(e.target.value)}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              disabled={parse.isPending || sentence.trim().length < 3}
-              onClick={() =>
-                parse.mutate(sentence.trim(), {
-                  onSuccess: (f) => {
-                    setValue('query', f.query ?? '')
-                    setValue('department', f.department ?? undefined)
-                    setValue('contract_type', f.contract_type ?? undefined)
-                  },
-                })
-              }
-            >
-              {parse.isPending ? t('jobs.reading') : t('jobs.fill_filters')}
-            </Button>
-          </div>
-          {parse.isError && <ErrorMessage error={parse.error} />}
-          {parse.data && (
-            <p className="text-xs text-muted-foreground">
-              {t('jobs.check_filters')}
-              {parse.data.remote && t('jobs.remote_note')}
-              {parse.data.notes.length > 0 &&
-                t('jobs.not_filterable', { notes: parse.data.notes.join('; ') })}
-            </p>
-          )}
-        </div>
+        <SentenceFill setValue={setValue} />
         <form className="grid gap-3 sm:grid-cols-4" onSubmit={handleSubmit(setParams)}>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="q">{t('jobs.keywords')}</Label>
@@ -261,32 +246,94 @@ function Search({ add }: { add: ReturnType<typeof useAddJob> }) {
           </Button>
         </form>
         {search.isError && <ErrorMessage error={search.error} />}
-        {search.data?.results.length === 0 && (
-          <p className="text-sm text-muted-foreground">{t('jobs.no_offers')}</p>
-        )}
-        <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
-          {search.data?.results.map((r) => (
-            <li key={r.id} className="flex items-start justify-between gap-4 rounded-lg border p-3">
-              <div>
-                <p className="font-medium">{r.title}</p>
-                <p className="text-sm text-muted-foreground">
-                  {[r.company, r.location, r.contract_type_label].filter(Boolean).join(' · ')}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={add.isPending}
-                aria-label={t('jobs.add_aria', { title: r.title })}
-                onClick={() => add.mutate({ externalId: r.id })}
-              >
-                {t('jobs.add')}
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <SearchResults results={search.data?.results} add={add} />
       </CardContent>
     </Card>
+  )
+}
+
+function SentenceFill({ setValue }: { setValue: UseFormSetValue<SearchParams> }) {
+  const parse = useParseQuery()
+  const [sentence, setSentence] = useState('')
+  const t = useT()
+  return (
+    <div className="space-y-1">
+      <Label htmlFor="sentence">{t('jobs.describe_label')}</Label>
+      <div className="flex gap-2">
+        <Input
+          id="sentence"
+          value={sentence}
+          maxLength={300}
+          placeholder={t('jobs.describe_placeholder')}
+          onChange={(e) => setSentence(e.target.value)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          disabled={parse.isPending || sentence.trim().length < 3}
+          onClick={() =>
+            parse.mutate(sentence.trim(), {
+              onSuccess: (f) => {
+                setValue('query', f.query ?? '')
+                setValue('department', f.department ?? undefined)
+                setValue('contract_type', f.contract_type ?? undefined)
+              },
+            })
+          }
+        >
+          {parse.isPending ? t('jobs.reading') : t('jobs.fill_filters')}
+        </Button>
+      </div>
+      {parse.isError && <ErrorMessage error={parse.error} />}
+      {parse.data && (
+        <p className="text-xs text-muted-foreground">
+          {t('jobs.check_filters')}
+          {parse.data.remote && t('jobs.remote_note')}
+          {parse.data.notes.length > 0 &&
+            t('jobs.not_filterable', { notes: parse.data.notes.join('; ') })}
+        </p>
+      )}
+    </div>
+  )
+}
+
+type SearchResult = NonNullable<ReturnType<typeof useSearchJobs>['data']>['results'][number]
+
+function SearchResults({
+  results,
+  add,
+}: {
+  results: SearchResult[] | undefined
+  add: ReturnType<typeof useAddJob>
+}) {
+  const t = useT()
+  return (
+    <>
+      {results?.length === 0 && (
+        <p className="text-sm text-muted-foreground">{t('jobs.no_offers')}</p>
+      )}
+      <ul className="max-h-96 space-y-2 overflow-y-auto pr-1">
+        {results?.map((r) => (
+          <li key={r.id} className="flex items-start justify-between gap-4 rounded-lg border p-3">
+            <div>
+              <p className="font-medium">{r.title}</p>
+              <p className="text-sm text-muted-foreground">
+                {[r.company, r.location, r.contract_type_label].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={add.isPending}
+              aria-label={t('jobs.add_aria', { title: r.title })}
+              onClick={() => add.mutate({ externalId: r.id })}
+            >
+              {t('jobs.add')}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }
 

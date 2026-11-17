@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { track } from '@/lib/analytics'
 import { api } from '@/lib/api/client'
 import { getAppCheckHeaders } from '@/lib/app-check'
 import { getAuthHeaders } from '@/lib/auth'
@@ -114,7 +115,13 @@ export const streamMessage = (
   content: string,
   onEvent: OnEvent,
   signal?: AbortSignal,
-) => stream(`/api/v1/coach/conversations/${conversationId}/messages`, { content }, onEvent, signal)
+) =>
+  stream(
+    `/api/v1/coach/conversations/${conversationId}/messages`,
+    { content },
+    onEvent,
+    signal,
+  ).then(() => track('chat_sent'))
 
 /** Re-answer the last message; the new reply replaces the old one. */
 export const regenerateReply = (conversationId: string, onEvent: OnEvent, signal?: AbortSignal) =>

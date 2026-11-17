@@ -68,7 +68,6 @@ function TelegramCard({ status, available }: { status: string | undefined; avail
           <StatusBadge>{t('helpers.connections.not_connected')}</StatusBadge>
         )}
       </div>
-      <p className="text-sm text-muted-foreground">{t('helpers.connections.telegram_about')}</p>
       {!available ? (
         <p role="status" className="text-sm text-muted-foreground">
           {t('helpers.connections.unavailable')}
@@ -94,7 +93,7 @@ function TelegramCard({ status, available }: { status: string | undefined; avail
             }
           >
             {link.isPending && <Spinner />}
-            {waiting ? t('helpers.connections.open_again') : t('helpers.connections.connect')}
+            {t('helpers.connections.connect')}
           </Button>
           {waiting && (
             <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">

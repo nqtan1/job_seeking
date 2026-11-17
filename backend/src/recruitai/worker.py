@@ -8,6 +8,7 @@ from recruitai import packs  # noqa: F401  registers every tool (ADR 0039)
 from recruitai.config import get_settings
 from recruitai.core.db import create_engine, create_session_factory
 from recruitai.core.logging import configure_logging
+from recruitai.core.observability import init_sentry
 from recruitai.core.storage import get_storage
 from recruitai.core.tasks import build_app, mark_done, mark_failed
 from recruitai.modules.agents import tasks as agents_tasks
@@ -21,6 +22,7 @@ settings = get_settings()
 configure_logging(
     settings.log_level
 )  # JSON, and httpx/urllib3 URLs (query strings) stay quiet
+init_sentry(settings, "worker")
 app = build_app(settings)
 
 _engine = create_engine(settings, application_name="recruitai-worker")

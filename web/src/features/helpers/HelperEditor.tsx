@@ -52,15 +52,16 @@ export function HelperEditor() {
   )
 }
 
-function Editor({ detail }: { detail: AgentDetail }) {
-  const { t, locale } = useI18n()
+const fieldsOf = (k: Kept): Fields => ({
+  name: k.name,
+  description: k.description,
+  avatar: k.avatar,
+  spec: k.spec,
+})
+
+function useEditorState(detail: AgentDetail) {
+  const { t } = useI18n()
   const key = `helper-draft:${detail.id}`
-  const fieldsOf = (k: Kept): Fields => ({
-    name: k.name,
-    description: k.description,
-    avatar: k.avatar,
-    spec: k.spec,
-  })
   // What the server holds, as far as this editor knows. Moves only when a save succeeds (or the
   // user accepts the latest after a conflict), so "unsaved changes" is never a stale comparison.
   const [baseline, setBaseline] = useState<Kept>({
@@ -77,20 +78,16 @@ function Editor({ detail }: { detail: AgentDetail }) {
       : fieldsOf(baseline)
   })
   const [conflict, setConflict] = useState(false)
-  const [showVersions, setShowVersions] = useState(false)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const add = useAddVersion()
   const patch = usePatchAgent()
-  const fetchAgent = useFetchAgent()
-  const versions = useAgentVersions(showVersions ? detail.id : undefined)
 
   const dirty = !same(draft, fieldsOf(baseline))
   useEffect(() => {
     if (dirty) saveDraft(key, { ...draft, base: baseline.base })
     else clearDraft(key)
   }, [dirty, draft, baseline.base, key])
-  const leaving = useRef(false) // raised just before a deliberate reload
 
   const save = async () => {
     if (saving) return
@@ -122,7 +119,36 @@ function Editor({ detail }: { detail: AgentDetail }) {
       setSaving(false)
     }
   }
-  const versionsList = (
+  const error = add.error ?? patch.error
+  return {
+    key,
+    baseline,
+    setBaseline,
+    draft,
+    setDraft,
+    dirty,
+    save,
+    saving,
+    error,
+    conflict,
+    setConflict,
+    note,
+    setNote,
+  }
+}
+
+function VersionsList({
+  agentId,
+  current,
+  onRestore,
+}: {
+  agentId: string
+  current: number
+  onRestore: (spec: VersionSpec) => void
+}) {
+  const { t, locale } = useI18n()
+  const versions = useAgentVersions(agentId)
+  return (
     <section aria-label={t('helpers.versions')}>
       {versions.isPending ? (
         <ListSkeleton rows={2} />
@@ -132,10 +158,10 @@ function Editor({ detail }: { detail: AgentDetail }) {
             <li key={v.id} className="relative flex flex-wrap items-center gap-x-3 gap-y-1">
               <span
                 aria-hidden
-                className={`absolute top-1.5 -left-[25px] size-2 rounded-full ring-4 ring-background ${v.version === baseline.base ? 'bg-primary' : 'bg-border'}`}
+                className={`absolute top-1.5 -left-[25px] size-2 rounded-full ring-4 ring-background ${v.version === current ? 'bg-primary' : 'bg-border'}`}
               />
               <span className="font-medium tabular-nums">v{v.version}</span>
-              {v.version === baseline.base && (
+              {v.version === current && (
                 <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
                   {t('helpers.ui.current')}
                 </span>
@@ -147,15 +173,13 @@ function Editor({ detail }: { detail: AgentDetail }) {
               >
                 {relTime(v.created_at, locale)}
               </time>
-              <span className="order-last basis-full text-sm text-muted-foreground italic">
-                {v.note || t('helpers.ui.no_note')}
-              </span>
+              {v.note && (
+                <span className="order-last basis-full text-sm text-muted-foreground italic">
+                  {v.note}
+                </span>
+              )}
               <span className="flex-1" />
-              <Button
-                size="xs"
-                variant="outline"
-                onClick={() => setDraft({ ...draft, spec: v.spec })}
-              >
+              <Button size="xs" variant="outline" onClick={() => onRestore(v.spec)}>
                 <RotateCcw data-icon="inline-start" />
                 {t('helpers.restore')}
               </Button>
@@ -165,111 +189,177 @@ function Editor({ detail }: { detail: AgentDetail }) {
       )}
     </section>
   )
-  const error = add.error ?? patch.error
-  const busy = saving
+}
 
+function NameRow({ draft, setDraft }: { draft: Fields; setDraft: (f: Fields) => void }) {
+  const t = useT()
   const role = draft.spec.role ?? 'custom'
+  return (
+    <>
+      <div className="flex flex-wrap items-end gap-3">
+        <Avatar spec={draft.avatar} size={56} label={t('helpers.avatar')} />
+        <div className="min-w-48 flex-1 space-y-1.5">
+          <Label htmlFor="h-name">{t('helpers.name')}</Label>
+          <Input
+            id="h-name"
+            value={draft.name}
+            maxLength={80}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          />
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setDraft({ ...draft, avatar: shuffled() })}
+        >
+          <Shuffle data-icon="inline-start" />
+          {t('helpers.shuffle')}
+        </Button>
+      </div>
+      {role !== 'custom' && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          <span className="rounded-full bg-muted px-2 py-0.5 font-medium">
+            {t(`helpers.role.${role}`)}
+          </span>
+        </p>
+      )}
+    </>
+  )
+}
+
+function Advanced({
+  agentId,
+  current,
+  draft,
+  setDraft,
+  note,
+  setNote,
+}: {
+  agentId: string
+  current: number
+  draft: Fields
+  setDraft: (f: Fields) => void
+  note: string
+  setNote: (n: string) => void
+}) {
+  const t = useT()
+  const [showVersions, setShowVersions] = useState(false)
+  const setSpec = (spec: VersionSpec) => setDraft({ ...draft, spec })
+  return (
+    <details className="rounded-xl border px-4 py-3">
+      <summary className="cursor-pointer text-sm font-medium">{t('helpers.advanced')}</summary>
+      <div className="mt-4 space-y-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="h-desc">{t('helpers.goal')}</Label>
+          <Input
+            id="h-desc"
+            value={draft.description}
+            maxLength={200}
+            onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+          />
+        </div>
+        <AvatarPicker value={draft.avatar} onChange={(avatar) => setDraft({ ...draft, avatar })} />
+        <SpecForm spec={draft.spec} onChange={setSpec} />
+        <Receives spec={draft.spec} />
+        <div className="space-y-1.5">
+          <Label htmlFor="h-note">{t('helpers.note')}</Label>
+          <Input
+            id="h-note"
+            maxLength={200}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowVersions((v) => !v)}
+          aria-expanded={showVersions}
+        >
+          <History data-icon="inline-start" />
+          {t('helpers.versions')}
+        </Button>
+        {showVersions && <VersionsList agentId={agentId} current={current} onRestore={setSpec} />}
+        <p className="font-mono text-xs text-muted-foreground">
+          {t('helpers.id')}: {agentId}
+        </p>
+      </div>
+    </details>
+  )
+}
+
+function SaveBar({
+  dirty,
+  base,
+  busy,
+  canSave,
+  onSave,
+}: {
+  dirty: boolean
+  base: number
+  busy: boolean
+  canSave: boolean
+  onSave: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card/95 p-3 shadow-lg backdrop-blur">
+      <span role="status" className="flex items-center gap-2 text-sm">
+        {dirty ? (
+          <>
+            <CircleDot className="size-4 text-warning" aria-hidden />
+            {t('helpers.unsaved')}
+          </>
+        ) : (
+          <>
+            <Check className="size-4 text-success" aria-hidden />
+            <span className="text-muted-foreground">{t('helpers.flow.status_saved')}</span>
+          </>
+        )}
+      </span>
+      <span className="flex-1" />
+      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
+        v{base}
+      </span>
+      <Button onClick={onSave} disabled={!canSave}>
+        {busy ? <Spinner /> : <Save data-icon="inline-start" />}
+        {t('helpers.save_version')}
+      </Button>
+    </div>
+  )
+}
+
+function Editor({ detail }: { detail: AgentDetail }) {
+  const s = useEditorState(detail)
+  const { draft, setDraft, baseline, dirty, conflict, key } = s
+  const fetchAgent = useFetchAgent()
+  const leaving = useRef(false) // raised just before a deliberate reload
+  const busy = s.saving
   const setSpec = (spec: VersionSpec) => setDraft({ ...draft, spec })
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div className="min-w-0 space-y-5">
-        <div className="flex flex-wrap items-end gap-3">
-          <Avatar spec={draft.avatar} size={56} label={t('helpers.avatar')} />
-          <div className="min-w-48 flex-1 space-y-1.5">
-            <Label htmlFor="h-name">{t('helpers.name')}</Label>
-            <Input
-              id="h-name"
-              value={draft.name}
-              maxLength={80}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            />
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDraft({ ...draft, avatar: shuffled() })}
-          >
-            <Shuffle data-icon="inline-start" />
-            {t('helpers.shuffle')}
-          </Button>
-        </div>
-        {role !== 'custom' && (
-          <p className="-mt-2 text-xs text-muted-foreground">
-            <span className="rounded-full bg-muted px-2 py-0.5 font-medium">
-              {t(`helpers.role.${role}`)}
-            </span>
-          </p>
-        )}
+        <NameRow draft={draft} setDraft={setDraft} />
 
         <InstructionsField spec={draft.spec} onChange={setSpec} />
 
-        <details className="rounded-xl border px-4 py-3">
-          <summary className="cursor-pointer text-sm font-medium">{t('helpers.advanced')}</summary>
-          <div className="mt-4 space-y-5">
-            <div className="space-y-1.5">
-              <Label htmlFor="h-desc">{t('helpers.goal')}</Label>
-              <Input
-                id="h-desc"
-                value={draft.description}
-                maxLength={200}
-                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              />
-            </div>
-            <AvatarPicker
-              value={draft.avatar}
-              onChange={(avatar) => setDraft({ ...draft, avatar })}
-            />
-            <SpecForm spec={draft.spec} onChange={setSpec} />
-            <Receives spec={draft.spec} />
-            <div className="space-y-1.5">
-              <Label htmlFor="h-note">{t('helpers.note')}</Label>
-              <Input
-                id="h-note"
-                maxLength={200}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowVersions((v) => !v)}
-              aria-expanded={showVersions}
-            >
-              <History data-icon="inline-start" />
-              {t('helpers.versions')}
-            </Button>
-            {showVersions && versionsList}
-            <p className="font-mono text-xs text-muted-foreground">
-              {t('helpers.id')}: {detail.id}
-            </p>
-          </div>
-        </details>
+        <Advanced
+          agentId={detail.id}
+          current={baseline.base}
+          draft={draft}
+          setDraft={setDraft}
+          note={s.note}
+          setNote={s.setNote}
+        />
 
-        <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border bg-card/95 p-3 shadow-lg backdrop-blur">
-          <span role="status" className="flex items-center gap-2 text-sm">
-            {dirty ? (
-              <>
-                <CircleDot className="size-4 text-warning" aria-hidden />
-                {t('helpers.unsaved')}
-              </>
-            ) : (
-              <>
-                <Check className="size-4 text-success" aria-hidden />
-                <span className="text-muted-foreground">{t('helpers.flow.status_saved')}</span>
-              </>
-            )}
-          </span>
-          <span className="flex-1" />
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
-            v{baseline.base}
-          </span>
-          <Button onClick={save} disabled={!dirty || busy || !draft.name.trim()}>
-            {busy ? <Spinner /> : <Save data-icon="inline-start" />}
-            {t('helpers.save_version')}
-          </Button>
-        </div>
-        <ErrorMessage error={conflict ? null : error} />
+        <SaveBar
+          dirty={dirty}
+          base={baseline.base}
+          busy={busy}
+          canSave={dirty && !busy && !!draft.name.trim()}
+          onSave={s.save}
+        />
+        <ErrorMessage error={conflict ? null : s.error} />
         {conflict && (
           <ConflictBanner
             onReload={() => {
@@ -280,8 +370,8 @@ function Editor({ detail }: { detail: AgentDetail }) {
             onKeep={async () => {
               // build on what the server has now, so the next save is not refused again
               const fresh = await fetchAgent(detail.id)
-              setBaseline((b) => ({ ...b, base: fresh.current_version }))
-              setConflict(false)
+              s.setBaseline((b) => ({ ...b, base: fresh.current_version }))
+              s.setConflict(false)
             }}
           />
         )}

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recruitai.ai.gateway import LLMGateway
 from recruitai.ai.prompts import helper
 from recruitai.ai.text import compact_json
+from recruitai.core import tools as registry
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.ids import new_id
@@ -23,9 +24,6 @@ from recruitai.modules.agents.helpers.schemas import (
     VersionSpec,
     chat_tool,
 )
-from recruitai.modules.candidates import service as candidates
-from recruitai.modules.jobs import service as jobs
-from recruitai.modules.matching import service as matching
 
 MAX_AGENTS_PER_ORG = 20
 MAX_AGENTS_EVER = 100  # archived ones count too: archiving is not a way around the cap
@@ -132,8 +130,12 @@ async def get_version(
     return row
 
 
-async def list_agents(db: AsyncSession, *, org_id: UUID) -> list[Agent]:
-    return await repository.list_agents(db, org_id=org_id)
+async def list_agents(
+    db: AsyncSession, *, org_id: UUID
+) -> list[tuple[Agent, list[str]]]:
+    """Each helper with its current chat tools (one no longer offered in chat is dropped)."""
+    rows = await repository.list_agents(db, org_id=org_id)
+    return [(a, [t for t in tools if chat_tool(t)]) for a, tools in rows]
 
 
 async def list_versions(
@@ -203,29 +205,22 @@ async def context_for(
     needs_job = "job" in spec.context_sources or "fit" in spec.context_sources
     if needs_job and job_id is None:
         raise ValidationFailed("This helper needs a job: pick one.")
+    call = registry.Call(db, llm, org_id, None, job_id, {})
     if "profile" in spec.context_sources:
-        profile = await candidates.require_profile(db, org_id=org_id)
-        data = {k: v for k, v in profile.data.items() if k not in _IDENTITY_KEYS}
+        profile = await registry.read("profile", call) or {}
+        data = {k: v for k, v in profile.items() if k not in _IDENTITY_KEYS}
         out["profile"] = compact_json(data)[:PROFILE_CHARS]
     if needs_job and job_id is not None:
-        job = await jobs.get_job(db, org_id=org_id, job_id=job_id)  # 404 across orgs
+        job = await registry.read("job", call)  # 404 across orgs
         if "job" in spec.context_sources:
-            out["job"] = compact_json(job.data)[:JOB_CHARS]
+            out["job"] = compact_json(job)[:JOB_CHARS]
         if "fit" in spec.context_sources:
-            reports = await matching.list_analyses(
-                db, org_id=org_id, job_id=job.id, limit=1
-            )
-            if not reports and llm is not None:
-                reports = [
-                    await matching.latest_or_analyze(
-                        db, llm, org_id=org_id, job_id=job.id
-                    )
-                ]
-            if not reports:
+            fit = await registry.read("fit", call)
+            if fit is None:
                 raise ValidationFailed(
                     "This helper needs a fit analysis: add a “Check my fit” step before it."
                 )
-            out["fit"] = compact_json(reports[0].data)[:FIT_CHARS]
+            out["fit"] = compact_json(fit)[:FIT_CHARS]
     return out
 
 

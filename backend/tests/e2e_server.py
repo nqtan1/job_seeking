@@ -5,7 +5,12 @@ journey is deterministic) and France Travail. ``E2E_LIVE_LLM=1`` skips the fake 
     uv run uvicorn tests.e2e_server:app --port 8000
 """
 
+# Set before recruitai is imported: it reads its Settings once, at import time (worker.py).
 import os
+
+# The isolated stack has no .env: switch on the features the browser tests cover.
+for _flag in ("HELPERS_ENABLED", "CV_REVIEW_ENABLED"):
+    os.environ.setdefault(_flag, "true")
 from collections.abc import AsyncGenerator
 from typing import Any
 

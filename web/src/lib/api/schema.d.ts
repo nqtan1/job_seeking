@@ -2109,6 +2109,35 @@ export interface components {
             version_id: string;
             spec: components["schemas"]["VersionSpec"];
         };
+        /** AgentListItem */
+        AgentListItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            avatar: components["schemas"]["Avatar"];
+            /** Current Version */
+            current_version: number;
+            /** Archived */
+            archived: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Tools */
+            tools: string[];
+        };
         /** AgentNode */
         AgentNode: {
             /**
@@ -10024,7 +10053,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AgentOut"][];
+                    "application/json": components["schemas"]["AgentListItem"][];
                 };
             };
             /** @description Authentication is required or the provided credentials are invalid. */

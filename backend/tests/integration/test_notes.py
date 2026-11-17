@@ -150,6 +150,15 @@ async def test_a_flow_step_of_a_switched_off_pack_fails_with_a_clear_code(
     run = await run_now(client, db_session, fake_llm, ada, flow, {"t": "hello"}, org)
     assert (run["status"], run["error_code"]) == ("failed", "tool_off")
 
+    from recruitai.modules.agents.flows import service
+
+    monkeypatch.setattr(service, "get_settings", lambda: off)
+    r = await client.post(
+        "/api/v1/flows", headers=ada,
+        json={"name": "F", "graph": {"nodes": [i, save, o], "edges": []}},
+    )  # fmt: skip
+    assert r.status_code == 422 and "switched off" in r.json()["detail"]  # at save
+
 
 async def test_summarise_input_cannot_close_its_markers(
     db_session: AsyncSession, fake_llm: FakeLLMGateway

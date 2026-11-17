@@ -39,6 +39,14 @@ export const settings = defineMessages({
     'settings.delete.confirm': 'Type {word} to confirm',
     'settings.delete.deleting': 'Deleting…',
     'settings.delete.button': 'Delete my account',
+    'analytics.label': 'Usage statistics',
+    'analytics.ask': 'Help us improve RecruitAI with anonymous usage statistics?',
+    'analytics.more': 'Learn more',
+    'analytics.accept': 'Accept',
+    'analytics.decline': 'No thanks',
+    'analytics.desc':
+      'Anonymous counts of the steps you use (for example “letter made”), never your content. Sent to PostHog in the EU.',
+    'analytics.share': 'Share anonymous usage statistics',
   },
   fr: {
     'settings.title': 'Paramètres',
@@ -78,6 +86,15 @@ export const settings = defineMessages({
     'settings.delete.confirm': 'Saisissez {word} pour confirmer',
     'settings.delete.deleting': 'Suppression…',
     'settings.delete.button': 'Supprimer mon compte',
+    'analytics.label': 'Statistiques d’utilisation',
+    'analytics.ask':
+      'Nous aider à améliorer RecruitAI avec des statistiques d’utilisation anonymes ?',
+    'analytics.more': 'En savoir plus',
+    'analytics.accept': 'Accepter',
+    'analytics.decline': 'Non merci',
+    'analytics.desc':
+      'Des comptages anonymes des étapes utilisées (par exemple « lettre créée »), jamais votre contenu. Envoyés à PostHog dans l’UE.',
+    'analytics.share': 'Partager des statistiques d’utilisation anonymes',
   },
   vi: {
     'settings.title': 'Cài đặt',
@@ -117,5 +134,13 @@ export const settings = defineMessages({
     'settings.delete.confirm': 'Gõ {word} để xác nhận',
     'settings.delete.deleting': 'Đang xóa…',
     'settings.delete.button': 'Xóa tài khoản của tôi',
+    'analytics.label': 'Thống kê sử dụng',
+    'analytics.ask': 'Giúp chúng tôi cải thiện RecruitAI bằng thống kê sử dụng ẩn danh?',
+    'analytics.more': 'Tìm hiểu thêm',
+    'analytics.accept': 'Đồng ý',
+    'analytics.decline': 'Không, cảm ơn',
+    'analytics.desc':
+      'Số liệu ẩn danh về các bước bạn dùng (ví dụ “đã tạo thư”), không bao giờ có nội dung của bạn. Gửi tới PostHog tại EU.',
+    'analytics.share': 'Chia sẻ thống kê sử dụng ẩn danh',
   },
 })

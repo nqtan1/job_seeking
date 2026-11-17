@@ -204,8 +204,6 @@ function JobFocus({
 export function ChatPage() {
   const t = useT()
   const { conversationId } = useParams()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
   const profile = useProfile()
   const history = useMessages(conversationId)
   const conversation = useConversation(conversationId)
@@ -215,10 +213,72 @@ export function ChatPage() {
   const [draftJob, setDraftJob] = useState<string | null>(params.get('job'))
   // `/chat?agent=<id>` (Agents page): chat with that helper; a stored chat keeps its own.
   const agentId = conversationId ? (conversation.data?.agent_id ?? null) : params.get('agent')
-  const agent = useAgent(agentId ?? undefined)
   const focusJob = conversationId ? (conversation.data?.job_id ?? null) : draftJob
   // `/?ask=…` (from the tracker) prefills the box; the user reviews it and sends.
-  const [text, setText] = useState(params.get('ask') ?? '')
+  const { text, setText, pending, error, end, stop, send, regenerate } = useChatTurn(
+    conversationId,
+    draftJob,
+    agentId,
+    params.get('ask') ?? '',
+    history.data,
+  )
+
+  if (profile.isPending) return <Skeleton className="m-6 h-24" />
+  if (!profile.data && !profile.isError)
+    return (
+      <div className="mx-auto max-w-lg p-6 pt-24">
+        <EmptyState
+          icon={UserRound}
+          title={t('coach.cv.title')}
+          description={t('coach.cv.description')}
+          action={
+            <Link to="/profile" className={buttonVariants()}>
+              {t('coach.cv.upload')}
+            </Link>
+          }
+        />
+      </div>
+    )
+
+  const all = history.data ?? []
+  const shown = pending?.replacing ? all.slice(0, -2) : all
+  const lastUser = [...all].reverse().find((m) => m.role === 'user')?.content
+  const empty = shown.length === 0 && !pending && !history.isLoading
+
+  return (
+    <div className="flex h-full flex-col">
+      <ChatHeader agentId={agentId} conversationId={conversationId} />
+      <JobFocus
+        jobId={focusJob}
+        focus={conversationId ? conversation.data?.focus : undefined}
+        disabled={!!pending || setFocus.isPending}
+        onChange={(id) => (conversationId ? setFocus.mutate(id) : setDraftJob(id))}
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl space-y-4 p-6">
+          {history.isError && <ErrorMessage error={history.error} />}
+          {empty && <ChatHome send={send} />}
+          <Transcript shown={shown} pending={pending} lastUser={lastUser} regenerate={regenerate} />
+          {error != null && <ErrorMessage error={error} />}
+          <div ref={end} />
+        </div>
+      </div>
+      <Composer text={text} setText={setText} pending={!!pending} send={send} onStop={stop} />
+    </div>
+  )
+}
+
+/** One streamed turn at a time, and what is typed in the box meanwhile. */
+function useChatTurn(
+  conversationId: string | undefined,
+  draftJob: string | null,
+  agentId: string | null,
+  initialText: string,
+  messages: unknown,
+) {
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [text, setText] = useState(initialText)
   const [pending, setPending] = useState<Pending>()
   const [error, setError] = useState<unknown>()
   const end = useRef<HTMLDivElement>(null)
@@ -227,7 +287,7 @@ export function ChatPage() {
   useEffect(() => () => abort.current?.abort(), [])
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' }) // may return a Promise: never return it
-  }, [history.data, pending])
+  }, [messages, pending])
 
   /** Run one streamed turn. `start` posts to the right endpoint; nothing is stored unless the
    *  reply completes, so on a failure or a stop the user's text goes back in the box. */
@@ -271,6 +331,149 @@ export function ChatPage() {
     conversationId &&
     void run(userText, true, (id, onEvent, signal) => regenerateReply(id, onEvent, signal))
 
+  const stop = () => abort.current?.abort()
+  return { text, setText, pending, error, end, stop, send, regenerate }
+}
+
+function ChatHeader({
+  agentId,
+  conversationId,
+}: {
+  agentId: string | null
+  conversationId: string | undefined
+}) {
+  const t = useT()
+  const navigate = useNavigate()
+  const agent = useAgent(agentId ?? undefined)
+  return (
+    <header className="flex h-14 shrink-0 items-center border-b px-6">
+      <h1 className="flex min-w-0 items-center gap-2 text-lg font-semibold tracking-tight">
+        {agent.data && <Avatar spec={agent.data.avatar} size={28} />}
+        <span className="truncate">
+          {agentId ? (agent.data?.name ?? t('coach.agent')) : t('coach.title')}
+        </span>
+      </h1>
+      {conversationId && (
+        <div className="ml-auto">
+          <DeleteChatButton
+            id={conversationId}
+            onDeleted={() => navigate('/chat', { replace: true })}
+          />
+        </div>
+      )}
+    </header>
+  )
+}
+
+function ChatHome({ send }: { send: (content: string) => Promise<void> }) {
+  const t = useT()
+  return (
+    <div className="space-y-6 pt-10 text-center">
+      <h2 className="text-2xl font-semibold tracking-tight">{t('coach.home')}</h2>
+      <div className="mx-auto grid max-w-xl gap-2 sm:grid-cols-2">
+        {PROMPTS.map(({ icon: Icon, key }) => (
+          <button
+            key={key}
+            className={card}
+            onClick={() => void send(t(`coach.prompt.${key}.send` as Key))}
+          >
+            <Icon className="size-4 text-primary" />
+            {t(`coach.prompt.${key}` as Key)}
+          </button>
+        ))}
+        {LINKS.map(({ icon: Icon, key, to }) => (
+          <Link key={key} to={to} className={card}>
+            <Icon className="size-4 text-primary" />
+            {t(`coach.link.${key}` as Key)}
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+type Message = NonNullable<ReturnType<typeof useMessages>['data']>[number]
+
+function Transcript({
+  shown,
+  pending,
+  lastUser,
+  regenerate,
+}: {
+  shown: Message[]
+  pending: Pending | undefined
+  lastUser: string | undefined
+  regenerate: (userText: string) => void
+}) {
+  const t = useT()
+  return (
+    <>
+      {shown.map((m, i) => (
+        <div key={m.id} className="space-y-2">
+          {m.role === 'assistant' && m.meta && (
+            <Activity
+              steps={stepsFromMeta(m.meta, t)}
+              context={m.meta.context as Context}
+              queries={m.meta.queries}
+              citations={m.meta.citations}
+              notices={m.meta.degraded}
+            />
+          )}
+          <Bubble role={m.role}>{m.content}</Bubble>
+          {m.role === 'assistant' && m.meta && (
+            <Sources
+              citations={m.meta.citations ?? []}
+              suggestionsHtml={m.meta.search_suggestions_html}
+            />
+          )}
+          {i === shown.length - 1 && m.role === 'assistant' && !pending && lastUser && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => regenerate(lastUser)}
+            >
+              <RefreshCw className="size-3" aria-hidden />
+              {t('coach.regenerate')}
+            </button>
+          )}
+        </div>
+      ))}
+      {pending && !pending.replacing && <Bubble role="user">{pending.user}</Bubble>}
+      {pending && (
+        <div className="space-y-2">
+          <Activity
+            running={!pending.assistant}
+            steps={pending.steps}
+            context={pending.context}
+            citations={pending.citations}
+            notices={pending.notices}
+          />
+          {pending.assistant && (
+            <Bubble role="assistant" streaming>
+              {pending.assistant}
+            </Bubble>
+          )}
+          <Sources citations={pending.citations} suggestionsHtml={pending.suggestions} />
+        </div>
+      )}
+    </>
+  )
+}
+
+function Composer({
+  text,
+  setText,
+  pending,
+  send,
+  onStop,
+}: {
+  text: string
+  setText: (text: string) => void
+  pending: boolean
+  send: (content: string) => Promise<void>
+  onStop: () => void
+}) {
+  const t = useT()
   const submit = (e: FormEvent) => {
     e.preventDefault()
     void send(text)
@@ -281,160 +484,35 @@ export function ChatPage() {
       void send(text)
     }
   }
-
-  if (profile.isPending) return <Skeleton className="m-6 h-24" />
-  if (!profile.data && !profile.isError)
-    return (
-      <div className="mx-auto max-w-lg p-6 pt-24">
-        <EmptyState
-          icon={UserRound}
-          title={t('coach.cv.title')}
-          description={t('coach.cv.description')}
-          action={
-            <Link to="/profile" className={buttonVariants()}>
-              {t('coach.cv.upload')}
-            </Link>
-          }
-        />
-      </div>
-    )
-
-  const all = history.data ?? []
-  const shown = pending?.replacing ? all.slice(0, -2) : all
-  const lastUser = [...all].reverse().find((m) => m.role === 'user')?.content
-  const empty = shown.length === 0 && !pending && !history.isLoading
-
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center border-b px-6">
-        <h1 className="flex min-w-0 items-center gap-2 text-lg font-semibold tracking-tight">
-          {agent.data && <Avatar spec={agent.data.avatar} size={28} />}
-          <span className="truncate">
-            {agentId ? (agent.data?.name ?? t('coach.agent')) : t('coach.title')}
-          </span>
-        </h1>
-        {conversationId && (
-          <div className="ml-auto">
-            <DeleteChatButton
-              id={conversationId}
-              onDeleted={() => navigate('/chat', { replace: true })}
-            />
-          </div>
+    <form onSubmit={submit} className="shrink-0 border-t bg-background p-4">
+      <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card p-2 shadow-xs focus-within:ring-3 focus-within:ring-ring/40">
+        <textarea
+          aria-label={t('coach.message_aria')}
+          rows={1}
+          value={text}
+          maxLength={MAX}
+          placeholder={t('coach.placeholder')}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKey}
+          className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none [field-sizing:content]"
+        />
+        {pending ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label={t('coach.stop')}
+            onClick={onStop}
+          >
+            <Square />
+          </Button>
+        ) : (
+          <Button type="submit" size="icon" aria-label={t('coach.send')} disabled={!text.trim()}>
+            <SendHorizontal />
+          </Button>
         )}
-      </header>
-      <JobFocus
-        jobId={focusJob}
-        focus={conversationId ? conversation.data?.focus : undefined}
-        disabled={!!pending || setFocus.isPending}
-        onChange={(id) => (conversationId ? setFocus.mutate(id) : setDraftJob(id))}
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-4 p-6">
-          {history.isError && <ErrorMessage error={history.error} />}
-          {empty && (
-            <div className="space-y-6 pt-10 text-center">
-              <h2 className="text-2xl font-semibold tracking-tight">{t('coach.home')}</h2>
-              <div className="mx-auto grid max-w-xl gap-2 sm:grid-cols-2">
-                {PROMPTS.map(({ icon: Icon, key }) => (
-                  <button
-                    key={key}
-                    className={card}
-                    onClick={() => void send(t(`coach.prompt.${key}.send` as Key))}
-                  >
-                    <Icon className="size-4 text-primary" />
-                    {t(`coach.prompt.${key}` as Key)}
-                  </button>
-                ))}
-                {LINKS.map(({ icon: Icon, key, to }) => (
-                  <Link key={key} to={to} className={card}>
-                    <Icon className="size-4 text-primary" />
-                    {t(`coach.link.${key}` as Key)}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-          {shown.map((m, i) => (
-            <div key={m.id} className="space-y-2">
-              {m.role === 'assistant' && m.meta && (
-                <Activity
-                  steps={stepsFromMeta(m.meta, t)}
-                  context={m.meta.context as Context}
-                  queries={m.meta.queries}
-                  citations={m.meta.citations}
-                  notices={m.meta.degraded}
-                />
-              )}
-              <Bubble role={m.role}>{m.content}</Bubble>
-              {m.role === 'assistant' && m.meta && (
-                <Sources
-                  citations={m.meta.citations ?? []}
-                  suggestionsHtml={m.meta.search_suggestions_html}
-                />
-              )}
-              {i === shown.length - 1 && m.role === 'assistant' && !pending && lastUser && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => regenerate(lastUser)}
-                >
-                  <RefreshCw className="size-3" aria-hidden />
-                  {t('coach.regenerate')}
-                </button>
-              )}
-            </div>
-          ))}
-          {pending && !pending.replacing && <Bubble role="user">{pending.user}</Bubble>}
-          {pending && (
-            <div className="space-y-2">
-              <Activity
-                running={!pending.assistant}
-                steps={pending.steps}
-                context={pending.context}
-                citations={pending.citations}
-                notices={pending.notices}
-              />
-              {pending.assistant && (
-                <Bubble role="assistant" streaming>
-                  {pending.assistant}
-                </Bubble>
-              )}
-              <Sources citations={pending.citations} suggestionsHtml={pending.suggestions} />
-            </div>
-          )}
-          {error != null && <ErrorMessage error={error} />}
-          <div ref={end} />
-        </div>
       </div>
-      <form onSubmit={submit} className="shrink-0 border-t bg-background p-4">
-        <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card p-2 shadow-xs focus-within:ring-3 focus-within:ring-ring/40">
-          <textarea
-            aria-label={t('coach.message_aria')}
-            rows={1}
-            value={text}
-            maxLength={MAX}
-            placeholder={t('coach.placeholder')}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKey}
-            className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none [field-sizing:content]"
-          />
-          {pending ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label={t('coach.stop')}
-              onClick={() => abort.current?.abort()}
-            >
-              <Square />
-            </Button>
-          ) : (
-            <Button type="submit" size="icon" aria-label={t('coach.send')} disabled={!text.trim()}>
-              <SendHorizontal />
-            </Button>
-          )}
-        </div>
-      </form>
-    </div>
+    </form>
   )
 }

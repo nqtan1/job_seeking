@@ -283,7 +283,7 @@ jobs:
   e2e:
     name: E2E · browser journeys (Playwright, canned LLM)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45 # every spec runs at desktop and phone width
     env:
       E2E_WEB_PORT: "5174"
       E2E_API_URL: http://localhost:8011

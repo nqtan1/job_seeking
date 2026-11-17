@@ -114,9 +114,9 @@ export function JobList() {
   return <JobListBody jobs={jobs.data} />
 }
 
-function JobListBody({ jobs }: { jobs: Job[] }) {
-  const { t, locale } = useI18n()
-  const pipeline = usePipeline()
+const pill = 'rounded-full'
+
+function useJobFilters() {
   const [group, setGroupState] = useState<Group>(() => {
     const g = load<string>('jobs-group', 'employer')
     return (GROUPS as readonly string[]).includes(g) ? (g as Group) : 'employer'
@@ -125,11 +125,6 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
   const [sort, setSort] = useState<Sort>('new')
   const [chip, setChip] = useState<Chip>('')
   const [q, setQ] = useState('')
-  const [open, setOpen] = useState<Record<string, boolean>>({})
-  const me = useMe()
-  const setViews = useSetJobViews()
-  const custom = (me.data?.job_views ?? []) as View[]
-  const [naming, setNaming] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const setGroup = (g: Group) => {
@@ -149,14 +144,20 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [group])
+  return { group, setGroup, range, setRange, sort, setSort, chip, setChip, q, setQ, searchRef }
+}
+type Filters = ReturnType<typeof useJobFilters>
 
-  const all: Entry[] = jobs.map((job) => {
+function toEntries(jobs: Job[], pipeline: ReturnType<typeof usePipeline>): Entry[] {
+  return jobs.map((job) => {
     const fit = pipeline.fit(job.id)
     const letters = pipeline.letters(job.id)
     const appStatus = pipeline.application(job.id)?.status
     return { job, fit, letters, appStatus, stage: stageOf(!!fit, letters.length > 0, appStatus) }
   })
-  const needle = q.trim().toLowerCase()
+}
+
+function filterRows(all: Entry[], { range, chip, sort }: Filters, needle: string): Entry[] {
   const chipOk = (e: Entry) =>
     chip === ''
       ? true
@@ -168,7 +169,7 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
             ? e.stage >= 3
             : e.stage === 4
   const byDate = (a: Entry, b: Entry) => b.job.created_at.localeCompare(a.job.created_at)
-  const rows = all
+  return all
     .filter(
       (e) =>
         inRange(e.job.created_at, range) &&
@@ -184,7 +185,9 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
         ? (a, b) => (b.fit?.score ?? -1) - (a.fit?.score ?? -1) || byDate(a, b)
         : byDate,
     )
+}
 
+function groupBuckets(rows: Entry[], group: Group, t: ReturnType<typeof useI18n>['t']): Bucket[] {
   const buckets: Bucket[] = []
   if (group === 'none') buckets.push({ key: 'all', label: '', avatar: null, items: rows })
   else {
@@ -222,167 +225,32 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
       )
     if (group === 'stage') buckets.sort((a, b) => Number(b.key) - Number(a.key))
   }
-  // Many groups: open only the first 3 so the list stays scannable.
-  const isOpen = (b: Bucket, i: number) => open[`${group}:${b.key}`] ?? (rows.length <= 20 || i < 3)
+  return buckets
+}
 
-  const state = { group, range, sort, chip, q }
-  const sameView = (v: Omit<View, 'name'>) =>
-    (Object.keys(state) as (keyof typeof state)[]).every((k) => state[k] === v[k])
-  const apply = (v: Omit<View, 'name'>) => {
-    setGroup(v.group)
-    setRange(v.range)
-    setSort(v.sort)
-    setChip(v.chip)
-    setQ(v.q)
-  }
-  const addView = (name: string) => {
-    const next = [...custom.filter((v) => v.name !== name), { name, ...state }]
-    setViews.mutate(next)
-    setNaming(false)
-  }
-  const removeView = (name: string) => {
-    const next = custom.filter((v) => v.name !== name)
-    setViews.mutate(next)
-  }
+function JobListBody({ jobs }: { jobs: Job[] }) {
+  const { t, locale } = useI18n()
+  const pipeline = usePipeline()
+  const f = useJobFilters()
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const { group, range, chip, q, setRange, setChip, setQ } = f
+
+  const all = toEntries(jobs, pipeline)
+  const needle = q.trim().toLowerCase()
+  const rows = filterRows(all, f, needle)
+  const buckets = groupBuckets(rows, group, t)
   const filtered = range !== 'all' || chip !== '' || needle !== ''
   const clear = () => {
     setRange('all')
     setChip('')
     setQ('')
   }
-  const count = (f: (e: Entry) => boolean) => all.filter(f).length
-  const chipCount: Record<Chip, number> = {
-    '': all.length,
-    fit: count((e) => !e.fit),
-    letter: count((e) => !!e.fit && e.letters.length === 0),
-    applied: count((e) => e.stage >= 3),
-    interview: count((e) => e.stage === 4),
-  }
-  const pill = 'rounded-full'
 
   return (
     <div className="space-y-3">
-      <div role="group" aria-label={t('jobs.chips_label')} className="flex flex-wrap gap-1.5">
-        {CHIPS.map((c) => (
-          <Button
-            key={c.id}
-            size="sm"
-            variant="outline"
-            className={pill}
-            aria-pressed={chip === c.id}
-            onClick={() => setChip(chip === c.id ? '' : c.id)}
-          >
-            <b>{chipCount[c.id]}</b> {t(c.key)}
-          </Button>
-        ))}
-      </div>
-
-      <div
-        className="flex flex-wrap items-center gap-1.5"
-        role="group"
-        aria-label={t('jobs.views')}
-      >
-        <span className="text-xs text-muted-foreground">{t('jobs.views')}</span>
-        {DEFAULT_VIEWS.map((d) => (
-          <Button
-            key={d.name}
-            size="xs"
-            variant="outline"
-            className={pill}
-            aria-pressed={sameView(d.v)}
-            onClick={() => apply(d.v)}
-          >
-            {t(d.name)}
-          </Button>
-        ))}
-        {custom.map((v) => (
-          <span key={v.name} className="inline-flex items-center">
-            <Button
-              size="xs"
-              variant="outline"
-              className={cn(pill, 'rounded-r-none')}
-              aria-pressed={sameView(v)}
-              onClick={() => apply(v)}
-            >
-              {v.name}
-            </Button>
-            <Button
-              size="icon-xs"
-              variant="outline"
-              className="rounded-l-none rounded-r-full"
-              aria-label={t('jobs.remove_view', { name: v.name })}
-              onClick={() => removeView(v.name)}
-            >
-              <X />
-            </Button>
-          </span>
-        ))}
-        {naming ? (
-          <Input
-            autoFocus
-            className="h-6 w-40 text-xs"
-            aria-label={t('jobs.view_name')}
-            placeholder={t('jobs.view_name')}
-            onBlur={() => setNaming(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setNaming(false)
-              if (e.key === 'Enter' && e.currentTarget.value.trim())
-                addView(e.currentTarget.value.trim())
-            }}
-          />
-        ) : (
-          <Button size="xs" variant="ghost" onClick={() => setNaming(true)}>
-            {t('jobs.save_view')}
-          </Button>
-        )}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          ref={searchRef}
-          type="search"
-          className="w-full sm:w-64"
-          aria-label={t('jobs.filter_label')}
-          placeholder={t('jobs.filter_placeholder')}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Escape' && setQ('')}
-        />
-        <div role="group" aria-label={t('jobs.group_by')} className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground">{t('jobs.group_by')}</span>
-          {GROUPS.map((g) => (
-            <Button
-              key={g}
-              size="xs"
-              variant="outline"
-              aria-pressed={group === g}
-              onClick={() => setGroup(g)}
-            >
-              {t(`jobs.group_${g}`)}
-            </Button>
-          ))}
-        </div>
-        <NativeSelect
-          size="sm"
-          aria-label={t('jobs.range_label')}
-          value={range}
-          onChange={(e) => setRange(e.target.value as Range)}
-        >
-          {RANGES.map((r) => (
-            <option key={r} value={r}>
-              {t('jobs.range_label')}: {t(`jobs.range_${r}`)}
-            </option>
-          ))}
-        </NativeSelect>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-pressed={sort === 'fit'}
-          onClick={() => setSort(sort === 'fit' ? 'new' : 'fit')}
-        >
-          {sort === 'fit' ? t('jobs.newest_first') : t('jobs.best_first')}
-        </Button>
-      </div>
+      <ChipBar all={all} chip={chip} setChip={setChip} />
+      <ViewsBar f={f} />
+      <FilterBar f={f} />
       <p aria-live="polite" className="text-xs text-muted-foreground">
         {t('jobs.shown', { shown: rows.length, total: all.length })}
       </p>
@@ -411,77 +279,262 @@ function JobListBody({ jobs }: { jobs: Job[] }) {
               return b.items.map((e) => (
                 <JobRow key={e.job.id} e={e} showCompany={true} locale={locale} />
               ))
-            const expanded = isOpen(b, i)
-            const id = `jobs-group-${group}-${b.key.replace(/\W/g, '_')}`
-            const applied = b.items.filter((e) => e.stage >= 3).length
-            const newest = b.items.reduce(
-              (m, e) => (e.job.created_at > m ? e.job.created_at : m),
-              '',
-            )
-            const d = daysAgo(newest)
+            // Many groups: open only the first 3 so the list stays scannable.
+            const expanded = open[`${group}:${b.key}`] ?? (rows.length <= 20 || i < 3)
             return (
-              <li key={b.key} className="space-y-2">
-                <button
-                  type="button"
-                  aria-expanded={expanded}
-                  aria-controls={id}
-                  onClick={() => setOpen({ ...open, [`${group}:${b.key}`]: !expanded })}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                >
-                  <ChevronRight
-                    className={cn('size-4 shrink-0 transition-transform', expanded && 'rotate-90')}
-                    aria-hidden
-                  />
-                  {b.avatar && (
-                    <span
-                      aria-hidden
-                      style={{ '--h': hue(b.avatar) } as React.CSSProperties}
-                      className="grid size-7 shrink-0 place-items-center rounded-md bg-[hsl(var(--h)_70%_50%/0.18)] text-xs font-semibold text-[hsl(var(--h)_60%_32%)] dark:text-[hsl(var(--h)_70%_78%)]"
-                    >
-                      {b.avatar === '~unknown' ? '?' : initials(b.label)}
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate font-medium">{b.label}</span>
-                      <StatusBadge>{b.items.length}</StatusBadge>
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {t('jobs.newest', {
-                        when:
-                          d <= 0
-                            ? t('jobs.when_today')
-                            : d === 1
-                              ? t('jobs.when_yesterday')
-                              : new Date(newest).toLocaleDateString(locale),
-                      })}
-                      {applied > 0 && ` · ${t('jobs.n_applied', { count: applied })}`}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 gap-0.5" aria-hidden>
-                    {b.items.map((e) => (
-                      <i key={e.job.id} className={cn('size-2 rounded-full', DOT[e.stage])} />
-                    ))}
-                  </span>
-                </button>
-                {expanded && (
-                  <ul id={id} className="space-y-2 pl-2 sm:pl-4">
-                    {b.items.map((e) => (
-                      <JobRow
-                        key={e.job.id}
-                        e={e}
-                        showCompany={group !== 'employer'}
-                        locale={locale}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </li>
+              <BucketItem
+                key={b.key}
+                b={b}
+                group={group}
+                expanded={expanded}
+                onToggle={() => setOpen({ ...open, [`${group}:${b.key}`]: !expanded })}
+                locale={locale}
+              />
             )
           })}
         </ul>
       )}
     </div>
+  )
+}
+
+function ChipBar({ all, chip, setChip }: { all: Entry[]; chip: Chip; setChip: (c: Chip) => void }) {
+  const { t } = useI18n()
+  const count = (f: (e: Entry) => boolean) => all.filter(f).length
+  const chipCount: Record<Chip, number> = {
+    '': all.length,
+    fit: count((e) => !e.fit),
+    letter: count((e) => !!e.fit && e.letters.length === 0),
+    applied: count((e) => e.stage >= 3),
+    interview: count((e) => e.stage === 4),
+  }
+  return (
+    <div role="group" aria-label={t('jobs.chips_label')} className="flex flex-wrap gap-1.5">
+      {CHIPS.map((c) => (
+        <Button
+          key={c.id}
+          size="sm"
+          variant="outline"
+          className={pill}
+          aria-pressed={chip === c.id}
+          onClick={() => setChip(chip === c.id ? '' : c.id)}
+        >
+          <b>{chipCount[c.id]}</b> {t(c.key)}
+        </Button>
+      ))}
+    </div>
+  )
+}
+
+function ViewsBar({ f }: { f: Filters }) {
+  const { t } = useI18n()
+  const me = useMe()
+  const setViews = useSetJobViews()
+  const custom = (me.data?.job_views ?? []) as View[]
+  const [naming, setNaming] = useState(false)
+  const state = { group: f.group, range: f.range, sort: f.sort, chip: f.chip, q: f.q }
+  const sameView = (v: Omit<View, 'name'>) =>
+    (Object.keys(state) as (keyof typeof state)[]).every((k) => state[k] === v[k])
+  const apply = (v: Omit<View, 'name'>) => {
+    f.setGroup(v.group)
+    f.setRange(v.range)
+    f.setSort(v.sort)
+    f.setChip(v.chip)
+    f.setQ(v.q)
+  }
+  const addView = (name: string) => {
+    const next = [...custom.filter((v) => v.name !== name), { name, ...state }]
+    setViews.mutate(next)
+    setNaming(false)
+  }
+  const removeView = (name: string) => {
+    const next = custom.filter((v) => v.name !== name)
+    setViews.mutate(next)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('jobs.views')}>
+      <span className="text-xs text-muted-foreground">{t('jobs.views')}</span>
+      {DEFAULT_VIEWS.map((d) => (
+        <Button
+          key={d.name}
+          size="xs"
+          variant="outline"
+          className={pill}
+          aria-pressed={sameView(d.v)}
+          onClick={() => apply(d.v)}
+        >
+          {t(d.name)}
+        </Button>
+      ))}
+      {custom.map((v) => (
+        <span key={v.name} className="inline-flex items-center">
+          <Button
+            size="xs"
+            variant="outline"
+            className={cn(pill, 'rounded-r-none')}
+            aria-pressed={sameView(v)}
+            onClick={() => apply(v)}
+          >
+            {v.name}
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="outline"
+            className="rounded-l-none rounded-r-full"
+            aria-label={t('jobs.remove_view', { name: v.name })}
+            onClick={() => removeView(v.name)}
+          >
+            <X />
+          </Button>
+        </span>
+      ))}
+      {naming ? (
+        <Input
+          autoFocus
+          className="h-6 w-40 text-xs"
+          aria-label={t('jobs.view_name')}
+          placeholder={t('jobs.view_name')}
+          onBlur={() => setNaming(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setNaming(false)
+            if (e.key === 'Enter' && e.currentTarget.value.trim())
+              addView(e.currentTarget.value.trim())
+          }}
+        />
+      ) : (
+        <Button size="xs" variant="ghost" onClick={() => setNaming(true)}>
+          {t('jobs.save_view')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function FilterBar({ f }: { f: Filters }) {
+  const { t } = useI18n()
+  const { group, setGroup, range, setRange, sort, setSort, q, setQ, searchRef } = f
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
+        ref={searchRef}
+        type="search"
+        className="w-full sm:w-64"
+        aria-label={t('jobs.filter_label')}
+        placeholder={t('jobs.filter_placeholder')}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && setQ('')}
+      />
+      <div role="group" aria-label={t('jobs.group_by')} className="flex items-center gap-1">
+        <span className="text-xs text-muted-foreground">{t('jobs.group_by')}</span>
+        {GROUPS.map((g) => (
+          <Button
+            key={g}
+            size="xs"
+            variant="outline"
+            aria-pressed={group === g}
+            onClick={() => setGroup(g)}
+          >
+            {t(`jobs.group_${g}`)}
+          </Button>
+        ))}
+      </div>
+      <NativeSelect
+        size="sm"
+        aria-label={t('jobs.range_label')}
+        value={range}
+        onChange={(e) => setRange(e.target.value as Range)}
+      >
+        {RANGES.map((r) => (
+          <option key={r} value={r}>
+            {t('jobs.range_label')}: {t(`jobs.range_${r}`)}
+          </option>
+        ))}
+      </NativeSelect>
+      <Button
+        size="sm"
+        variant="outline"
+        aria-pressed={sort === 'fit'}
+        onClick={() => setSort(sort === 'fit' ? 'new' : 'fit')}
+      >
+        {sort === 'fit' ? t('jobs.newest_first') : t('jobs.best_first')}
+      </Button>
+    </div>
+  )
+}
+
+function BucketItem({
+  b,
+  group,
+  expanded,
+  onToggle,
+  locale,
+}: {
+  b: Bucket
+  group: Group
+  expanded: boolean
+  onToggle: () => void
+  locale: string
+}) {
+  const { t } = useI18n()
+  const id = `jobs-group-${group}-${b.key.replace(/\W/g, '_')}`
+  const applied = b.items.filter((e) => e.stage >= 3).length
+  const newest = b.items.reduce((m, e) => (e.job.created_at > m ? e.job.created_at : m), '')
+  const d = daysAgo(newest)
+  return (
+    <li className="space-y-2">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-controls={id}
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <ChevronRight
+          className={cn('size-4 shrink-0 transition-transform', expanded && 'rotate-90')}
+          aria-hidden
+        />
+        {b.avatar && (
+          <span
+            aria-hidden
+            style={{ '--h': hue(b.avatar) } as React.CSSProperties}
+            className="grid size-7 shrink-0 place-items-center rounded-md bg-[hsl(var(--h)_70%_50%/0.18)] text-xs font-semibold text-[hsl(var(--h)_60%_32%)] dark:text-[hsl(var(--h)_70%_78%)]"
+          >
+            {b.avatar === '~unknown' ? '?' : initials(b.label)}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate font-medium">{b.label}</span>
+            <StatusBadge>{b.items.length}</StatusBadge>
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {t('jobs.newest', {
+              when:
+                d <= 0
+                  ? t('jobs.when_today')
+                  : d === 1
+                    ? t('jobs.when_yesterday')
+                    : new Date(newest).toLocaleDateString(locale),
+            })}
+            {applied > 0 && ` · ${t('jobs.n_applied', { count: applied })}`}
+          </span>
+        </span>
+        <span className="flex shrink-0 gap-0.5" aria-hidden>
+          {b.items.map((e) => (
+            <i key={e.job.id} className={cn('size-2 rounded-full', DOT[e.stage])} />
+          ))}
+        </span>
+      </button>
+      {expanded && (
+        <ul id={id} className="space-y-2 pl-2 sm:pl-4">
+          {b.items.map((e) => (
+            <JobRow key={e.job.id} e={e} showCompany={group !== 'employer'} locale={locale} />
+          ))}
+        </ul>
+      )}
+    </li>
   )
 }
 

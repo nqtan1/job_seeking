@@ -1,5 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useFieldArray, useForm, type FieldPath } from 'react-hook-form'
+import {
+  useFieldArray,
+  useForm,
+  type Control,
+  type FieldErrors,
+  type FieldPath,
+  type UseFormRegister,
+} from 'react-hook-form'
+import type { ReactNode } from 'react'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,9 +54,6 @@ export function ProfileForm({
     resolver: zodResolver(makeProfileSchema(t)),
     defaultValues: toForm(profile),
   })
-  const exp = useFieldArray({ control, name: 'experiences' })
-  const edu = useFieldArray({ control, name: 'formations' })
-  const skills = useFieldArray({ control, name: 'skills' })
   const { errors } = formState
 
   const field = (path: FieldPath<FormValues>, label: string) => (
@@ -59,6 +64,7 @@ export function ProfileForm({
   )
   const label = (k: string) => NAMES[k] ?? t(LABELS[k])
   const numbered = (k: string, n: number) => t('candidate.numbered', { label: label(k), n })
+  const part = { control, register, errors, field, numbered }
 
   return (
     <form
@@ -91,119 +97,9 @@ export function ProfileForm({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('candidate.h.experience')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {exp.fields.map((f, i) => (
-            <fieldset
-              key={f.id}
-              className="grid gap-4 border-b pb-6 last:border-0 last:pb-0 sm:grid-cols-2"
-            >
-              <legend className="sr-only">{t('candidate.f.experience_n', { n: i + 1 })}</legend>
-              {EXPERIENCE.map((k) => field(`experiences.${i}.${k}`, numbered(k, i + 1)))}
-              <div className="space-y-1 sm:col-span-2">
-                <Label htmlFor={`experiences.${i}.description`}>
-                  {t('candidate.f.description_n', { n: i + 1 })}
-                </Label>
-                <Textarea
-                  id={`experiences.${i}.description`}
-                  rows={3}
-                  {...register(`experiences.${i}.description`)}
-                />
-              </div>
-              {(errors.experiences?.[i]?.job_title || errors.experiences?.[i]?.company) && (
-                <p role="alert" className="text-sm text-destructive">
-                  {t('candidate.f.exp_required')}
-                </p>
-              )}
-              <Button type="button" variant="outline" size="sm" onClick={() => exp.remove(i)}>
-                {t('candidate.f.remove_exp', { n: i + 1 })}
-              </Button>
-            </fieldset>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              exp.append({
-                job_title: '',
-                company: '',
-                start_date: '',
-                end_date: '',
-                description: '',
-              })
-            }
-          >
-            {t('candidate.f.add_exp')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('candidate.h.education')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {edu.fields.map((f, i) => (
-            <fieldset
-              key={f.id}
-              className="grid gap-4 border-b pb-6 last:border-0 last:pb-0 sm:grid-cols-3"
-            >
-              <legend className="sr-only">{t('candidate.f.education_n', { n: i + 1 })}</legend>
-              {FORMATION.map((k) => field(`formations.${i}.${k}`, numbered(k, i + 1)))}
-              {(errors.formations?.[i]?.degree || errors.formations?.[i]?.institution) && (
-                <p role="alert" className="text-sm text-destructive">
-                  {t('candidate.f.edu_required')}
-                </p>
-              )}
-              <Button type="button" variant="outline" size="sm" onClick={() => edu.remove(i)}>
-                {t('candidate.f.remove_edu', { n: i + 1 })}
-              </Button>
-            </fieldset>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => edu.append({ degree: '', field: '', institution: '' })}
-          >
-            {t('candidate.f.add_edu')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{t('candidate.h.skills')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {skills.fields.map((f, i) => (
-              <div key={f.id} className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor={`skills.${i}.name`}>
-                    {t('candidate.f.skill_n', { n: i + 1 })}
-                  </Label>
-                  <Input id={`skills.${i}.name`} {...register(`skills.${i}.name`)} />
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => skills.remove(i)}>
-                  {t('candidate.f.remove_skill', { n: i + 1 })}
-                </Button>
-              </div>
-            ))}
-          </div>
-          {errors.skills && (
-            <p role="alert" className="text-sm text-destructive">
-              {t('candidate.f.skills_empty')}
-            </p>
-          )}
-          <Button type="button" variant="outline" onClick={() => skills.append({ name: '' })}>
-            {t('candidate.f.add_skill')}
-          </Button>
-        </CardContent>
-      </Card>
-
+      <ExperienceCard {...part} />
+      <EducationCard {...part} />
+      <SkillsCard {...part} />
       <div className="sticky bottom-0 -mx-6 -mb-6 flex items-center justify-end gap-3 border-t bg-background/90 px-6 py-3 backdrop-blur">
         {save.isError && <ErrorMessage error={save.error} />}
         {onCancel && (
@@ -216,5 +112,142 @@ export function ProfileForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+type PartProps = {
+  control: Control<FormValues>
+  register: UseFormRegister<FormValues>
+  errors: FieldErrors<FormValues>
+  field: (path: FieldPath<FormValues>, label: string) => ReactNode
+  numbered: (k: string, n: number) => string
+}
+
+function ExperienceCard({ control, register, errors, field, numbered }: PartProps) {
+  const t = useT()
+  const exp = useFieldArray({ control, name: 'experiences' })
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('candidate.h.experience')}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {exp.fields.map((f, i) => (
+          <fieldset
+            key={f.id}
+            className="grid gap-4 border-b pb-6 last:border-0 last:pb-0 sm:grid-cols-2"
+          >
+            <legend className="sr-only">{t('candidate.f.experience_n', { n: i + 1 })}</legend>
+            {EXPERIENCE.map((k) => field(`experiences.${i}.${k}`, numbered(k, i + 1)))}
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor={`experiences.${i}.description`}>
+                {t('candidate.f.description_n', { n: i + 1 })}
+              </Label>
+              <Textarea
+                id={`experiences.${i}.description`}
+                rows={3}
+                {...register(`experiences.${i}.description`)}
+              />
+            </div>
+            {(errors.experiences?.[i]?.job_title || errors.experiences?.[i]?.company) && (
+              <p role="alert" className="text-sm text-destructive">
+                {t('candidate.f.exp_required')}
+              </p>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={() => exp.remove(i)}>
+              {t('candidate.f.remove_exp', { n: i + 1 })}
+            </Button>
+          </fieldset>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() =>
+            exp.append({
+              job_title: '',
+              company: '',
+              start_date: '',
+              end_date: '',
+              description: '',
+            })
+          }
+        >
+          {t('candidate.f.add_exp')}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function EducationCard({ control, errors, field, numbered }: Omit<PartProps, 'register'>) {
+  const t = useT()
+  const edu = useFieldArray({ control, name: 'formations' })
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('candidate.h.education')}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {edu.fields.map((f, i) => (
+          <fieldset
+            key={f.id}
+            className="grid gap-4 border-b pb-6 last:border-0 last:pb-0 sm:grid-cols-3"
+          >
+            <legend className="sr-only">{t('candidate.f.education_n', { n: i + 1 })}</legend>
+            {FORMATION.map((k) => field(`formations.${i}.${k}`, numbered(k, i + 1)))}
+            {(errors.formations?.[i]?.degree || errors.formations?.[i]?.institution) && (
+              <p role="alert" className="text-sm text-destructive">
+                {t('candidate.f.edu_required')}
+              </p>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={() => edu.remove(i)}>
+              {t('candidate.f.remove_edu', { n: i + 1 })}
+            </Button>
+          </fieldset>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => edu.append({ degree: '', field: '', institution: '' })}
+        >
+          {t('candidate.f.add_edu')}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function SkillsCard({ control, register, errors }: Omit<PartProps, 'field' | 'numbered'>) {
+  const t = useT()
+  const skills = useFieldArray({ control, name: 'skills' })
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('candidate.h.skills')}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {skills.fields.map((f, i) => (
+            <div key={f.id} className="flex items-end gap-2">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor={`skills.${i}.name`}>{t('candidate.f.skill_n', { n: i + 1 })}</Label>
+                <Input id={`skills.${i}.name`} {...register(`skills.${i}.name`)} />
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => skills.remove(i)}>
+                {t('candidate.f.remove_skill', { n: i + 1 })}
+              </Button>
+            </div>
+          ))}
+        </div>
+        {errors.skills && (
+          <p role="alert" className="text-sm text-destructive">
+            {t('candidate.f.skills_empty')}
+          </p>
+        )}
+        <Button type="button" variant="outline" onClick={() => skills.append({ name: '' })}>
+          {t('candidate.f.add_skill')}
+        </Button>
+      </CardContent>
+    </Card>
   )
 }

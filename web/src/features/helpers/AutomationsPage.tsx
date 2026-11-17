@@ -93,18 +93,61 @@ export function AutomationsPage() {
   )
 }
 
-function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boolean) => void }) {
-  const { t, locale } = useI18n()
-  const navigate = useNavigate()
-  const flows = useFlows()
-  const runs = useAllRuns({})
-  const create = useCreateFlow()
-  const archive = useArchiveFlow()
-  const [name, setName] = useState('')
-  // Runs come newest first, so the first one seen for a flow is its last run.
-  const last = new Map<string, NonNullable<typeof runs.data>['pages'][number][number]>()
-  for (const r of runs.data?.pages.flat() ?? []) if (!last.has(r.flow_id)) last.set(r.flow_id, r)
+type FlowItem = NonNullable<ReturnType<typeof useFlows>['data']>[number]
+type LastRun = NonNullable<ReturnType<typeof useAllRuns>['data']>['pages'][number][number]
 
+function FlowRow({
+  f,
+  run,
+  archive,
+}: {
+  f: FlowItem
+  run: LastRun | undefined
+  archive: ReturnType<typeof useArchiveFlow>
+}) {
+  const { t, locale } = useI18n()
+  return (
+    <li className="flex items-center gap-3 p-3 pl-4">
+      <Link
+        to={`/automations/${f.id}`}
+        className="min-w-0 flex-1 truncate rounded font-medium outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        {f.name}
+      </Link>
+      <NextRun flowId={f.id} />
+      {run && (
+        <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          <RunStatusBadge status={run.status} />
+          <span className="hidden sm:inline">{relTime(run.created_at, locale)}</span>
+        </span>
+      )}
+      <details className="relative shrink-0">
+        <summary
+          aria-label={t('helpers.flow.more', { name: f.name })}
+          className="grid size-8 cursor-pointer list-none place-items-center rounded-lg text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
+        >
+          <Ellipsis className="size-4" aria-hidden />
+        </summary>
+        <div className="absolute right-0 z-10 mt-1 flex gap-1 rounded-xl border bg-popover p-2 shadow-md">
+          <ConfirmButton
+            variant="ghost"
+            label={t('helpers.archive')}
+            confirmLabel={t('helpers.archive_confirm')}
+            cancelLabel={t('helpers.cancel')}
+            pending={archive.isPending}
+            onConfirm={(reset) => archive.mutate(f.id, { onSettled: reset })}
+          />
+        </div>
+      </details>
+    </li>
+  )
+}
+
+function NewFlowModal({ naming, setNaming }: { naming: boolean; setNaming: (v: boolean) => void }) {
+  const t = useT()
+  const navigate = useNavigate()
+  const create = useCreateFlow()
+  const [name, setName] = useState('')
   const make = () =>
     create.mutate(
       {
@@ -120,6 +163,51 @@ function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boole
     )
 
   return (
+    <Modal open={naming} label={t('helpers.flow.new')} onClose={() => setNaming(false)}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (name.trim()) make()
+        }}
+        className="space-y-4"
+      >
+        <h2 className="font-semibold">{t('helpers.flow.new')}</h2>
+        <Label htmlFor="flow-name" className="sr-only">
+          {t('helpers.name')}
+        </Label>
+        <Input
+          id="flow-name"
+          autoFocus
+          maxLength={80}
+          placeholder={t('helpers.name')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <ErrorMessage error={create.error} />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setNaming(false)}>
+            {t('helpers.cancel')}
+          </Button>
+          <Button type="submit" disabled={!name.trim() || create.isPending}>
+            {create.isPending && <Spinner />}
+            {t('helpers.flow.create')}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boolean) => void }) {
+  const { t } = useI18n()
+  const flows = useFlows()
+  const runs = useAllRuns({})
+  const archive = useArchiveFlow()
+  // Runs come newest first, so the first one seen for a flow is its last run.
+  const last = new Map<string, LastRun>()
+  for (const r of runs.data?.pages.flat() ?? []) if (!last.has(r.flow_id)) last.set(r.flow_id, r)
+
+  return (
     <div className="space-y-8">
       <ReadyMade />
       <ErrorMessage error={archive.error} />
@@ -131,79 +219,13 @@ function FlowsTab({ naming, setNaming }: { naming: boolean; setNaming: (v: boole
         <p className="text-sm text-muted-foreground">{t('helpers.flow.empty')}</p>
       ) : (
         <ul className="divide-y rounded-2xl border">
-          {flows.data.map((f) => {
-            const run = last.get(f.id)
-            return (
-              <li key={f.id} className="flex items-center gap-3 p-3 pl-4">
-                <Link
-                  to={`/automations/${f.id}`}
-                  className="min-w-0 flex-1 truncate rounded font-medium outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-                >
-                  {f.name}
-                </Link>
-                <NextRun flowId={f.id} />
-                {run && (
-                  <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                    <RunStatusBadge status={run.status} />
-                    <span className="hidden sm:inline">{relTime(run.created_at, locale)}</span>
-                  </span>
-                )}
-                <details className="relative shrink-0">
-                  <summary
-                    aria-label={t('helpers.flow.more', { name: f.name })}
-                    className="grid size-8 cursor-pointer list-none place-items-center rounded-lg text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
-                  >
-                    <Ellipsis className="size-4" aria-hidden />
-                  </summary>
-                  <div className="absolute right-0 z-10 mt-1 flex gap-1 rounded-xl border bg-popover p-2 shadow-md">
-                    <ConfirmButton
-                      variant="ghost"
-                      label={t('helpers.archive')}
-                      confirmLabel={t('helpers.archive_confirm')}
-                      cancelLabel={t('helpers.cancel')}
-                      pending={archive.isPending}
-                      onConfirm={(reset) => archive.mutate(f.id, { onSettled: reset })}
-                    />
-                  </div>
-                </details>
-              </li>
-            )
-          })}
+          {flows.data.map((f) => (
+            <FlowRow key={f.id} f={f} run={last.get(f.id)} archive={archive} />
+          ))}
         </ul>
       )}
 
-      <Modal open={naming} label={t('helpers.flow.new')} onClose={() => setNaming(false)}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (name.trim()) make()
-          }}
-          className="space-y-4"
-        >
-          <h2 className="font-semibold">{t('helpers.flow.new')}</h2>
-          <Label htmlFor="flow-name" className="sr-only">
-            {t('helpers.name')}
-          </Label>
-          <Input
-            id="flow-name"
-            autoFocus
-            maxLength={80}
-            placeholder={t('helpers.name')}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <ErrorMessage error={create.error} />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setNaming(false)}>
-              {t('helpers.cancel')}
-            </Button>
-            <Button type="submit" disabled={!name.trim() || create.isPending}>
-              {create.isPending && <Spinner />}
-              {t('helpers.flow.create')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <NewFlowModal naming={naming} setNaming={setNaming} />
     </div>
   )
 }
@@ -237,9 +259,8 @@ function JobHunterTile() {
         </span>
       }
       name={t('helpers.hunter.title')}
-      hint={t('helpers.hunter.body')}
       busy={install.isPending}
-      busyLabel={t('helpers.pages.tpl.busy')}
+      busyLabel={t('app.loading')}
       disabled={install.isPending}
       onUse={() =>
         install.mutate(undefined, { onSuccess: (f) => navigate(`/automations/${f.id}`) })
@@ -250,11 +271,10 @@ function JobHunterTile() {
   )
 }
 
-/** One compact tile: name, a few words, one button. */
+/** One compact tile: name and one button. */
 function Tile({
   icon,
   name,
-  hint,
   busy,
   busyLabel,
   disabled,
@@ -263,7 +283,6 @@ function Tile({
 }: {
   icon: ReactNode
   name: string
-  hint: string
   busy: boolean
   busyLabel: string
   disabled: boolean
@@ -275,16 +294,13 @@ function Tile({
     <li className={cn('flex flex-col gap-3 rounded-2xl border bg-card p-4', LIFT)}>
       <div className="flex items-center gap-3">
         {icon}
-        <div className="min-w-0">
-          <p className="font-semibold">{name}</p>
-          <p className="text-sm text-muted-foreground">{hint}</p>
-        </div>
+        <p className="min-w-0 font-semibold">{name}</p>
       </div>
       <Button
         variant="outline"
         className="mt-auto self-start"
         disabled={disabled}
-        aria-label={t('helpers.pages.tpl.use_label', { name })}
+        aria-label={`${t('helpers.use_starter')}: ${name}`}
         onClick={onUse}
       >
         {busy ? <Spinner /> : <Sparkles data-icon="inline-start" />}
@@ -295,19 +311,16 @@ function Tile({
   )
 }
 
-function ReadyMade() {
+type BuildError = { id: string; cause?: unknown; cap?: number; partial?: boolean }
+
+function useBuildTemplate() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const agents = useAgents()
   const createAgent = useCreateAgent()
   const createFlow = useCreateFlow()
   const [busy, setBusy] = useState<string | null>(null)
-  const [error, setError] = useState<{
-    id: string
-    cause?: unknown
-    cap?: number
-    partial?: boolean
-  } | null>(null)
+  const [error, setError] = useState<BuildError | null>(null)
   const made = useRef(new Map<string, AgentDetail[]>())
 
   const build = async (tpl: Template) => {
@@ -325,7 +338,7 @@ function ReadyMade() {
         have.push(
           await createAgent.mutateAsync({
             name: t(s.name),
-            description: t(s.goal),
+            description: '',
             spec: localized(s.spec, s.inputLabels, t),
             note: '',
           }),
@@ -351,6 +364,29 @@ function ReadyMade() {
     }
   }
 
+  return { busy, error, build }
+}
+
+function TemplateError({ error }: { error: BuildError }) {
+  const t = useT()
+  return error.cap ? (
+    <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      {t('helpers.pages.tpl.cap', { max: MAX_HELPERS, count: error.cap })}
+    </p>
+  ) : (
+    <div className="space-y-2">
+      {error.partial && (
+        <p className="text-sm text-muted-foreground">{t('helpers.pages.tpl.partial')}</p>
+      )}
+      <ErrorMessage error={error.cause} />
+    </div>
+  )
+}
+
+function ReadyMade() {
+  const { t } = useI18n()
+  const { busy, error, build } = useBuildTemplate()
+
   return (
     <section aria-labelledby="ready-h" className="space-y-3">
       <h2 id="ready-h" className="text-lg font-semibold tracking-tight">
@@ -369,30 +405,12 @@ function ReadyMade() {
               </span>
             }
             name={t(tpl.name)}
-            hint={t(tpl.hint)}
             busy={busy === tpl.id}
-            busyLabel={t('helpers.pages.tpl.busy')}
+            busyLabel={t('app.loading')}
             disabled={busy !== null}
             onUse={() => build(tpl)}
           >
-            {error?.id === tpl.id &&
-              (error.cap ? (
-                <p
-                  role="alert"
-                  className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {t('helpers.pages.tpl.cap', { max: MAX_HELPERS, count: error.cap })}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {error.partial && (
-                    <p className="text-sm text-muted-foreground">
-                      {t('helpers.pages.tpl.partial')}
-                    </p>
-                  )}
-                  <ErrorMessage error={error.cause} />
-                </div>
-              ))}
+            {error?.id === tpl.id && <TemplateError error={error} />}
           </Tile>
         ))}
       </ul>

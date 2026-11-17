@@ -411,7 +411,7 @@ describe('the flow editor', () => {
     const ids = graph.nodes.map((n) => n.id)
     const [start, result] = ids
     expect(resultLast(graph, [result, start, 'x'])).toEqual([start, 'x', result])
-    expect(typeKey('transform')).toBe('helpers.node.transform_name')
+    expect(typeKey('transform')).toBe('helpers.node.transform')
   })
 
   test('the header carries save and run with an always-present save status; adding a step makes it unsaved', async () => {
@@ -517,7 +517,7 @@ describe('platform pages', () => {
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(31))
     await user.click(screen.getByRole('button', { name: 'Failed' }))
     await waitFor(() => expect(screen.getAllByRole('listitem')).toHaveLength(1))
-    await user.click(screen.getByRole('button', { name: 'Run Follow-up again' }))
+    await user.click(screen.getByRole('button', { name: 'Run again: Follow-up' }))
     expect(await screen.findByText('run page')).toBeInTheDocument()
     expect(mocks.POST.mock.calls[0][0]).toBe('/api/v1/flow-runs/{run_id}/rerun')
   })
@@ -579,7 +579,7 @@ describe('platform pages', () => {
         <RouterProvider router={router} />
       </QueryClientProvider>,
     )
-    await user.click(await screen.findByRole('button', { name: 'Use Prepare my interview' })) // two helpers
+    await user.click(await screen.findByRole('button', { name: 'Use: Prepare my interview' })) // two helpers
     expect(await screen.findByText('editor')).toBeInTheDocument()
     const calls = mocks.POST.mock.calls
     expect(calls.map((c) => c[0])).toEqual(['/api/v1/agents', '/api/v1/agents', '/api/v1/flows'])

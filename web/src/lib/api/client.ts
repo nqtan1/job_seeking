@@ -1,4 +1,5 @@
 import createClient from 'openapi-fetch'
+import { analyticsMiddleware } from '@/lib/analytics'
 import { getAppCheckHeaders } from '@/lib/app-check'
 import { getAuthHeaders } from '@/lib/auth'
 import { endSession } from '@/lib/session'
@@ -28,3 +29,5 @@ api.use({
     return response
   },
 })
+
+api.use(analyticsMiddleware)

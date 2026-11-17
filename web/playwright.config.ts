@@ -14,6 +14,11 @@ export default defineConfig({
   workers: 1,
   timeout: 180_000,
   use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
+  // Every spec twice: a desktop and a phone (390 px, the layout below Tailwind `md`).
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 900 } } },
+    { name: 'phone', use: { viewport: { width: 390, height: 844 } } },
+  ],
   webServer: {
     command: `pnpm dev --port ${port}`,
     url: `http://localhost:${port}`,

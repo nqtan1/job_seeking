@@ -14,6 +14,7 @@ import { useTask } from '@/lib/api/tasks'
 import { signOut } from '@/lib/auth'
 import { SignInMethods } from '@/features/auth/SignInMethods'
 import { ConsentSettings } from '@/features/radar/Consent'
+import { AnalyticsCard } from './Analytics'
 import { ensureRecentAuth } from '@/lib/stepup'
 import {
   useAiCalls,
@@ -274,6 +275,7 @@ export function SettingsPage() {
         <RemindersCard />
         <AiActivityCard />
         <ConsentSettings />
+        <AnalyticsCard />
         <SessionsCard />
         <ExportCard />
         <DeleteCard />

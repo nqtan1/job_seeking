@@ -38,16 +38,22 @@ async def get_agent(
     ).scalar_one_or_none()
 
 
-async def list_agents(session: AsyncSession, *, org_id: UUID) -> list[Agent]:
-    return list(
-        (
-            await session.execute(
-                select(Agent)
-                .where(Agent.org_id == org_id, Agent.archived_at.is_(None))
-                .order_by(Agent.updated_at.desc(), Agent.id)
-            )
-        ).scalars()
+async def list_agents(
+    session: AsyncSession, *, org_id: UUID
+) -> list[tuple[Agent, list[str]]]:
+    """Each live helper with its current version's chat tools, in one query."""
+    rows = await session.execute(
+        select(Agent, AgentVersion.tools)
+        .join(
+            AgentVersion,
+            (AgentVersion.agent_id == Agent.id)
+            & (AgentVersion.version == Agent.current_version)
+            & (AgentVersion.org_id == org_id),
+        )
+        .where(Agent.org_id == org_id, Agent.archived_at.is_(None))
+        .order_by(Agent.updated_at.desc(), Agent.id)
     )
+    return [(a, tools) for a, tools in rows]
 
 
 async def add_version(

@@ -35,7 +35,7 @@ async def test_a_helper_has_an_identity_and_immutable_versions_with_no_lost_edit
         headers=ada,
         json={
             "based_on": 1,
-            "spec": {**SPEC, "instructions": "Shorter."},
+            "spec": {**SPEC, "instructions": "Shorter.", "tools": ["fit_read"]},
             "note": "tighter",
         },
     )
@@ -52,6 +52,10 @@ async def test_a_helper_has_an_identity_and_immutable_versions_with_no_lost_edit
     versions = (await client.get(f"{url}/versions", headers=ada)).json()
     assert [v["version"] for v in versions] == [2, 1]
     assert versions[1]["spec"]["instructions"] == SPEC["instructions"]  # v1 untouched
+    listed = (await client.get(BASE, headers=ada)).json()
+    assert [x["tools"] for x in listed] == [
+        ["fit_read"]
+    ]  # the current version's, one query
 
     renamed = await client.patch(url, headers=ada, json={"name": " Zed "})
     assert renamed.json()["name"] == "Zed"

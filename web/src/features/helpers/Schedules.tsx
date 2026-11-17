@@ -114,10 +114,7 @@ function ScheduleRow({ s }: { s: Schedule }) {
           size="sm"
           variant="outline"
           disabled={toggle.isPending}
-          aria-label={t(
-            s.enabled ? 'helpers.pages.sched.pause_label' : 'helpers.pages.sched.resume_label',
-            { what },
-          )}
+          aria-label={`${t(s.enabled ? 'helpers.pages.sched.pause' : 'helpers.pages.sched.resume')}: ${what}`}
           onClick={() => toggle.mutate({ id: s.id, enabled: !s.enabled })}
         >
           {s.enabled ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
@@ -126,9 +123,9 @@ function ScheduleRow({ s }: { s: Schedule }) {
         <ConfirmButton
           variant="ghost"
           label={t('helpers.pages.sched.delete')}
-          aria-label={t('helpers.pages.sched.delete_label', { what })}
+          aria-label={`${t('helpers.pages.sched.delete')}: ${what}`}
           confirmLabel={t('helpers.pages.sched.delete_confirm')}
-          confirmAriaLabel={t('helpers.pages.sched.delete_label', { what })}
+          confirmAriaLabel={`${t('helpers.pages.sched.delete')}: ${what}`}
           cancelLabel={t('helpers.cancel')}
           pending={remove.isPending}
           onConfirm={(reset) => remove.mutate(s.id, { onSettled: reset })}
@@ -157,9 +154,9 @@ export function SchedulePanel({
   const schedules = useSchedules(flow.id)
   const [adding, setAdding] = useState(false)
   const blocked = dirty
-    ? 'helpers.pages.sched.dirty'
+    ? 'helpers.run_save_first'
     : flow.issues.some((i) => i.severity === 'error')
-      ? 'helpers.pages.sched.issues'
+      ? 'helpers.run_fix_first'
       : null
   const rows = schedules.data ?? []
   return (
@@ -202,6 +199,125 @@ export function SchedulePanel({
   )
 }
 
+function CadenceField({
+  cadence,
+  setCadence,
+}: {
+  cadence: Schedule['cadence']
+  setCadence: (c: Schedule['cadence']) => void
+}) {
+  const { t } = useI18n()
+  return (
+    <fieldset className="space-y-2">
+      <legend className="mb-1.5 text-sm font-medium">{t('helpers.pages.sched.cadence')}</legend>
+      <div className="grid gap-2">
+        {CADENCES.map((c) => (
+          <ChoiceCard
+            key={c}
+            type="radio"
+            name="cadence"
+            checked={cadence === c}
+            onChange={() => setCadence(c)}
+            title={t(`helpers.pages.sched.cadence_${c}`)}
+          />
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+function TimeFields({
+  weekly,
+  time,
+  setTime,
+  weekday,
+  setWeekday,
+}: {
+  weekly: boolean
+  time: string
+  setTime: (v: string) => void
+  weekday: number
+  setWeekday: (d: number) => void
+}) {
+  const { t, locale } = useI18n()
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-1.5">
+        <Label htmlFor="sched-time">{t('helpers.pages.sched.time')}</Label>
+        <Input
+          id="sched-time"
+          type="time"
+          required
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+        />
+      </div>
+      {weekly && (
+        <div className="space-y-1.5">
+          <Label htmlFor="sched-day">{t('helpers.pages.sched.weekday')}</Label>
+          <NativeSelect
+            id="sched-day"
+            className="w-full"
+            value={weekday}
+            onChange={(e) => setWeekday(Number(e.target.value))}
+          >
+            {Array.from({ length: 7 }, (_, d) => (
+              <option key={d} value={d}>
+                {dayName(d, locale)}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ZoneField({ zone, setZone }: { zone: string; setZone: (z: string) => void }) {
+  const { t } = useI18n()
+  const zones = ZONES.includes(zone) ? ZONES : [zone, ...ZONES]
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor="sched-zone">{t('helpers.pages.sched.zone')}</Label>
+      <NativeSelect
+        id="sched-zone"
+        className="w-full"
+        value={zone}
+        onChange={(e) => setZone(e.target.value)}
+      >
+        {zones.map((z) => (
+          <option key={z} value={z}>
+            {city(z)} ({z})
+          </option>
+        ))}
+      </NativeSelect>
+    </div>
+  )
+}
+
+function InputFields({
+  fields,
+  values,
+  setValues,
+}: {
+  fields: { name: string; label: string }[]
+  values: Record<string, string>
+  setValues: (v: Record<string, string>) => void
+}) {
+  return fields.map((f) => (
+    <div key={f.name} className="space-y-1.5">
+      <Label htmlFor={`sched-${f.name}`}>{f.label}</Label>
+      <Textarea
+        id={`sched-${f.name}`}
+        rows={3}
+        maxLength={MAX_INPUT_CHARS}
+        value={values[f.name] ?? ''}
+        onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
+      />
+    </div>
+  ))
+}
+
 function AddDialog({
   open,
   flow,
@@ -215,7 +331,7 @@ function AddDialog({
   specs: Specs
   onClose: () => void
 }) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const sentence = useSentence()
   const create = useCreateSchedule()
   const [cadence, setCadence] = useState<Schedule['cadence']>('daily')
@@ -244,7 +360,6 @@ function AddDialog({
     weekday: cadence === 'weekly' ? weekday : null,
     timezone: zone,
   }
-  const zones = ZONES.includes(zone) ? ZONES : [zone, ...ZONES]
 
   return (
     <Modal open={open} label={t('helpers.pages.sched.add')} onClose={onClose}>
@@ -262,82 +377,18 @@ function AddDialog({
         }}
       >
         <h2 className="text-lg font-semibold tracking-tight">{t('helpers.pages.sched.add')}</h2>
-        <fieldset className="space-y-2">
-          <legend className="mb-1.5 text-sm font-medium">{t('helpers.pages.sched.cadence')}</legend>
-          <div className="grid gap-2">
-            {CADENCES.map((c) => (
-              <ChoiceCard
-                key={c}
-                type="radio"
-                name="cadence"
-                checked={cadence === c}
-                onChange={() => setCadence(c)}
-                title={t(`helpers.pages.sched.cadence_${c}`)}
-              />
-            ))}
-          </div>
-        </fieldset>
+        <CadenceField cadence={cadence} setCadence={setCadence} />
         {cadence !== 'hourly' && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="sched-time">{t('helpers.pages.sched.time')}</Label>
-              <Input
-                id="sched-time"
-                type="time"
-                required
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-              />
-            </div>
-            {cadence === 'weekly' && (
-              <div className="space-y-1.5">
-                <Label htmlFor="sched-day">{t('helpers.pages.sched.weekday')}</Label>
-                <NativeSelect
-                  id="sched-day"
-                  className="w-full"
-                  value={weekday}
-                  onChange={(e) => setWeekday(Number(e.target.value))}
-                >
-                  {Array.from({ length: 7 }, (_, d) => (
-                    <option key={d} value={d}>
-                      {dayName(d, locale)}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-            )}
-          </div>
+          <TimeFields
+            weekly={cadence === 'weekly'}
+            time={time}
+            setTime={setTime}
+            weekday={weekday}
+            setWeekday={setWeekday}
+          />
         )}
-        <div className="space-y-1.5">
-          <Label htmlFor="sched-zone">{t('helpers.pages.sched.zone')}</Label>
-          <NativeSelect
-            id="sched-zone"
-            className="w-full"
-            value={zone}
-            onChange={(e) => setZone(e.target.value)}
-          >
-            {zones.map((z) => (
-              <option key={z} value={z}>
-                {city(z)} ({z})
-              </option>
-            ))}
-          </NativeSelect>
-          <p className="text-xs text-muted-foreground">
-            {t('helpers.pages.sched.zone_hint', { zone: city(zone) })}
-          </p>
-        </div>
-        {fields.map((f) => (
-          <div key={f.name} className="space-y-1.5">
-            <Label htmlFor={`sched-${f.name}`}>{f.label}</Label>
-            <Textarea
-              id={`sched-${f.name}`}
-              rows={3}
-              maxLength={MAX_INPUT_CHARS}
-              value={values[f.name] ?? ''}
-              onChange={(e) => setValues({ ...values, [f.name]: e.target.value })}
-            />
-          </div>
-        ))}
+        <ZoneField zone={zone} setZone={setZone} />
+        <InputFields fields={fields} values={values} setValues={setValues} />
         {needsJob && <JobSelect id="sched-job" value={jobId} onChange={setJobId} />}
         <p className="font-medium">{t('helpers.pages.sched.summary', { when: sentence(when) })}</p>
         <p className="flex items-start gap-2 rounded-xl border bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">

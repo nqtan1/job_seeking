@@ -8,7 +8,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 from contextlib import aclosing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -20,10 +20,12 @@ from recruitai.ai.gateway import (
     LLMGateway,
     Source,
     TextDelta,
+    ToolCall,
     ToolCalls,
     ToolCallTurn,
     ToolResult,
     ToolResultTurn,
+    ToolSpec,
     Turn,
     UserTurn,
 )
@@ -38,6 +40,7 @@ from recruitai.config import Settings
 from recruitai.core.errors import NotFound, UpstreamUnavailable, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.core.language import Language
+from recruitai.core.tools import Tool
 from recruitai.modules.agents.helpers import service as helpers
 from recruitai.modules.candidates import service as candidates
 from recruitai.modules.coach import context, repository
@@ -282,46 +285,11 @@ async def _build_prompt(
         except NotFound:
             job = None  # the job was deleted since: carry on as a general conversation
     if job is not None:
-        job_text, job_cut = context.job_json(job.data, context.JOB_CHARS)
-        job_text = context.fence(job_text)
-        digest = hashlib.sha256(
-            json.dumps(job.data, sort_keys=True, ensure_ascii=False).encode()
-        ).hexdigest()
-        job_ref = JobRef(job_id=job.id, content_hash=digest)
-        title = job.data.get("title")
-        counts["job"] = {
-            "title": title if isinstance(title, str) else None,
-            "chars": len(job_text),
-            "truncated": job_cut,
-        }
-        job_block = f"\n<job_under_discussion>\n{job_text}\n</job_under_discussion>\n"
-        reports = await matching.list_analyses(
-            db, org_id=org_id, job_id=job.id, limit=1
+        job_block, fit_block, job_ref = await _job_blocks(
+            db, org_id, job.id, job.data, counts
         )
-        if reports:
-            fit_text, fit_cut = context.json_block(reports[0].data, context.FIT_CHARS)
-            fit_text = context.fence(fit_text)
-            counts["fit"] = {"chars": len(fit_text), "truncated": fit_cut}
-            fit_block = (
-                f"\n<previous_fit_analysis>\n{fit_text}\n</previous_fit_analysis>\n"
-            )
     else:
-        # No job in focus: say which jobs the candidate has saved, so "which should I apply
-        # to first?" and "how many jobs do I have?" are answerable (titles only, bounded).
-        saved = await jobs.list_jobs(db, org_id=org_id, limit=SAVED_JOBS_MAX)
-        lines = [
-            context.fence(
-                f"- {j.data.get('title') or 'Untitled'}"
-                f" · {(j.data.get('company') or {}).get('name') or 'unknown company'}"
-            )
-            for j in saved
-        ]
-        counts["saved_jobs"] = len(saved)
-        saved_block = (
-            f'\n<saved_jobs count="{len(saved)}" limit="{SAVED_JOBS_MAX}">\n'
-            + ("\n".join(lines) or "(none yet)")
-            + "\n</saved_jobs>\n"
-        )
+        saved_block = await _saved_jobs_block(db, org_id, counts)
     return _Prompt(
         text=_TURN.format(
             profile=profile_text,
@@ -346,6 +314,58 @@ async def _build_prompt(
         job_ref=job_ref,
         counts=counts,
         tools=list(helpers.COACH_TOOLS) if spec is None else spec[1],
+    )
+
+
+async def _job_blocks(
+    db: AsyncSession,
+    org_id: UUID,
+    job_id: UUID,
+    data: dict[str, Any],
+    counts: dict[str, Any],
+) -> tuple[str, str, JobRef]:
+    """The job in focus and its latest fit report, fenced: (job block, fit block, job ref)."""
+    fit_block = ""
+    job_text, job_cut = context.job_json(data, context.JOB_CHARS)
+    job_text = context.fence(job_text)
+    digest = hashlib.sha256(
+        json.dumps(data, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+    job_ref = JobRef(job_id=job_id, content_hash=digest)
+    title = data.get("title")
+    counts["job"] = {
+        "title": title if isinstance(title, str) else None,
+        "chars": len(job_text),
+        "truncated": job_cut,
+    }
+    job_block = f"\n<job_under_discussion>\n{job_text}\n</job_under_discussion>\n"
+    reports = await matching.list_analyses(db, org_id=org_id, job_id=job_id, limit=1)
+    if reports:
+        fit_text, fit_cut = context.json_block(reports[0].data, context.FIT_CHARS)
+        fit_text = context.fence(fit_text)
+        counts["fit"] = {"chars": len(fit_text), "truncated": fit_cut}
+        fit_block = f"\n<previous_fit_analysis>\n{fit_text}\n</previous_fit_analysis>\n"
+    return job_block, fit_block, job_ref
+
+
+async def _saved_jobs_block(
+    db: AsyncSession, org_id: UUID, counts: dict[str, Any]
+) -> str:
+    """No job in focus: say which jobs the candidate has saved, so "which should I apply to
+    first?" and "how many jobs do I have?" are answerable (titles only, bounded)."""
+    saved = await jobs.list_jobs(db, org_id=org_id, limit=SAVED_JOBS_MAX)
+    lines = [
+        context.fence(
+            f"- {j.data.get('title') or 'Untitled'}"
+            f" · {(j.data.get('company') or {}).get('name') or 'unknown company'}"
+        )
+        for j in saved
+    ]
+    counts["saved_jobs"] = len(saved)
+    return (
+        f'\n<saved_jobs count="{len(saved)}" limit="{SAVED_JOBS_MAX}">\n'
+        + ("\n".join(lines) or "(none yet)")
+        + "\n</saved_jobs>\n"
     )
 
 
@@ -378,6 +398,24 @@ async def _converse(llm: LLMGateway, **kwargs: Any) -> AsyncGenerator[ChatEvent]
             kwargs["continuation"] = True  # the turn was charged once already
 
 
+@dataclass
+class _TurnState:
+    """What one coach turn gathers across its model rounds."""
+
+    degraded: list[str]
+    read_untrusted: bool
+    texts: list[str] = field(default_factory=list)
+    steps: list[StepMeta] = field(default_factory=list)
+    sources: dict[str, Source] = field(default_factory=dict)
+    queries: list[str] = field(default_factory=list)
+    suggestions: str | None = None
+    started: bool = False
+    searches: int = 0
+    rounds: int = 0
+    allow: bool = True
+    pending: ToolCalls | None = None
+
+
 async def stream_reply(
     db: AsyncSession,
     llm: LLMGateway,
@@ -392,6 +430,67 @@ async def stream_reply(
 ) -> AsyncGenerator[Event]:
     """The coach's turn as events ``(name, data)``. Bounded tool loop (ADR 0023). Refusals and the
     first model call's errors raise before the first event (problem+json). ``replace_last`` regenerates."""
+    conversation, recent, replaced, content = await _turn_input(
+        db,
+        org_id=org_id,
+        conversation_id=conversation_id,
+        content=content,
+        replace_last=replace_last,
+    )
+    history = window(recent)
+    prompt = await _build_prompt(
+        db,
+        conversation,
+        history,
+        len(recent) - len(history),
+        content,
+        language,
+        settings,
+    )
+    tools, tool_ctx, web = _turn_tools(
+        db, llm, settings, prompt, org_id=org_id, user_id=user_id
+    )
+    degraded: list[str] = []
+    if settings.coach_job_focus and not web and prompt.job_attached:
+        degraded.append("web_unavailable")  # said to the user, never a silent gap
+    # outsiders' text reached the model (a job ad, web results earlier in the chat, a tool this
+    # turn): nothing may write or leave the app after it
+    read_untrusted = prompt.job_attached or any(
+        (t := tools_module.tool_of(s.get("tool", ""))) is not None and t.untrusted
+        for m in history
+        for s in (m.meta or {}).get("steps", [])
+    )
+    state = _TurnState(degraded=degraded, read_untrusted=read_untrusted)
+    async with aclosing(
+        _rounds(llm, settings, prompt, tools, tool_ctx, state)
+    ) as events:
+        async for event in events:
+            yield event
+    async with aclosing(
+        _store_reply(
+            db,
+            llm,
+            prompt,
+            state,
+            org_id=org_id,
+            conversation_id=conversation_id,
+            content=content,
+            replaced=replaced,
+        )
+    ) as events:
+        async for event in events:
+            yield event
+
+
+async def _turn_input(
+    db: AsyncSession,
+    *,
+    org_id: UUID,
+    conversation_id: UUID,
+    content: str | None,
+    replace_last: bool,
+) -> tuple[Conversation, list[Message], list[Message], str]:
+    """(conversation, recent messages, the pair being regenerated, the message), refused early."""
     conversation = await get_conversation(
         db, org_id=org_id, conversation_id=conversation_id
     )
@@ -413,17 +512,19 @@ async def stream_reply(
         raise ValidationFailed(
             f"A message must be 1 to {MAX_MESSAGE_CHARS} characters."
         )
-    history = window(recent)
-    prompt = await _build_prompt(
-        db,
-        conversation,
-        history,
-        len(recent) - len(history),
-        content,
-        language,
-        settings,
-    )
+    return conversation, recent, replaced, content
 
+
+def _turn_tools(
+    db: AsyncSession,
+    llm: LLMGateway,
+    settings: Settings,
+    prompt: _Prompt,
+    *,
+    org_id: UUID,
+    user_id: UUID | None,
+) -> tuple[list[ToolSpec], tools_module.ToolContext, bool]:
+    """(tools offered this turn, their context, whether web grounding is available)."""
     caps = llm.capabilities(PROMPT_VERSION)
     web = caps.web_grounding
     tools = (
@@ -446,150 +547,192 @@ async def stream_reply(
         profile=prompt.profile,
         feature=PROMPT_VERSION,
     )
+    return tools, tool_ctx, web
+
+
+async def _rounds(
+    llm: LLMGateway,
+    settings: Settings,
+    prompt: _Prompt,
+    tools: list[ToolSpec],
+    tool_ctx: tools_module.ToolContext,
+    state: _TurnState,
+) -> AsyncGenerator[Event]:
+    """Model call, tool calls, model call... until the model answers without calling a tool."""
     turns: list[Turn] = [UserTurn(prompt.text)]
     deadline = time.monotonic() + settings.coach_turn_timeout_s
-    texts: list[str] = []
-    steps: list[StepMeta] = []
-    sources: dict[str, Source] = {}
-    queries: list[str] = []
-    suggestions: str | None = None
-    degraded: list[str] = []
-    if settings.coach_job_focus and not web and prompt.job_attached:
-        degraded.append("web_unavailable")  # said to the user, never a silent gap
-    started = False
-    # outsiders' text reached the model (a job ad, web results earlier in the chat, a tool this
-    # turn): nothing may write or leave the app after it
-    read_untrusted = prompt.job_attached or any(
-        (t := tools_module.tool_of(s.get("tool", ""))) is not None and t.untrusted
-        for m in history
-        for s in (m.meta or {}).get("steps", [])
-    )
-    searches = 0
-    rounds = 0
-    allow = True
-
     while True:
-        pending: ToolCalls | None = None
-        # aclosing: if the client disconnects and this generator is closed, the gateway's stream
-        # is closed *now* (it records the call's outcome in its ``finally``).
+        state.pending = None
+        async with aclosing(_model_round(llm, prompt, turns, tools, state)) as events:
+            async for event in events:
+                yield event
+        pending = state.pending
+        # past the step limit or the deadline, calls are ignored even if a backend still sends them
+        if pending is None or not state.allow:
+            break
+        state.rounds += 1
+        results: list[ToolResult] = []
         async with aclosing(
-            _converse(
-                llm,
-                system=prompt.system,
-                turns=turns,
-                tools=tools,
-                feature=PROMPT_VERSION,
-                model="smart",
-                allow_tools=allow,
-                continuation=rounds > 0,
-            )
+            _run_calls(pending.calls, tools, tool_ctx, state, results)
         ) as events:
             async for event in events:
-                if not started:  # first model output: no refusal can happen any more
-                    started = True
-                    yield "context", prompt.counts
-                    for code in degraded:
-                        yield "notice", {"code": code}
-                if isinstance(event, TextDelta):
-                    texts.append(event.text)
-                    yield "token", {"text": event.text}
-                elif isinstance(event, ToolCalls):
-                    pending = event
-        if pending is None:
-            break
-        rounds += 1
-        results: list[ToolResult] = []
-        for n, call in enumerate(pending.calls):
-            step_id = f"{rounds}.{n}"
-            if n >= MAX_CALLS_PER_ROUND:  # every parallel call is answered, few are run
-                results.append(ToolResult(call.name, {"error": "too_many_calls"}))
-                continue
-            label = tools_module.label_for(call.name, call.args)
-            yield (
-                "step",
-                {"id": step_id, "tool": call.name, "label": label, "status": "running"},
-            )
-            t0 = time.monotonic()
-            tool = tools_module.tool_of(call.name)
-            logged = (
-                tool.id if tool is not None else "unknown"
-            )  # never the model's own text
-            try:
-                if tool is None or call.name not in {t.name for t in tools}:
-                    run = tools_module.ToolRun(
-                        {"error": "unknown_tool"}, label, ok=False
-                    )
-                elif read_untrusted and tool.effect != "read":
-                    run = tools_module.ToolRun(
-                        {
-                            "error": "not_after_untrusted_content",
-                            "hint": "This turn read outside content: it cannot write or send anything now.",
-                        },
-                        label,
-                        ok=False,
-                    )
-                elif (
-                    call.name == "web_research"
-                    and searches >= MAX_WEB_SEARCHES_PER_TURN
-                ):
-                    run = tools_module.ToolRun(
-                        {
-                            "error": "research_limit",
-                            "hint": "Answer with what you found.",
-                        },
-                        label,
-                        ok=False,
-                    )
-                else:
-                    searches += call.name == "web_research"
-                    read_untrusted |= tool.untrusted
-                    run = await asyncio.wait_for(
-                        tools_module.run(call.name, call.args, tool_ctx), TOOL_TIMEOUT_S
-                    )
-            except Exception as exc:  # noqa: BLE001  (a tool must never crash the chat)
-                logger.warning(
-                    "coach tool failed",
-                    extra={"tool": logged, "error_type": type(exc).__name__},
-                )
-                run = tools_module.ToolRun({"error": "tool_failed"}, label, ok=False)
-                degraded.append(
-                    "web_unavailable" if call.name == "web_research" else "tool_error"
-                )
-                yield "notice", {"code": degraded[-1]}
-            ms = int((time.monotonic() - t0) * 1000)
-            logger.info("coach tool", extra={"tool": logged, "ms": ms, "ok": run.ok})
-            steps.append(
-                StepMeta(tool=call.name, status="done" if run.ok else "error", ms=ms)
-            )
-            yield (
-                "step",
-                {
-                    "id": step_id,
-                    "tool": call.name,
-                    "label": label,
-                    "status": "done" if run.ok else "error",
-                },
-            )
-            for source in run.sources:
-                sources.setdefault(source.uri, source)
-            queries.extend(q for q in run.queries if q not in queries)
-            suggestions = run.suggestions_html or suggestions
-            results.append(ToolResult(call.name, run.result))
+                yield event
         turns += [ToolCallTurn(pending.calls, pending.raw), ToolResultTurn(results)]
-        if rounds >= settings.coach_max_steps:
-            allow = False
-            degraded.append("step_limit")
+        if state.rounds >= settings.coach_max_steps:
+            state.allow = False
+            state.degraded.append("step_limit")
             yield "notice", {"code": "step_limit"}
         elif time.monotonic() > deadline:
-            allow = False
-            degraded.append("turn_timeout")
+            state.allow = False
+            state.degraded.append("turn_timeout")
             yield "notice", {"code": "turn_timeout"}
 
-    reply = "".join(texts).strip()
+
+async def _model_round(
+    llm: LLMGateway,
+    prompt: _Prompt,
+    turns: list[Turn],
+    tools: list[ToolSpec],
+    state: _TurnState,
+) -> AsyncGenerator[Event]:
+    """One model call: its text streamed out, its tool calls (if any) left in ``state.pending``."""
+    # aclosing: if the client disconnects and this generator is closed, the gateway's stream
+    # is closed *now* (it records the call's outcome in its ``finally``).
+    async with aclosing(
+        _converse(
+            llm,
+            system=prompt.system,
+            turns=turns,
+            tools=tools,
+            feature=PROMPT_VERSION,
+            model="smart",
+            allow_tools=state.allow,
+            continuation=state.rounds > 0,
+        )
+    ) as events:
+        async for event in events:
+            if not state.started:  # first model output: no refusal can happen any more
+                state.started = True
+                yield "context", prompt.counts
+                for code in state.degraded:
+                    yield "notice", {"code": code}
+            if isinstance(event, TextDelta):
+                state.texts.append(event.text)
+                yield "token", {"text": event.text}
+            elif isinstance(event, ToolCalls):
+                state.pending = event
+
+
+async def _run_calls(
+    calls: list[ToolCall],
+    tools: list[ToolSpec],
+    tool_ctx: tools_module.ToolContext,
+    state: _TurnState,
+    results: list[ToolResult],
+) -> AsyncGenerator[Event]:
+    """Run one round's tool calls in order, each answered in ``results``, with step events."""
+    for n, call in enumerate(calls):
+        step_id = f"{state.rounds}.{n}"
+        if n >= MAX_CALLS_PER_ROUND:  # every parallel call is answered, few are run
+            results.append(ToolResult(call.name, {"error": "too_many_calls"}))
+            continue
+        label = tools_module.label_for(call.name, call.args)
+        yield (
+            "step",
+            {"id": step_id, "tool": call.name, "label": label, "status": "running"},
+        )
+        t0 = time.monotonic()
+        tool = tools_module.tool_of(call.name)
+        logged = (
+            tool.id if tool is not None else "unknown"
+        )  # never the model's own text
+        try:
+            run = await _run_tool(call, tool, label, tools, tool_ctx, state)
+        except Exception as exc:  # noqa: BLE001  (a tool must never crash the chat)
+            logger.warning(
+                "coach tool failed",
+                extra={"tool": logged, "error_type": type(exc).__name__},
+            )
+            run = tools_module.ToolRun({"error": "tool_failed"}, label, ok=False)
+            state.degraded.append(
+                "web_unavailable" if call.name == "web_research" else "tool_error"
+            )
+            yield "notice", {"code": state.degraded[-1]}
+        ms = int((time.monotonic() - t0) * 1000)
+        logger.info("coach tool", extra={"tool": logged, "ms": ms, "ok": run.ok})
+        state.steps.append(
+            StepMeta(tool=call.name, status="done" if run.ok else "error", ms=ms)
+        )
+        yield (
+            "step",
+            {
+                "id": step_id,
+                "tool": call.name,
+                "label": label,
+                "status": "done" if run.ok else "error",
+            },
+        )
+        for source in run.sources:
+            state.sources.setdefault(source.uri, source)
+        state.queries.extend(q for q in run.queries if q not in state.queries)
+        state.suggestions = run.suggestions_html or state.suggestions
+        results.append(ToolResult(call.name, run.result))
+
+
+async def _run_tool(
+    call: ToolCall,
+    tool: Tool | None,
+    label: str,
+    tools: list[ToolSpec],
+    tool_ctx: tools_module.ToolContext,
+    state: _TurnState,
+) -> tools_module.ToolRun:
+    """One tool call, unless it is unknown, not allowed after untrusted text, or over budget."""
+    if tool is None or call.name not in {t.name for t in tools}:
+        return tools_module.ToolRun({"error": "unknown_tool"}, label, ok=False)
+    if state.read_untrusted and tool.effect != "read":
+        return tools_module.ToolRun(
+            {
+                "error": "not_after_untrusted_content",
+                "hint": "This turn read outside content: it cannot write or send anything now.",
+            },
+            label,
+            ok=False,
+        )
+    if call.name == "web_research" and state.searches >= MAX_WEB_SEARCHES_PER_TURN:
+        return tools_module.ToolRun(
+            {
+                "error": "research_limit",
+                "hint": "Answer with what you found.",
+            },
+            label,
+            ok=False,
+        )
+    state.searches += call.name == "web_research"
+    state.read_untrusted |= tool.untrusted
+    return await asyncio.wait_for(
+        tools_module.run(call.name, call.args, tool_ctx), TOOL_TIMEOUT_S
+    )
+
+
+async def _store_reply(
+    db: AsyncSession,
+    llm: LLMGateway,
+    prompt: _Prompt,
+    state: _TurnState,
+    *,
+    org_id: UUID,
+    conversation_id: UUID,
+    content: str,
+    replaced: list[Message],
+) -> AsyncGenerator[Event]:
+    """Citations and suggestions out, then the turn stored (only now: a failed one is resent)."""
+    reply = "".join(state.texts).strip()
     if not reply:
         raise UpstreamUnavailable(
             "The AI provider returned an empty response.", code="ai_response_invalid"
         )
+    sources = state.sources
     if sources:
         yield (
             "citations",
@@ -600,21 +743,21 @@ async def stream_reply(
                 ]
             },
         )
-    if suggestions:
-        yield "suggestions", {"html": suggestions}
+    if state.suggestions:
+        yield "suggestions", {"html": state.suggestions}
     meta = MessageMeta(
         prompt_version=PROMPT_VERSION,
         model=llm.model_name("smart", PROMPT_VERSION),
         job_ref=prompt.job_ref,
         context=prompt.counts,
-        steps=steps,
+        steps=state.steps,
         citations=[
             Citation(title=s.title, uri=s.uri, domain=s.domain)
             for s in sources.values()
         ],
-        queries=queries,
-        search_suggestions_html=suggestions,
-        degraded=list(dict.fromkeys(degraded)),
+        queries=state.queries,
+        search_suggestions_html=state.suggestions,
+        degraded=list(dict.fromkeys(state.degraded)),
     )
     if replaced:
         removed = await repository.delete_messages(

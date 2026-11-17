@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     # db_pool_size + db_max_overflow, so total = instances * that; keep it under the
     # server's max_connections.
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    # Sentry error tracking (core/observability.py, ADR 0040). Empty DSN = off (dev, tests, CI).
+    # RELEASE is the deployed git sha, set by CD next to the image tag.
+    sentry_dsn: str = ""
+    release: str = ""
 
     database_url: str
     # Cloud SQL IAM database authentication (ADR 0028): the runtime service account's short-lived
@@ -114,6 +118,9 @@ class Settings(BaseSettings):
     qwen_base_url: str | None = None
     qwen_api_key: str | None = None
     qwen_model_name: str | None = None
+    # Coach tool calling. On only when the vLLM server runs with
+    # --enable-auto-tool-choice --tool-call-parser hermes.
+    qwen_tools: bool = False
     # Optional vision model, used when a request carries an image. Falls back to the QWEN_* trio.
     qwen_vl_base_url: str | None = None
     # QWEN_VL_KEY is the name the owner's .env already uses.

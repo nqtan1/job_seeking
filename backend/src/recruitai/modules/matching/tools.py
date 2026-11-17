@@ -1,8 +1,8 @@
 """The fit check tool of the career pack (ADR 0039)."""
 
-from typing import cast
+from typing import Any, cast
 
-from recruitai.core.tools import Call, NoJob, Tool, register
+from recruitai.core.tools import Call, NoJob, Tool, register, register_reader
 from recruitai.modules.identity import service as identity
 from recruitai.modules.matching import service as matching
 from recruitai.modules.matching.models import FitAnalysis
@@ -82,3 +82,21 @@ register(
     ),
     _fit_read,
 )
+
+
+async def _fit(c: Call) -> dict[str, Any] | None:
+    """A helper's "fit" source: the latest analysis of the job. With a model (a test run), a job
+    with none yet gets one first."""
+    if c.job_id is None:
+        raise NoJob()
+    rows = await matching.list_analyses(c.db, org_id=c.org_id, job_id=c.job_id, limit=1)
+    if rows:
+        return rows[0].data
+    if c.llm is None:
+        return None
+    return (
+        await matching.latest_or_analyze(c.db, c.llm, org_id=c.org_id, job_id=c.job_id)
+    ).data
+
+
+register_reader("fit", _fit)

@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai import usage
+from recruitai.core import throttle
 from recruitai.core.email import EmailSender
 from recruitai.core.errors import UpstreamUnavailable
 from recruitai.core.export import rows_as_dicts
@@ -177,6 +178,8 @@ SWEEP_BATCH = 200
 
 async def sweep_ai_calls(db: AsyncSession, *, now: datetime) -> int:
     deleted = await usage.delete_older_than(db, cutoff=now - AI_CALLS_KEPT)
+    # rate-limit windows ride the same daily tick
+    await throttle.sweep(db, cutoff=now - timedelta(days=1))
     await db.commit()
     return deleted
 

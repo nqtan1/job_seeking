@@ -190,117 +190,126 @@ async def run_due(db: AsyncSession, *, now: datetime) -> int:
     owners = await identity.active_owner_ids(
         db, org_ids=list({s.org_id for s in due}), active_since=now - DORMANT_AFTER
     )
-    started = 0
     claimed: list[_Claim] = []
     for s in due:
-        if s.org_id not in owners:  # dormant or blocked: stop spending on their behalf
-            await repo.update_schedule(
-                db,
-                org_id=s.org_id,
-                schedule_id=s.id,
-                values={"paused_reason": "inactive"},
-            )
-            continue
-        if await repo.has_waiting_run(db, schedule_id=s.id):
-            # its last run is still sleeping on a wait: never pile runs up behind it. The slot is
-            # skipped (next one saved), else parked rows stay the oldest and fill every batch.
-            await repo.update_schedule(
-                db,
-                org_id=s.org_id,
-                schedule_id=s.id,
-                values={
-                    "next_run_at": next_run(
-                        s.cadence,
-                        s.at_time,
-                        s.weekday,
-                        s.timezone,
-                        max(now, s.next_run_at),
-                    )
-                },
-            )
-            continue
-        last, made_at = await repo.last_scheduled_run(db, schedule_id=s.id)
-        # A failed run counts once (only if it was queued after the previous claim, so a refused
-        # start can never make the same failure count again), a finished one resets; anything else
-        # (nothing yet, still running, cancelled) keeps the count.
-        fresh = made_at is not None and (
-            s.last_run_at is None or made_at > s.last_run_at
-        )
-        failures = s.consecutive_failures
-        if last == "done":
-            failures = 0
-        elif last == "failed" and fresh:
-            failures += 1
-        if failures >= FAILURES_BEFORE_PAUSE:
-            await repo.update_schedule(
-                db,
-                org_id=s.org_id,
-                schedule_id=s.id,
-                values={"paused_reason": "failures", "consecutive_failures": failures},
-            )
-            continue
-        slot = s.next_run_at
-        values: dict[str, object] = {
-            "next_run_at": next_run(
-                s.cadence, s.at_time, s.weekday, s.timezone, max(now, slot)
-            ),
-            "consecutive_failures": failures,
-        }
-        if last == "failed" and fresh:
-            values["last_run_at"] = (
-                now  # that failure is counted now: never count it twice
-            )
-        await repo.update_schedule(db, org_id=s.org_id, schedule_id=s.id, values=values)
-        claimed.append(
-            _Claim(
-                s.id,
-                s.org_id,
-                s.user_id,
-                s.flow_id,
-                dict(s.inputs),
-                s.job_id,
-                slot,
-                failures,
-            )
-        )
+        if (c := await _claim(db, s, owners, now)) is not None:
+            claimed.append(c)
     await db.commit()  # the slots are ours; release the row locks before the slow part
 
+    started = 0
     for c in claimed:
-        try:
-            _, created = await flow_runs.start_run(
-                db,
-                org_id=c.org_id,
-                user_id=c.user_id,
-                flow_id=c.flow_id,
-                data=RunIn(inputs=c.inputs, job_id=c.job_id),
-                idempotency_key=f"sched:{c.id}:{int(c.slot.timestamp())}",
-                schedule_id=c.id,
-            )
-            if created:  # last_run_at marks runs actually made, so a later failure is still fresh
-                started += 1
-                await repo.update_schedule(
-                    db, org_id=c.org_id, schedule_id=c.id, values={"last_run_at": now}
+        started += await _start(db, c, now)
+    return started
+
+
+async def _claim(
+    db: AsyncSession, s: FlowSchedule, owners: dict[UUID, UUID], now: datetime
+) -> _Claim | None:
+    """Claim one due slot (next slot saved), or pause/skip the schedule and return None."""
+    if s.org_id not in owners:  # dormant or blocked: stop spending on their behalf
+        await repo.update_schedule(
+            db,
+            org_id=s.org_id,
+            schedule_id=s.id,
+            values={"paused_reason": "inactive"},
+        )
+        return None
+    if await repo.has_waiting_run(db, schedule_id=s.id):
+        # its last run is still sleeping on a wait: never pile runs up behind it. The slot is
+        # skipped (next one saved), else parked rows stay the oldest and fill every batch.
+        await repo.update_schedule(
+            db,
+            org_id=s.org_id,
+            schedule_id=s.id,
+            values={
+                "next_run_at": next_run(
+                    s.cadence,
+                    s.at_time,
+                    s.weekday,
+                    s.timezone,
+                    max(now, s.next_run_at),
                 )
-                await db.commit()
-        except (
-            flow_runs.OrgBusy
-        ) as exc:  # busy right now: skip this slot, it is not a failure
-            await db.rollback()
-            logger.info(
-                "scheduled run skipped",
-                extra={"schedule_id": str(c.id), "code": exc.code},
+            },
+        )
+        return None
+    last, made_at = await repo.last_scheduled_run(db, schedule_id=s.id)
+    # A failed run counts once (only if it was queued after the previous claim, so a refused
+    # start can never make the same failure count again), a finished one resets; anything else
+    # (nothing yet, still running, cancelled) keeps the count.
+    fresh = made_at is not None and (s.last_run_at is None or made_at > s.last_run_at)
+    failures = s.consecutive_failures
+    if last == "done":
+        failures = 0
+    elif last == "failed" and fresh:
+        failures += 1
+    if failures >= FAILURES_BEFORE_PAUSE:
+        await repo.update_schedule(
+            db,
+            org_id=s.org_id,
+            schedule_id=s.id,
+            values={"paused_reason": "failures", "consecutive_failures": failures},
+        )
+        return None
+    slot = s.next_run_at
+    values: dict[str, object] = {
+        "next_run_at": next_run(
+            s.cadence, s.at_time, s.weekday, s.timezone, max(now, slot)
+        ),
+        "consecutive_failures": failures,
+    }
+    if last == "failed" and fresh:
+        values["last_run_at"] = now  # that failure is counted now: never count it twice
+    await repo.update_schedule(db, org_id=s.org_id, schedule_id=s.id, values=values)
+    return _Claim(
+        s.id,
+        s.org_id,
+        s.user_id,
+        s.flow_id,
+        dict(s.inputs),
+        s.job_id,
+        slot,
+        failures,
+    )
+
+
+async def _start(db: AsyncSession, c: _Claim, now: datetime) -> int:
+    """Start the run of one claimed slot: 1 if a run was made, else 0 (a refusal is counted)."""
+    started = 0
+    try:
+        _, created = await flow_runs.start_run(
+            db,
+            org_id=c.org_id,
+            user_id=c.user_id,
+            flow_id=c.flow_id,
+            data=RunIn(inputs=c.inputs, job_id=c.job_id),
+            idempotency_key=f"sched:{c.id}:{int(c.slot.timestamp())}",
+            schedule_id=c.id,
+        )
+        if (
+            created
+        ):  # last_run_at marks runs actually made, so a later failure is still fresh
+            started += 1
+            await repo.update_schedule(
+                db, org_id=c.org_id, schedule_id=c.id, values={"last_run_at": now}
             )
-        except AppError as exc:
-            await db.rollback()
-            logger.info(
-                "scheduled run refused",
-                extra={"schedule_id": str(c.id), "code": exc.code},
-            )
-            await _count_failure(db, c)
-        except Exception as exc:  # noqa: BLE001  (one bad schedule must not stop the others)
-            await db.rollback()
-            logger.error(
-                "scheduled run failed", extra={"error_type": type(exc).__name__}
-            )
-            await _count_failure(db, c)
+            await db.commit()
+    except (
+        flow_runs.OrgBusy
+    ) as exc:  # busy right now: skip this slot, it is not a failure
+        await db.rollback()
+        logger.info(
+            "scheduled run skipped",
+            extra={"schedule_id": str(c.id), "code": exc.code},
+        )
+    except AppError as exc:
+        await db.rollback()
+        logger.info(
+            "scheduled run refused",
+            extra={"schedule_id": str(c.id), "code": exc.code},
+        )
+        await _count_failure(db, c)
+    except Exception as exc:  # noqa: BLE001  (one bad schedule must not stop the others)
+        await db.rollback()
+        logger.error("scheduled run failed", extra={"error_type": type(exc).__name__})
+        await _count_failure(db, c)
     return started

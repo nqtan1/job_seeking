@@ -112,3 +112,19 @@ def all() -> dict[str, Tool]:
 def handler(id: str) -> Handler:
     """KeyError for a tool the engine runs itself, or no tool at all."""
     return _HANDLERS[id]
+
+
+# A helper's context sources (ADR 0031: "profile", "job", "fit") as raw data, read by the module
+# that owns it, so agents imports no feature module. None: nothing stored yet.
+Reader = Callable[[Call], Awaitable[dict[str, Any] | None]]
+_READERS: dict[str, Reader] = {}
+
+
+def register_reader(source: str, reader: Reader) -> None:
+    if source in _READERS:
+        raise RuntimeError(f"reader {source} is registered twice")
+    _READERS[source] = reader
+
+
+def read(source: str, call: Call) -> Awaitable[dict[str, Any] | None]:
+    return _READERS[source](call)

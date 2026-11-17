@@ -43,49 +43,10 @@ export function ProfileView({ profile }: { profile: Profile }) {
   const t = useT()
   const { personal_info: p, summary, experiences, formations, skills } = profile.data
   const references = profile.data.references ?? []
-  const contact = [
-    { icon: <Mail className="size-4" />, text: p.email },
-    { icon: <Phone className="size-4" />, text: p.phone },
-    { icon: <MapPin className="size-4" />, text: p.address },
-  ].filter((c) => c.text)
-  const links = [p.linkedin, p.github, p.website].filter((l): l is string => !!l)
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-5">
-          <div
-            aria-hidden
-            className="grid size-16 shrink-0 place-items-center rounded-full bg-primary/10 text-xl font-semibold text-primary"
-          >
-            {initials(p.name)}
-          </div>
-          <div className="min-w-0 flex-1 space-y-2">
-            <h2 className="text-2xl font-semibold tracking-tight">{p.name}</h2>
-            <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
-              {contact.map((c) => (
-                <li key={c.text} className="flex items-center gap-1.5">
-                  {c.icon}
-                  {c.text}
-                </li>
-              ))}
-              {links.map((l) => (
-                <li key={l} className="flex items-center gap-1.5">
-                  <Globe className="size-4" />
-                  <a
-                    href={/^https?:/.test(l) ? l : `https://${l}`}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="hover:text-foreground hover:underline"
-                  >
-                    {l.replace(/^https?:\/\/(www\.)?/, '')}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+      <Identity p={p} />
 
       {summary && (
         <Block icon={<Sparkles className="size-4" />} title={t('candidate.h.about')}>
@@ -142,24 +103,78 @@ export function ProfileView({ profile }: { profile: Profile }) {
           </ul>
         </Block>
       )}
-      {references.length > 0 && (
-        <Block icon={<UserCheck className="size-4" />} title={t('candidate.h.references')}>
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {references.map((r, i) => (
-              <li key={i} className="space-y-0.5 rounded-lg border bg-muted/30 p-3">
-                <p className="font-medium">{r.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {[r.title, r.company].filter(Boolean).join(' · ')}
-                </p>
-                {r.relationship && <p className="text-xs italic">{r.relationship}</p>}
-                {(r.email || r.phone) && (
-                  <p className="pt-1 text-sm">{[r.email, r.phone].filter(Boolean).join(' · ')}</p>
-                )}
+      <References references={references} />
+    </div>
+  )
+}
+
+type Data = Profile['data']
+
+function Identity({ p }: { p: Data['personal_info'] }) {
+  const contact = [
+    { icon: <Mail className="size-4" />, text: p.email },
+    { icon: <Phone className="size-4" />, text: p.phone },
+    { icon: <MapPin className="size-4" />, text: p.address },
+  ].filter((c) => c.text)
+  const links = [p.linkedin, p.github, p.website].filter((l): l is string => !!l)
+
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-center gap-5">
+        <div
+          aria-hidden
+          className="grid size-16 shrink-0 place-items-center rounded-full bg-primary/10 text-xl font-semibold text-primary"
+        >
+          {initials(p.name)}
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight">{p.name}</h2>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
+            {contact.map((c) => (
+              <li key={c.text} className="flex items-center gap-1.5">
+                {c.icon}
+                {c.text}
+              </li>
+            ))}
+            {links.map((l) => (
+              <li key={l} className="flex items-center gap-1.5">
+                <Globe className="size-4" />
+                <a
+                  href={/^https?:/.test(l) ? l : `https://${l}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="hover:text-foreground hover:underline"
+                >
+                  {l.replace(/^https?:\/\/(www\.)?/, '')}
+                </a>
               </li>
             ))}
           </ul>
-        </Block>
-      )}
-    </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function References({ references }: { references: NonNullable<Data['references']> }) {
+  const t = useT()
+  if (references.length === 0) return null
+  return (
+    <Block icon={<UserCheck className="size-4" />} title={t('candidate.h.references')}>
+      <ul className="grid gap-4 sm:grid-cols-2">
+        {references.map((r, i) => (
+          <li key={i} className="space-y-0.5 rounded-lg border bg-muted/30 p-3">
+            <p className="font-medium">{r.name}</p>
+            <p className="text-sm text-muted-foreground">
+              {[r.title, r.company].filter(Boolean).join(' · ')}
+            </p>
+            {r.relationship && <p className="text-xs italic">{r.relationship}</p>}
+            {(r.email || r.phone) && (
+              <p className="pt-1 text-sm">{[r.email, r.phone].filter(Boolean).join(' · ')}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Block>
   )
 }

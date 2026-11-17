@@ -1,3 +1,4 @@
+import { track } from '@/lib/analytics'
 import { api } from '@/lib/api/client'
 import { unwrap } from '@/lib/api/unwrap'
 
@@ -16,5 +17,6 @@ export async function uploadDocument(kind: 'cv' | 'jd', file: File): Promise<str
       },
     }),
   )
+  if (kind === 'cv') track('cv_uploaded')
   return doc.document_id
 }

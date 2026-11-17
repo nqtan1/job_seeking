@@ -208,6 +208,7 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "radar_results",
         "radar_runs",
         "radar_searches",
+        "rate_hits",
         "task_runs",
         "users",
     }

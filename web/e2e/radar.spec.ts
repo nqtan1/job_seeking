@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
+import { expectNoA11yViolations, narrow, places } from './support.ts'
 
 // Needs the isolated stack with the scripted worker: backend/tests/e2e_stack.sh up
 // (fit scores come out as 86, 38, 74 for the three offers; the minimum fit is 70).
@@ -9,7 +10,7 @@ const SHOTS = process.env.E2E_SHOTS
 /** Open a career screen through the menu: Tools, its card, then its tab when the page has several. */
 const CARD: Record<string, string> = { Profile: 'CV', Radar: 'Jobs', Tracker: 'Applications' }
 const go = async (page: Page, name: string) => {
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tools' }).click()
+  await places(page).getByRole('link', { name: 'Tools' }).click()
   await page
     .getByRole('region', { name: 'Career' })
     .getByRole('link', { name: new RegExp(`^${CARD[name] ?? name}`) })
@@ -30,7 +31,6 @@ test('radar: the user sees it work, understands the matches and follows one to t
 }) => {
   const problems: string[] = []
   page.on('pageerror', (e) => problems.push(e.message))
-  await page.setViewportSize({ width: 1280, height: 900 })
 
   // A new user with a CV.
   await page.goto('/')
@@ -39,7 +39,7 @@ test('radar: the user sees it work, understands the matches and follows one to t
   await page.getByLabel('Password', { exact: true }).fill('password123')
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
+  await expect(places(page)).toBeVisible()
   await go(page, 'Profile')
   await page.getByLabel('CV file').setInputFiles(path.join(FIXTURES, 'cv_sample.pdf'))
   await page.getByRole('button', { name: 'Extract profile' }).click()
@@ -96,9 +96,7 @@ test('radar: the user sees it work, understands the matches and follows one to t
   )
   // The user is looking at the matches, so the "new" badge in the menu and the tab goes away
   // (the badge showing up for unseen matches is covered by tests/radar-badge.test.tsx).
-  await expect(
-    page.getByRole('navigation', { name: 'Main' }).getByLabel(/new matches/),
-  ).toHaveCount(0)
+  await expect(places(page).getByLabel(/new matches/)).toHaveCount(0)
   await expect(page).toHaveTitle('RecruitAI')
   await shot(page, '3-results')
 
@@ -129,6 +127,7 @@ test('radar: the user sees it work, understands the matches and follows one to t
 
   // It shows in the tracker, and the jobs list says where it came from.
   await go(page, 'Tracker')
+  if (narrow(page)) await page.getByRole('tab', { name: /^Applied/ }).click() // one column at a time
   await expect(page.getByRole('region', { name: 'Applied' })).toContainText('Fictiva Logiciels')
   await go(page, 'Jobs')
   await expect(page.getByText('From radar').first()).toBeVisible()
@@ -143,4 +142,5 @@ test('radar: the user sees it work, understands the matches and follows one to t
   await expect(page.getByText('Ingénieur Java Senior chez Corp Industries.')).toBeVisible()
 
   expect(problems).toEqual([])
+  await expectNoA11yViolations(page)
 })

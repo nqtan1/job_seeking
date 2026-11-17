@@ -85,7 +85,7 @@ resource "google_sql_database_instance" "main" {
   settings {
     tier                        = var.sql_tier
     edition                     = "ENTERPRISE"
-    availability_type           = "ZONAL"
+    availability_type           = var.sql_availability # ADR 0041: REGIONAL (failover) in prod
     disk_size                   = 10
     disk_autoresize             = true
     deletion_protection_enabled = true

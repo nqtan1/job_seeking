@@ -50,7 +50,6 @@ export function TodayPage() {
       /* closed for this visit only */
     }
   }
-  const done = steps.filter((s) => s.done).length
   const day = (iso: string) =>
     new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short' })
   const open = reminders.filter((r) => !closed.includes(r.key))
@@ -62,29 +61,7 @@ export function TodayPage() {
         <ListSkeleton rows={4} />
       ) : (
         <>
-          {open.length > 0 && (
-            <ul aria-label={t('today.reminders')} className="space-y-2">
-              {open.map((r) => (
-                <li
-                  key={r.key}
-                  className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-3 pl-4"
-                >
-                  <Bell className="size-4 shrink-0 text-primary" />
-                  <Link to={r.to} className="min-w-0 flex-1 font-medium hover:underline">
-                    {t(r.label, { count: r.count })}
-                  </Link>
-                  <button
-                    type="button"
-                    aria-label={t('today.close')}
-                    onClick={() => close(r.key)}
-                    className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          <Reminders open={open} close={close} />
 
           <ul className="grid grid-cols-3 gap-3">
             {stats.map((s) => (
@@ -100,81 +77,132 @@ export function TodayPage() {
             ))}
           </ul>
 
-          {todo && (
-            <section
-              aria-label={t('today.next')}
-              className="space-y-4 rounded-2xl border bg-card p-6 shadow-xs"
-            >
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    {t('today.next')} · {done}/{steps.length}
-                  </p>
-                  <p className="text-xl font-semibold tracking-tight">{t(todo.label)}</p>
-                </div>
-                <Link to={todo.to} className={buttonVariants()}>
-                  {t('today.go')} <ArrowRight />
-                </Link>
-              </div>
-              <ol className="flex gap-1.5" aria-hidden>
-                {steps.map((s) => (
-                  <li
-                    key={s.label}
-                    className={cn('h-1.5 flex-1 rounded-full', s.done ? 'bg-primary' : 'bg-muted')}
-                  />
-                ))}
-              </ol>
-            </section>
-          )}
+          {todo && <NextStep todo={todo} steps={steps} />}
 
-          <div className="grid gap-8 md:grid-cols-2">
-            {runs.length > 0 && (
-              <Section title={t('today.flows')}>
-                <ul>
-                  {runs.map((r) => (
-                    <li key={r.id}>
-                      <Link to={`/automations/runs/${r.id}`} className={row}>
-                        <span
-                          className={cn(
-                            'size-2 shrink-0 rounded-full',
-                            DOT[r.status] ?? 'animate-pulse bg-primary',
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate">{r.flow_name}</span>
-                        <span className="text-xs text-muted-foreground">{day(r.created_at)}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-            {recent.length > 0 && (
-              <Section title={t('today.recent')}>
-                <ul>
-                  {recent.map((it) => {
-                    const Icon = KIND[it.kind]
-                    return (
-                      <li key={it.key}>
-                        <Link to={it.to} className={row}>
-                          <Icon className="size-4 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0 flex-1 truncate">
-                            {it.text || t(`today.kind.${it.kind}`)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">{day(it.at)}</span>
-                        </Link>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </Section>
-            )}
-          </div>
+          <Activity runs={runs} recent={recent} day={day} />
           {!todo && open.length === 0 && runs.length === 0 && recent.length === 0 && (
             <p className="flex items-center gap-2 text-muted-foreground">
               <Check className="size-4 text-success" /> {t('today.clear')}
             </p>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+type Today = ReturnType<typeof useToday>
+
+function Reminders({ open, close }: { open: Today['reminders']; close: (key: string) => void }) {
+  const { t } = useI18n()
+  if (open.length === 0) return null
+  return (
+    <ul aria-label={t('today.reminders')} className="space-y-2">
+      {open.map((r) => (
+        <li
+          key={r.key}
+          className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-3 pl-4"
+        >
+          <Bell className="size-4 shrink-0 text-primary" />
+          <Link to={r.to} className="min-w-0 flex-1 font-medium hover:underline">
+            {t(r.label, { count: r.count })}
+          </Link>
+          <button
+            type="button"
+            aria-label={t('today.close')}
+            onClick={() => close(r.key)}
+            className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent"
+          >
+            <X className="size-4" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function NextStep({ todo, steps }: { todo: NonNullable<Today['todo']>; steps: Today['steps'] }) {
+  const { t } = useI18n()
+  const done = steps.filter((s) => s.done).length
+  return (
+    <section
+      aria-label={t('today.next')}
+      className="space-y-4 rounded-2xl border bg-card p-6 shadow-xs"
+    >
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-muted-foreground">
+            {t('today.next')} · {done}/{steps.length}
+          </p>
+          <p className="text-xl font-semibold tracking-tight">{t(todo.label)}</p>
+        </div>
+        <Link to={todo.to} className={buttonVariants()}>
+          {t('today.go')} <ArrowRight />
+        </Link>
+      </div>
+      <ol className="flex gap-1.5" aria-hidden>
+        {steps.map((s) => (
+          <li
+            key={s.label}
+            className={cn('h-1.5 flex-1 rounded-full', s.done ? 'bg-primary' : 'bg-muted')}
+          />
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+function Activity({
+  runs,
+  recent,
+  day,
+}: {
+  runs: Today['runs']
+  recent: Today['recent']
+  day: (iso: string) => string
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="grid gap-8 md:grid-cols-2">
+      {runs.length > 0 && (
+        <Section title={t('today.flows')}>
+          <ul>
+            {runs.map((r) => (
+              <li key={r.id}>
+                <Link to={`/automations/runs/${r.id}`} className={row}>
+                  <span
+                    className={cn(
+                      'size-2 shrink-0 rounded-full',
+                      DOT[r.status] ?? 'animate-pulse bg-primary',
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{r.flow_name}</span>
+                  <span className="text-xs text-muted-foreground">{day(r.created_at)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+      {recent.length > 0 && (
+        <Section title={t('today.recent')}>
+          <ul>
+            {recent.map((it) => {
+              const Icon = KIND[it.kind]
+              return (
+                <li key={it.key}>
+                  <Link to={it.to} className={row}>
+                    <Icon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {it.text || t(`today.kind.${it.kind}`)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{day(it.at)}</span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </Section>
       )}
     </div>
   )

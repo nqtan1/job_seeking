@@ -210,6 +210,12 @@ class AgentOut(BaseModel):
     updated_at: datetime
 
 
+class AgentListItem(AgentOut):
+    tools: list[
+        str
+    ]  # the current version's chat tools: the list needs no detail request
+
+
 class AgentDetail(AgentOut):
     version_id: UUID  # the current version's id: what a flow node pins
     spec: VersionSpec

@@ -24,9 +24,7 @@ export function DocumentsDrawer({
   name: string
   onClose: () => void
 }) {
-  const { t, locale } = useI18n()
-  const docName = (d: { kind: string; created_at: string; size: number }) =>
-    `${KINDS.includes(d.kind) ? t(`tracker.docs.kind_${d.kind}` as 'tracker.docs.kind_cv') : d.kind} · ${new Date(d.created_at).toLocaleDateString(locale)} · ${Math.max(1, Math.round(d.size / 1024))} KB`
+  const { t } = useI18n()
   const attached = useApplicationDocuments(app.id, true)
   const available = useAvailableDocuments(true)
   const attach = useAttachDocument(app.id)
@@ -66,71 +64,104 @@ export function DocumentsDrawer({
         ))}
       </div>
       {current && (
-        <>
-          {current.mime.startsWith('image/') ? (
-            <img
-              src={current.download_url}
-              alt={current.filename}
-              className="min-h-64 flex-1 rounded-lg border bg-white object-contain"
-            />
-          ) : (
-            <iframe
-              title={current.filename}
-              src={current.download_url}
-              className="min-h-64 flex-1 rounded-lg border bg-white"
-            />
-          )}
-          <div className="flex gap-2">
-            <a
-              href={current.download_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs underline underline-offset-2"
-            >
-              {t('tracker.docs.open')}
-            </a>
-            <a
-              href={current.save_url}
-              className="text-xs underline underline-offset-2"
-              aria-label={t('tracker.docs.download_aria', { file: current.filename })}
-            >
-              {t('tracker.docs.download')}
-            </a>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={detach.isPending}
-              aria-label={t('tracker.docs.remove_aria', { file: current.filename })}
-              onClick={() =>
-                detach.mutate(current.document_id, { onSuccess: () => setPicked(undefined) })
-              }
-            >
-              {t('tracker.docs.remove')}
-            </Button>
-          </div>
-        </>
+        <DocViewer current={current} detach={detach} onRemoved={() => setPicked(undefined)} />
       )}
       {choices.length > 0 && (
-        <NativeSelect
-          aria-label={t('tracker.docs.attach_aria')}
-          className="w-full"
-          value=""
-          disabled={attach.isPending}
-          onChange={(e) =>
-            attach.mutate(e.target.value, { onSuccess: () => setPicked(e.target.value) })
-          }
-        >
-          <NativeSelectOption value="" disabled>
-            {t('tracker.docs.attach')}
-          </NativeSelectOption>
-          {choices.map((d) => (
-            <NativeSelectOption key={d.document_id} value={d.document_id}>
-              {docName(d)}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <AttachSelect choices={choices} attach={attach} onAttached={setPicked} />
       )}
       {(attach.isError || detach.isError) && <ErrorMessage error={attach.error ?? detach.error} />}
     </Drawer>
+  )
+}
+
+type AttachedDoc = NonNullable<ReturnType<typeof useApplicationDocuments>['data']>[number]
+type AvailableDoc = NonNullable<ReturnType<typeof useAvailableDocuments>['data']>[number]
+
+function DocViewer({
+  current,
+  detach,
+  onRemoved,
+}: {
+  current: AttachedDoc
+  detach: ReturnType<typeof useDetachDocument>
+  onRemoved: () => void
+}) {
+  const { t } = useI18n()
+  return (
+    <>
+      {current.mime.startsWith('image/') ? (
+        <img
+          src={current.download_url}
+          alt={current.filename}
+          className="min-h-64 flex-1 rounded-lg border bg-white object-contain"
+        />
+      ) : (
+        <iframe
+          title={current.filename}
+          src={current.download_url}
+          className="min-h-64 flex-1 rounded-lg border bg-white"
+        />
+      )}
+      <div className="flex gap-2">
+        <a
+          href={current.download_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs underline underline-offset-2"
+        >
+          {t('tracker.docs.open')}
+        </a>
+        <a
+          href={current.save_url}
+          className="text-xs underline underline-offset-2"
+          aria-label={t('tracker.docs.download_aria', { file: current.filename })}
+        >
+          {t('tracker.docs.download')}
+        </a>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={detach.isPending}
+          aria-label={t('tracker.docs.remove_aria', { file: current.filename })}
+          onClick={() => detach.mutate(current.document_id, { onSuccess: onRemoved })}
+        >
+          {t('tracker.docs.remove')}
+        </Button>
+      </div>
+    </>
+  )
+}
+
+function AttachSelect({
+  choices,
+  attach,
+  onAttached,
+}: {
+  choices: AvailableDoc[]
+  attach: ReturnType<typeof useAttachDocument>
+  onAttached: (id: string) => void
+}) {
+  const { t, locale } = useI18n()
+  const docName = (d: { kind: string; created_at: string; size: number }) =>
+    `${KINDS.includes(d.kind) ? t(`tracker.docs.kind_${d.kind}` as 'tracker.docs.kind_cv') : d.kind} · ${new Date(d.created_at).toLocaleDateString(locale)} · ${Math.max(1, Math.round(d.size / 1024))} KB`
+  return (
+    <NativeSelect
+      aria-label={t('tracker.docs.attach_aria')}
+      className="w-full"
+      value=""
+      disabled={attach.isPending}
+      onChange={(e) =>
+        attach.mutate(e.target.value, { onSuccess: () => onAttached(e.target.value) })
+      }
+    >
+      <NativeSelectOption value="" disabled>
+        {t('tracker.docs.attach')}
+      </NativeSelectOption>
+      {choices.map((d) => (
+        <NativeSelectOption key={d.document_id} value={d.document_id}>
+          {docName(d)}
+        </NativeSelectOption>
+      ))}
+    </NativeSelect>
   )
 }

@@ -17,6 +17,7 @@ from recruitai.core.db import close_db, get_db, init_db, warm_up
 from recruitai.core.error_handlers import install_error_handlers
 from recruitai.core.logging import configure_logging
 from recruitai.core.middleware import RequestContextMiddleware
+from recruitai.core.observability import init_sentry
 from recruitai.core.storage_routes import router as local_storage_router
 from recruitai.core.tasks_routes import router as tasks_router
 from recruitai.modules.agents.connections.router import router as connections_router
@@ -46,6 +47,7 @@ from recruitai.modules.radar.router import router as radar_router
 def create_app() -> FastAPI:
     settings = Settings()  # type: ignore[call-arg]  # fields are populated from the environment, not passed here
     configure_logging(settings.log_level)
+    init_sentry(settings, "api")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

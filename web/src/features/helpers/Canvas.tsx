@@ -6,6 +6,7 @@ import {
   Controls,
   type Edge,
   EdgeLabelRenderer,
+  type EdgeChange,
   type EdgeProps,
   Handle,
   MarkerType,
@@ -240,12 +241,48 @@ export default function Canvas(props: CanvasProps) {
 
 function Inner(p: CanvasProps) {
   const t = useT()
-  const { graph, specs, readOnly } = p
+  const { readOnly } = p
+  const { box, fit } = useFit(p.graph, p.fitSignal)
+  const nodes = useStepNodes(p)
+  const edges = useFlowEdges(p)
+  const { onNodesChange, onEdgesChange, onConnect, isValidConnection } = gestures(p)
+
+  return (
+    <div
+      ref={box}
+      className="flow-canvas h-[clamp(20rem,55dvh,44rem)] w-full overflow-hidden rounded-xl border bg-muted/30"
+      role="application"
+      aria-label={t('helpers.view.canvas')}
+    >
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onInit={fit}
+        minZoom={0.5}
+        maxZoom={1.5}
+        nodesConnectable={!readOnly}
+        elementsSelectable
+        deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        isValidConnection={isValidConnection}
+        onPaneClick={() => p.onSelect?.(null)}
+      >
+        <Background gap={22} size={1.2} />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+    </div>
+  )
+}
+
+/** Re-fit after an auto-arrange and whenever a step is added, so steps never end up tiny or
+ *  off-screen. The short wait lets React Flow measure the new node first. */
+function useFit(graph: Graph, fitSignal: number | undefined) {
   const { setViewport } = useReactFlow()
   const box = useRef<HTMLDivElement>(null)
-  const dark = useDark()
-  // Re-fit after an auto-arrange and whenever a step is added, so steps never end up tiny or
-  // off-screen. The short wait lets React Flow measure the new node first.
   const count = graph.nodes.length
   const fit = () => {
     const el = box.current
@@ -273,12 +310,18 @@ function Inner(p: CanvasProps) {
   useEffect(() => {
     const grew = count > seen.current
     seen.current = count
-    if (!grew && !p.fitSignal) return
+    if (!grew && !fitSignal) return
     const id = setTimeout(() => fitNow.current(), 60)
     return () => clearTimeout(id)
-  }, [p.fitSignal, count])
+  }, [fitSignal, count])
 
-  const nodes: Node<StepData>[] = useMemo(
+  return { box, fit }
+}
+
+function useStepNodes(p: CanvasProps): Node<StepData>[] {
+  const t = useT()
+  const { graph, readOnly } = p
+  return useMemo(
     () =>
       graph.nodes.map((n) => ({
         id: n.id,
@@ -307,8 +350,13 @@ function Inner(p: CanvasProps) {
       })),
     [graph, p.specs, p.titles, p.avatars, p.moods, p.statusLabels, p.selection, readOnly, t],
   )
+}
 
-  const edges: Edge<FlowEdgeData>[] = useMemo(() => {
+function useFlowEdges(p: CanvasProps): Edge<FlowEdgeData>[] {
+  const t = useT()
+  const { graph, readOnly } = p
+  const dark = useDark()
+  return useMemo(() => {
     const colors = (id: string) =>
       colorsOf(
         graph.nodes.find((n) => n.id === id),
@@ -341,7 +389,11 @@ function Inner(p: CanvasProps) {
       },
     }))
   }, [graph.edges, graph.nodes, p.packets, p.avatars, p.selection, readOnly, t, dark])
+}
 
+/** Canvas gestures turned into the same pure graph edits the Steps list uses. */
+function gestures(p: CanvasProps) {
+  const { graph, specs, readOnly } = p
   const onNodesChange = (changes: NodeChange<Node<StepData>>[]) => {
     if (readOnly || !p.onGraph) return
     for (const c of changes)
@@ -372,46 +424,19 @@ function Inner(p: CanvasProps) {
     }
   }
 
-  return (
-    <div
-      ref={box}
-      className="flow-canvas h-[clamp(20rem,55dvh,44rem)] w-full overflow-hidden rounded-xl border bg-muted/30"
-      role="application"
-      aria-label={t('helpers.canvas')}
-    >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onInit={fit}
-        minZoom={0.5}
-        maxZoom={1.5}
-        nodesConnectable={!readOnly}
-        elementsSelectable
-        deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
-        onNodesChange={onNodesChange}
-        onEdgesChange={(changes) => {
-          if (readOnly || !p.onGraph) return
-          for (const c of changes)
-            if (c.type === 'select' && c.selected) p.onSelect?.({ kind: 'edge', id: c.id })
-          p.onGraph((g) => {
-            let next = g
-            for (const c of changes) if (c.type === 'remove') next = removeEdge(next, c.id)
-            return next === g ? g : next
-          })
-        }}
-        onConnect={onConnect}
-        isValidConnection={(c) =>
-          !!c.source &&
-          !!c.target &&
-          refusal(graph, c.source, (c.sourceHandle ?? 'out') as string, c.target) === null
-        }
-        onPaneClick={() => p.onSelect?.(null)}
-      >
-        <Background gap={22} size={1.2} />
-        <Controls showInteractive={false} />
-      </ReactFlow>
-    </div>
-  )
+  const onEdgesChange = (changes: EdgeChange<Edge<FlowEdgeData>>[]) => {
+    if (readOnly || !p.onGraph) return
+    for (const c of changes)
+      if (c.type === 'select' && c.selected) p.onSelect?.({ kind: 'edge', id: c.id })
+    p.onGraph((g) => {
+      let next = g
+      for (const c of changes) if (c.type === 'remove') next = removeEdge(next, c.id)
+      return next === g ? g : next
+    })
+  }
+  const isValidConnection = (c: Edge | Connection) =>
+    !!c.source &&
+    !!c.target &&
+    refusal(graph, c.source, (c.sourceHandle ?? 'out') as string, c.target) === null
+  return { onNodesChange, onEdgesChange, onConnect, isValidConnection }
 }

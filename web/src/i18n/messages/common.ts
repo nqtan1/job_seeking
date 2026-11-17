@@ -6,6 +6,8 @@ export const common = defineMessages({
     'lang.hint': 'Used for the app, the AI answers, your letters and the e-mails we send.',
     'err.generic': 'Something went wrong. Please try again.',
     'err.request_id': 'request id: {id}',
+    'err.crash': 'Something went wrong',
+    'err.reload': 'Reload',
     'err.unauthorized': 'Your session has ended. Please sign in again.',
     'err.reauth_required': 'Please sign in again to confirm it is you.',
     'err.forbidden': 'You are not allowed to do this.',
@@ -150,6 +152,19 @@ export const common = defineMessages({
     'privacy.d8': '30 days; they never contain your CV, letters or email',
     'privacy.r9': 'Backups',
     'privacy.d9': 'At most 7 days: deleted data is gone from backups within 7 days',
+    'privacy.r10': 'Notes saved by your helpers (title, text, source link), so you can reuse them',
+    'privacy.d10': 'While your account is active; deleted with the note or with your account',
+    'privacy.r11': 'Error reports (Sentry)',
+    'privacy.d11': '90 days',
+    'privacy.r12': 'Usage statistics (PostHog, EU), only if you accept',
+    'privacy.d12': '12 months',
+    'privacy.r13': 'Request counts per account (abuse limits)',
+    'privacy.d13': '2 days',
+    'privacy.h_services': 'Other services',
+    'privacy.sentry':
+      'Sentry receives a report when the app crashes: the error type and where it happened. It contains no CV, job, letter or chat text, no e-mail and no request content.',
+    'privacy.posthog':
+      'PostHog (EU servers) receives anonymous counts of the steps you use, such as “letter made”, only if you accept. Never your content, no recording of your screen. You can change your choice in Settings.',
     'privacy.h_rights': 'Your rights',
     'privacy.rights':
       'In Settings you can export all your data as a ZIP at any time, and delete your account: your data and files are then deleted immediately. You also have the right of access, rectification, objection and complaint to the CNIL (cnil.fr).',
@@ -199,6 +214,8 @@ export const common = defineMessages({
       'Utilisée pour l’application, les réponses de l’IA, vos lettres et les e-mails que nous envoyons.',
     'err.generic': 'Une erreur est survenue. Veuillez réessayer.',
     'err.request_id': 'identifiant de requête : {id}',
+    'err.crash': 'Un problème est survenu',
+    'err.reload': 'Recharger',
     'err.unauthorized': 'Votre session est terminée. Veuillez vous reconnecter.',
     'err.reauth_required': 'Veuillez vous reconnecter pour confirmer votre identité.',
     'err.forbidden': 'Vous n’avez pas le droit d’effectuer cette action.',
@@ -354,6 +371,20 @@ export const common = defineMessages({
     'privacy.r9': 'Sauvegardes',
     'privacy.d9':
       '7 jours au maximum : les données supprimées disparaissent des sauvegardes en 7 jours',
+    'privacy.r10':
+      'Notes enregistrées par vos assistants (titre, texte, lien source), pour les réutiliser',
+    'privacy.d10': 'Tant que votre compte est actif ; supprimées avec la note ou avec votre compte',
+    'privacy.r11': 'Rapports d’erreur (Sentry)',
+    'privacy.d11': '90 jours',
+    'privacy.r12': 'Statistiques d’utilisation (PostHog, UE), seulement si vous acceptez',
+    'privacy.d12': '12 mois',
+    'privacy.r13': 'Compteurs de requêtes par compte (limites anti-abus)',
+    'privacy.d13': '2 jours',
+    'privacy.h_services': 'Autres services',
+    'privacy.sentry':
+      'Sentry reçoit un rapport quand l’application plante : le type d’erreur et l’endroit où elle s’est produite. Il ne contient aucun texte de CV, d’offre, de lettre ou de conversation, ni e-mail, ni contenu de requête.',
+    'privacy.posthog':
+      'PostHog (serveurs dans l’UE) reçoit des comptages anonymes des étapes que vous utilisez, comme « lettre créée », seulement si vous acceptez. Jamais votre contenu, aucun enregistrement de votre écran. Vous pouvez changer votre choix dans les Paramètres.',
     'privacy.h_rights': 'Vos droits',
     'privacy.rights':
       'Dans les Paramètres, vous pouvez à tout moment exporter toutes vos données au format ZIP et supprimer votre compte : vos données et fichiers sont alors supprimés immédiatement. Vous disposez aussi des droits d’accès, de rectification, d’opposition et de réclamation auprès de la CNIL (cnil.fr).',
@@ -403,6 +434,8 @@ export const common = defineMessages({
     'lang.hint': 'Dùng cho ứng dụng, câu trả lời của AI, thư xin việc và các email chúng tôi gửi.',
     'err.generic': 'Đã xảy ra lỗi. Vui lòng thử lại.',
     'err.request_id': 'mã yêu cầu: {id}',
+    'err.crash': 'Đã xảy ra sự cố',
+    'err.reload': 'Tải lại',
     'err.unauthorized': 'Phiên đăng nhập đã kết thúc. Vui lòng đăng nhập lại.',
     'err.reauth_required': 'Vui lòng đăng nhập lại để xác nhận đó là bạn.',
     'err.forbidden': 'Bạn không có quyền thực hiện thao tác này.',
@@ -551,6 +584,20 @@ export const common = defineMessages({
     'privacy.d8': '30 ngày; không bao giờ chứa CV, thư hay email của bạn',
     'privacy.r9': 'Bản sao lưu',
     'privacy.d9': 'Tối đa 7 ngày: dữ liệu đã xóa biến mất khỏi bản sao lưu trong vòng 7 ngày',
+    'privacy.r10':
+      'Ghi chú do trợ lý của bạn lưu (tiêu đề, nội dung, liên kết nguồn), để bạn dùng lại',
+    'privacy.d10': 'Khi tài khoản còn hoạt động; bị xóa cùng ghi chú hoặc cùng tài khoản',
+    'privacy.r11': 'Báo cáo lỗi (Sentry)',
+    'privacy.d11': '90 ngày',
+    'privacy.r12': 'Thống kê sử dụng (PostHog, EU), chỉ khi bạn đồng ý',
+    'privacy.d12': '12 tháng',
+    'privacy.r13': 'Số lượt gọi theo tài khoản (giới hạn chống lạm dụng)',
+    'privacy.d13': '2 ngày',
+    'privacy.h_services': 'Dịch vụ khác',
+    'privacy.sentry':
+      'Sentry nhận báo cáo khi ứng dụng gặp sự cố: loại lỗi và vị trí xảy ra. Báo cáo không chứa nội dung CV, việc làm, thư hay trò chuyện, không có email và không có nội dung yêu cầu.',
+    'privacy.posthog':
+      'PostHog (máy chủ tại EU) nhận số liệu ẩn danh về các bước bạn dùng, như “đã tạo thư”, chỉ khi bạn đồng ý. Không bao giờ có nội dung của bạn, không ghi lại màn hình. Bạn có thể đổi lựa chọn trong Cài đặt.',
     'privacy.h_rights': 'Quyền của bạn',
     'privacy.rights':
       'Trong Cài đặt, bạn có thể xuất toàn bộ dữ liệu dạng ZIP bất cứ lúc nào và xóa tài khoản: dữ liệu và tệp của bạn sẽ bị xóa ngay lập tức. Bạn cũng có quyền truy cập, chỉnh sửa, phản đối và khiếu nại tới CNIL (cnil.fr).',

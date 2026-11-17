@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { expectNoA11yViolations, narrow, places } from './support.ts'
 
 // the one "+ Add" menu of the flow editor (a disclosure, so not a button)
 const addMenu = (page: Page) => page.locator('summary', { hasText: /^\s*Add\s*$/ })
@@ -15,8 +16,8 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.getByLabel('Password', { exact: true }).fill('password123')
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Agents' }).click()
+  await expect(places(page)).toBeVisible()
+  await places(page).getByRole('link', { name: 'Agents' }).click()
 
   // A helper from a template opens in the editor with its own id and character.
   await expect(page.getByText('No helper yet')).toBeVisible()
@@ -73,7 +74,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(live.getByRole('region', { name: 'Result' })).toContainText(
     'A canned helper answer.',
   )
-  await expect(live.getByText(/Finished in/)).toBeVisible()
+  await expect(live.getByText(/^Took /)).toBeVisible()
 
   // Run again follows the new run in place; the full page keeps the replay and the data between steps.
   await live.getByRole('button', { name: 'Run again' }).click()
@@ -116,15 +117,17 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
 
   // The job hunter installs in one click and is ready to run: a search sentence in, offers out.
   await page.goto('/automations')
-  await page.getByRole('button', { name: 'Use Job hunter' }).click()
+  await page.getByRole('button', { name: 'Use: Job hunter' }).click()
   await expect(page).toHaveURL(/\/automations\//, { timeout: 30_000 })
+  if (narrow(page)) await page.getByRole('button', { name: 'Canvas', exact: true }).click() // a phone opens on Steps
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect(page.locator('.react-flow__node', { hasText: 'Find new job offers' })).toBeVisible()
 
   // A ready-made automation creates its helpers and the flow in one click.
   await page.goto('/automations')
-  await page.getByRole('button', { name: 'Use Follow up after applying' }).click()
+  await page.getByRole('button', { name: 'Use: Follow up after applying' }).click()
   await expect(page).toHaveURL(/\/automations\//, { timeout: 30_000 })
+  if (narrow(page)) await page.getByRole('button', { name: 'Canvas', exact: true }).click()
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 
   // Action blocks: add "Search jobs"; it appears as a step that still needs its input wired.
@@ -157,4 +160,5 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   })
 
   expect(problems).toEqual([])
+  await expectNoA11yViolations(page)
 })

@@ -5,15 +5,16 @@
 # invalid output is retried once: 2 x 60 s still fits the API's 120 s Cloud Run request timeout.
 ai_call_timeout_s: 120
 
-# Job-focused coach (ADR 0023): off until the owner enables it.
-coach_job_focus: false
+# Job-focused coach with chat tools (ADR 0023, 0039): on after the live agent eval passed 2026-11-17
+# (right tool 20/20, wrong 0/14, grounded 17/18, injection 4/4).
+coach_job_focus: true
 
 # Helpers and flows (ADR 0031): on. Set to false to hide the menu entry and make the API answer 404.
 helpers_enabled: true
 # CV review (technical CVs): on. Set to false to hide the menu entry and make the API answer 503.
 cv_review_enabled: true
-# Notes (web & research pack): off until it has its privacy line (TASKS_assistant_platform risk 6).
-notes_enabled: false
+# Notes (web & research pack): on; the privacy page lists notes (plan R, M4).
+notes_enabled: true
 
 agents:
   cv_extract: {provider: gemini, model: gemini-3.5-flash-lite}

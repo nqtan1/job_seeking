@@ -6,6 +6,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.config import get_settings
 from recruitai.core import tools as registry
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
@@ -25,8 +26,9 @@ MAX_FLOWS_PER_ORG = 20
 MAX_FLOWS_EVER = 100  # archived ones count too: archiving is not a way around the cap
 
 
-# Saving is allowed with open problems (work in progress); these make a graph unreadable.
-UNSAVABLE = {"duplicate_node_id", "duplicate_edge_id"}
+# Saving is allowed with open problems (work in progress); these make a graph unreadable, or
+# use a tool whose pack is switched off (refused when it arrives, not when it runs).
+UNSAVABLE = {"duplicate_node_id", "duplicate_edge_id", "tool_off"}
 
 
 def graph_of(version: FlowVersion) -> g.Graph:
@@ -56,8 +58,14 @@ async def check(
     if agents is None:
         agents = await engine.load_agents(db, org_id=org_id, graph=graph)
     issues = g.validate(graph, agents)
+    settings = get_settings()
     for n in graph.nodes:
-        if isinstance(n, g.ToolNode) and registry.get(n.tool).starts_runs:
+        if not isinstance(n, g.ToolNode):
+            continue
+        tool = registry.get(n.tool)
+        if tool.flag and not getattr(settings, tool.flag):
+            issues.append(g.Issue("tool_off", "This tool is switched off.", n.id))
+        if tool.starts_runs:
             issues += await _target_issues(db, org_id, flow_id, n)
     return issues
 

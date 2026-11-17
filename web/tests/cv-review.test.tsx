@@ -194,13 +194,15 @@ test('a PDF upload shows the original file with each block marked where it is pr
           ? { data: new Blob(['png'], { type: 'image/png' }) }
           : { data: [] },
   )
-  renderPage()
-  const mark = await screen.findByRole('button', { name: 'CV text, line 2' }) // an overlay, not a textarea
+  const { container } = renderPage()
+  await screen.findByText(/could not be matched/)
+  const mark = container.querySelector('[data-cvr-block="b2"]')! // an overlay, not a textarea
+  expect(mark).toHaveAttribute('title', 'CV text, line 2')
   expect(mark).toHaveStyle({ left: '10%', top: '20%', width: '50%' })
   expect(screen.queryByLabelText('CV text, line 1')).not.toBeInTheDocument() // not matched in the file
   expect(screen.getByText(/could not be matched/)).toBeInTheDocument()
 
-  await user.click(mark)
+  await user.click(mark as HTMLElement)
   expect(screen.getByText(/Describes a duty/).closest('article')).toHaveClass('ring-2')
   await user.click(screen.getByRole('button', { name: 'Edit text' }))
   expect(screen.getByLabelText('CV text, line 1').tagName).toBe('TEXTAREA') // every line is back, editable

@@ -152,7 +152,7 @@ export function StepTimeline({
   const t = useT()
   const rows = order.filter((id) => steps.has(id))
   return (
-    <ol aria-label={t('helpers.timeline')} className="space-y-0">
+    <ol aria-label={t('helpers.view.steps')} className="space-y-0">
       {rows.map((id, i) => (
         <Row
           key={id}
@@ -170,6 +170,70 @@ export function StepTimeline({
         />
       ))}
     </ol>
+  )
+}
+
+function StepFailure({
+  node,
+  message,
+  canResume,
+  resuming,
+  onResume,
+}: {
+  node: Graph['nodes'][number] | undefined
+  message: string
+  canResume: boolean
+  resuming: boolean
+  onResume: () => void
+}) {
+  const t = useT()
+  return (
+    <div
+      role="alert"
+      className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm"
+    >
+      <p className="text-destructive">{message}</p>
+      <div className="flex flex-wrap gap-2">
+        {node?.type === 'agent' && (
+          <Link
+            to={`/helpers/${node.agent_id}`}
+            className="inline-flex h-8 items-center rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11"
+          >
+            {t('helpers.inspect.edit_helper')}
+          </Link>
+        )}
+        {canResume && (
+          <Button size="sm" disabled={resuming} onClick={onResume}>
+            {resuming ? <Spinner /> : <RotateCcw data-icon="inline-start" />}
+            {t('helpers.run.resume')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StepDetails({ received, output }: { received: Handoff[]; output: Step['output'] }) {
+  const t = useT()
+  return (
+    <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
+      {received.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-muted-foreground">{t('helpers.ui.received')}</p>
+          {received.map((h) => (
+            <Result key={h.edge_id} value={h.payload} bare />
+          ))}
+        </div>
+      )}
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-muted-foreground">{t('helpers.ui.produced')}</p>
+        {output ? (
+          <Result value={output} bare />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('helpers.ui.nothing')}</p>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -211,7 +275,7 @@ function Row({
         className={cn('relative grid size-7 shrink-0 place-items-center rounded-full', rail.ring)}
       >
         {rail.icon}
-        <span className="sr-only">{t(`helpers.step.${s.status}`)}</span>
+        <span className="sr-only">{t(`helpers.run.status.${s.status}`)}</span>
       </span>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex min-h-7 flex-wrap items-center gap-2">
@@ -242,53 +306,15 @@ function Row({
           <p className="text-sm text-muted-foreground">{t('helpers.step.skipped_why')}</p>
         )}
         {failed && (
-          <div
-            role="alert"
-            className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm"
-          >
-            <p className="text-destructive">{errText(s.error_code)}</p>
-            <div className="flex flex-wrap gap-2">
-              {node?.type === 'agent' && (
-                <Link
-                  to={`/helpers/${node.agent_id}`}
-                  className="inline-flex h-8 items-center rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11"
-                >
-                  {t('helpers.inspect.edit_helper')}
-                </Link>
-              )}
-              {canResume && (
-                <Button size="sm" disabled={resuming} onClick={onResume}>
-                  {resuming ? <Spinner /> : <RotateCcw data-icon="inline-start" />}
-                  {t('helpers.run.resume')}
-                </Button>
-              )}
-            </div>
-          </div>
+          <StepFailure
+            node={node}
+            message={errText(s.error_code)}
+            canResume={canResume}
+            resuming={resuming}
+            onResume={onResume}
+          />
         )}
-        {hasDetails && open && (
-          <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
-            {received.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {t('helpers.ui.received')}
-                </p>
-                {received.map((h) => (
-                  <Result key={h.edge_id} value={h.payload} bare />
-                ))}
-              </div>
-            )}
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                {t('helpers.ui.produced')}
-              </p>
-              {s.output ? (
-                <Result value={s.output} bare />
-              ) : (
-                <p className="text-sm text-muted-foreground">{t('helpers.ui.nothing')}</p>
-              )}
-            </div>
-          </div>
-        )}
+        {hasDetails && open && <StepDetails received={received} output={s.output} />}
       </div>
     </li>
   )
@@ -300,8 +326,8 @@ export function RecentRuns({ flowId }: { flowId: string }) {
   const runs = useFlowRuns(flowId).data
   if (!runs?.length) return null
   return (
-    <section aria-label={t('helpers.flow.recent')} className="space-y-2 rounded-xl border p-4">
-      <h2 className="font-semibold">{t('helpers.flow.recent')}</h2>
+    <section aria-label={t('helpers.pages.runs.list')} className="space-y-2 rounded-xl border p-4">
+      <h2 className="font-semibold">{t('helpers.pages.runs.list')}</h2>
       <ul className="divide-y">
         {runs.slice(0, 5).map((r) => (
           <li key={r.id}>
@@ -331,6 +357,95 @@ function useElapsed(since: string, until: string | null | undefined, live: boole
   return Math.max(Math.floor((end - new Date(since).getTime()) / 1000) * 1000, 0)
 }
 
+function LiveHeader({ run, live, elapsed }: { run: Run; live: boolean; elapsed: number }) {
+  const { t, locale } = useI18n()
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h2 className="font-semibold tracking-tight">{t('helpers.live.title')}</h2>
+        <RunStatusBadge status={run.status} />
+        {live && <Spinner />}
+        <span className="text-sm text-muted-foreground tabular-nums">
+          {t(live ? 'helpers.live.elapsed' : 'helpers.ui.took', { time: seconds(elapsed) })}
+        </span>
+      </div>
+      <div role="status" className="sr-only">
+        {t(`helpers.run.status.${run.status}`)}
+      </div>
+      {run.status === 'waiting' && (
+        <p className="text-sm text-muted-foreground">
+          {t('helpers.run.waiting_until', { time: when(run.wake_at, locale) })}
+        </p>
+      )}
+    </>
+  )
+}
+
+function LiveActions({
+  run,
+  live,
+  stepFailed,
+  cancel,
+  rerun,
+  resume,
+  onFollow,
+  onClose,
+}: {
+  run: Run
+  live: boolean
+  stepFailed: boolean
+  cancel: ReturnType<typeof useCancelRun>
+  rerun: ReturnType<typeof useRerun>
+  resume: ReturnType<typeof useResumeRun>
+  onFollow: (runId: string) => void
+  onClose: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="flex flex-wrap gap-2">
+      {live && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={cancel.isPending}
+          onClick={() => cancel.mutate(run.id)}
+        >
+          <Ban data-icon="inline-start" />
+          {t('helpers.run.cancel')}
+        </Button>
+      )}
+      {run.status === 'failed' && !stepFailed && (
+        <Button size="sm" disabled={resume.isPending} onClick={() => resume.mutate(run.id)}>
+          {resume.isPending ? <Spinner /> : <RotateCcw data-icon="inline-start" />}
+          {t('helpers.run.resume')}
+        </Button>
+      )}
+      {!live && (
+        <Button
+          size="sm"
+          variant={run.status === 'done' ? 'default' : 'outline'}
+          disabled={rerun.isPending}
+          onClick={() => rerun.mutate(run.id, { onSuccess: (r) => onFollow(r.id) })}
+        >
+          {rerun.isPending ? <Spinner /> : <Play data-icon="inline-start" />}
+          {t('helpers.live.again')}
+        </Button>
+      )}
+      <Link
+        to={`/automations/runs/${run.id}`}
+        className="inline-flex h-7 items-center gap-1 rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11"
+      >
+        <ExternalLink className="size-3.5" aria-hidden />
+        {t('helpers.live.full')}
+      </Link>
+      <Button variant="ghost" size="sm" onClick={onClose}>
+        <X data-icon="inline-start" />
+        {t('helpers.live.close')}
+      </Button>
+    </div>
+  )
+}
+
 /**
  * A run followed in place (the flow editor): status and timer, the steps as they start, the
  * answer with Copy, and what to do next. The status line is always mounted so changes are spoken.
@@ -352,7 +467,7 @@ export function LiveRunPanel({
   onFollow: (runId: string) => void
   onClose: () => void
 }) {
-  const { t, locale } = useI18n()
+  const { t } = useI18n()
   const errText = useErrText()
   const live = isLive(run.status)
   const cancel = useCancelRun()
@@ -368,76 +483,30 @@ export function LiveRunPanel({
       aria-label={t('helpers.live.title')}
       className="space-y-4 rounded-2xl border bg-card p-4 shadow-xs"
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h2 className="font-semibold tracking-tight">{t('helpers.live.title')}</h2>
-        <RunStatusBadge status={run.status} />
-        {live && <Spinner />}
-        <span className="text-sm text-muted-foreground tabular-nums">
-          {t(live ? 'helpers.live.elapsed' : 'helpers.live.total', { time: seconds(elapsed) })}
-        </span>
-      </div>
-      <div role="status" className="sr-only">
-        {t(`helpers.run.status.${run.status}`)}
-      </div>
-      {run.status === 'waiting' && (
-        <p className="text-sm text-muted-foreground">
-          {t('helpers.run.waiting_until', { time: when(run.wake_at, locale) })}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        {live && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={cancel.isPending}
-            onClick={() => cancel.mutate(run.id)}
-          >
-            <Ban data-icon="inline-start" />
-            {t('helpers.run.cancel')}
-          </Button>
-        )}
-        {run.status === 'failed' && !stepFailed && (
-          <Button size="sm" disabled={resume.isPending} onClick={() => resume.mutate(run.id)}>
-            {resume.isPending ? <Spinner /> : <RotateCcw data-icon="inline-start" />}
-            {t('helpers.run.resume')}
-          </Button>
-        )}
-        {!live && (
-          <Button
-            size="sm"
-            variant={run.status === 'done' ? 'default' : 'outline'}
-            disabled={rerun.isPending}
-            onClick={() => rerun.mutate(run.id, { onSuccess: (r) => onFollow(r.id) })}
-          >
-            {rerun.isPending ? <Spinner /> : <Play data-icon="inline-start" />}
-            {t('helpers.live.again')}
-          </Button>
-        )}
-        <Link
-          to={`/automations/runs/${run.id}`}
-          className="inline-flex h-7 items-center gap-1 rounded-lg border bg-background px-2.5 text-sm font-medium hover:bg-muted pointer-coarse:h-11"
-        >
-          <ExternalLink className="size-3.5" aria-hidden />
-          {t('helpers.live.full')}
-        </Link>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          <X data-icon="inline-start" />
-          {t('helpers.live.close')}
-        </Button>
-      </div>
+      <LiveHeader run={run} live={live} elapsed={elapsed} />
+      <LiveActions
+        run={run}
+        live={live}
+        stepFailed={stepFailed}
+        cancel={cancel}
+        rerun={rerun}
+        resume={resume}
+        onFollow={onFollow}
+        onClose={onClose}
+      />
       <ErrorMessage error={cancel.error ?? rerun.error ?? resume.error} />
       {run.status === 'failed' && (
         <p className="text-sm text-muted-foreground">
-          {run.error_code && !stepFailed ? errText(run.error_code) : t('helpers.live.failed')}
+          {run.error_code && !stepFailed ? errText(run.error_code) : t('helpers.rerr.generic')}
         </p>
       )}
       {run.status === 'cancelled' && (
-        <p className="text-sm text-muted-foreground">{t('helpers.live.stopped')}</p>
+        <p className="text-sm text-muted-foreground">{t('helpers.rerr.cancelled')}</p>
       )}
       {started.size === 0 && live && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />
-          {t('helpers.live.starting')}
+          {t('helpers.run.status.queued')}
         </p>
       )}
       <ResultHero run={run} />

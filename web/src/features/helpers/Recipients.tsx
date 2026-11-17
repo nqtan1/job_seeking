@@ -22,7 +22,6 @@ export function ContactsTab() {
         <h2 id="contacts-h" className="text-lg font-semibold tracking-tight">
           {t('helpers.contacts.title')}
         </h2>
-        <p className="text-sm text-muted-foreground">{t('helpers.contacts.intro')}</p>
       </div>
       <AddContact />
       <ErrorMessage error={remove.error} />
@@ -48,9 +47,9 @@ export function ContactsTab() {
                       <Trash2 aria-hidden /> {t('helpers.remove')}
                     </>
                   }
-                  aria-label={t('helpers.contacts.remove_for', { email: c.email })}
+                  aria-label={t('ui.remove', { name: c.email })}
                   confirmLabel={t('helpers.contacts.remove_confirm')}
-                  confirmAriaLabel={t('helpers.contacts.remove_confirm_for', { email: c.email })}
+                  confirmAriaLabel={`${t('helpers.contacts.remove_confirm')}: ${c.email}`}
                   cancelLabel={t('helpers.cancel')}
                   pending={remove.isPending}
                   onConfirm={(reset) => remove.mutate(c.id, { onSettled: reset })}

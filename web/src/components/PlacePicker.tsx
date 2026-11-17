@@ -46,25 +46,7 @@ export function PlacePicker({
         <span className="truncate">{codes.length ? placesLabel(value) : t('ui.all_france')}</span>
         <ChevronDown className={cn('size-4 shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
-      {codes.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5">
-          {codes.map((c) => (
-            <li
-              key={c}
-              className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs"
-            >
-              {placeLabel(c)}
-              <button
-                type="button"
-                aria-label={t('ui.remove', { name: placeLabel(c) })}
-                onClick={() => toggle(c)}
-              >
-                <X className="size-3" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <PlaceChips codes={codes} onRemove={toggle} />
       {open && (
         <div className="max-h-80 max-w-md space-y-3 overflow-y-auto rounded-lg border bg-popover p-3 shadow-md">
           <Input
@@ -84,42 +66,75 @@ export function PlacePicker({
           >
             {t('ui.all_france')}
           </button>
-          {regions.map((r) => {
-            const all = r.departments.map((x) => x.code)
-            const allOn = all.every((c) => codes.includes(c))
-            return (
-              <fieldset key={r.name} className="space-y-1">
-                <legend className="flex w-full items-center justify-between text-xs font-semibold text-muted-foreground">
-                  {r.name}
-                  <button
-                    type="button"
-                    className="font-normal underline"
-                    aria-label={t(allOn ? 'ui.clear_in' : 'ui.select_all_in', { name: r.name })}
-                    onClick={() =>
-                      emit(allOn ? codes.filter((c) => !all.includes(c)) : [...codes, ...all])
-                    }
-                  >
-                    {allOn ? t('ui.clear') : t('ui.select_all')}
-                  </button>
-                </legend>
-                {r.departments.map((x) => (
-                  <label key={x.code} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={codes.includes(x.code)}
-                      onChange={() => toggle(x.code)}
-                    />
-                    {placeLabel(x.code)}
-                  </label>
-                ))}
-              </fieldset>
-            )
-          })}
+          {regions.map((r) => (
+            <RegionGroup key={r.name} region={r} codes={codes} emit={emit} toggle={toggle} />
+          ))}
           {regions.length === 0 && (
             <p className="text-sm text-muted-foreground">{t('ui.no_match', { query })}</p>
           )}
         </div>
       )}
     </div>
+  )
+}
+
+function PlaceChips({ codes, onRemove }: { codes: string[]; onRemove: (code: string) => void }) {
+  const t = useT()
+  if (codes.length === 0) return null
+  return (
+    <ul className="flex flex-wrap gap-1.5">
+      {codes.map((c) => (
+        <li
+          key={c}
+          className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs"
+        >
+          {placeLabel(c)}
+          <button
+            type="button"
+            aria-label={t('ui.remove', { name: placeLabel(c) })}
+            onClick={() => onRemove(c)}
+          >
+            <X className="size-3" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function RegionGroup({
+  region: r,
+  codes,
+  emit,
+  toggle,
+}: {
+  region: ReturnType<typeof filterRegions>[number]
+  codes: string[]
+  emit: (next: string[]) => void
+  toggle: (code: string) => void
+}) {
+  const t = useT()
+  const all = r.departments.map((x) => x.code)
+  const allOn = all.every((c) => codes.includes(c))
+  return (
+    <fieldset className="space-y-1">
+      <legend className="flex w-full items-center justify-between text-xs font-semibold text-muted-foreground">
+        {r.name}
+        <button
+          type="button"
+          className="font-normal underline"
+          aria-label={t(allOn ? 'ui.clear_in' : 'ui.select_all_in', { name: r.name })}
+          onClick={() => emit(allOn ? codes.filter((c) => !all.includes(c)) : [...codes, ...all])}
+        >
+          {allOn ? t('ui.clear') : t('ui.select_all')}
+        </button>
+      </legend>
+      {r.departments.map((x) => (
+        <label key={x.code} className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={codes.includes(x.code)} onChange={() => toggle(x.code)} />
+          {placeLabel(x.code)}
+        </label>
+      ))}
+    </fieldset>
   )
 }

@@ -5,9 +5,29 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }],
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
     "typescript/no-explicit-any": "error",
     "typescript/consistent-type-imports": "error",
     "no-console": "error"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.ts", "src/**/*.tsx"],
+      "rules": {
+        "max-lines-per-function": [
+          "error",
+          {
+            "max": 100,
+            "skipBlankLines": false,
+            "skipComments": false
+          }
+        ]
+      }
+    }
+  ]
 }

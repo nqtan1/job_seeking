@@ -160,7 +160,10 @@ async def test_an_unknown_tool_and_the_step_limit_cannot_run_away(
     org, conv = await _setup(db_session)
     for _ in range(2):
         fake_llm.queue_turn(PROMPT_VERSION, [_call("delete_everything")])
-    fake_llm.queue_turn(PROMPT_VERSION, [TextDelta("Réponse finale.")])
+    # a backend that ignores "no tools" and still sends a call: the call is dropped, the loop ends
+    fake_llm.queue_turn(
+        PROMPT_VERSION, [TextDelta("Réponse finale."), _call("delete_everything")]
+    )
     settings = with_tools().model_copy(update={"coach_max_steps": 2})
 
     got = await _run(db_session, fake_llm, org, conv, settings=settings)

@@ -203,22 +203,8 @@ async def _advance(
     org_id: UUID,
     run_id: UUID,
 ) -> dict[str, Any]:
-    run = await flow_repo.get_run(db, org_id=org_id, run_id=run_id)
-    assert run is not None  # claimed a moment ago
-    version = await flow_repo.get_flow_version_by_id(
-        db, org_id=org_id, version_id=run.flow_version_id
-    )
-    assert version is not None
-    graph = g.Graph.model_validate(version.graph)
-    agents = await load_agents(db, org_id=org_id, graph=graph)
+    run, graph, agents, steps, order = await _load_run(db, org_id=org_id, run_id=run_id)
     nodes = {n.id: n for n in graph.nodes}
-    steps = {
-        s.node_id: s
-        for s in await flow_repo.list_steps(db, org_id=org_id, run_id=run_id)
-    }
-    order = g.topological(graph)
-    if order is None or set(steps) != set(nodes):
-        await _fail(db, run, None, "invalid_flow")
     incoming: dict[UUID, list[g.Edge]] = {n: [] for n in nodes}
     for e in graph.edges:
         incoming[e.to].append(e)
@@ -261,87 +247,163 @@ async def _advance(
         if incoming[nid] and (
             not active or (gates and not any(e in active for e in gates))
         ):
-            await flow_repo.set_step(
-                db, org_id=org_id, step_id=step.id, status="skipped"
-            )
-            status[nid] = "skipped"
-            await db.commit()
+            await _skip(db, org_id, step, status, nid)
             continue
 
-        # text typed on a step fills an input no link maps; a link owns its input, so one on a branch
-        # not taken leaves the input empty and the step is skipped as before
-        mapped = {m.input for e in incoming[nid] for m in e.map}
-        values: dict[str, str] = (
-            {k: v for k, v in node.fixed.items() if k not in mapped}
-            if isinstance(node, g.ToolNode)
-            else {}
+        values = await _gather_inputs(
+            db,
+            run,
+            step,
+            node,
+            incoming[nid],
+            active,
+            outputs,
+            org_id=org_id,
+            run_id=run_id,
+            nid=nid,
         )
-        linked: set[str] = set()
-        for e in active:
-            payload, truncated = g.render_map(e.map, outputs[e.from_.node])
-            for key in payload:
-                if (
-                    key in linked
-                ):  # two live edges into one input: never guess which wins
-                    await _fail(db, run, step, "ambiguous_input")
-            linked.update(payload)
-            values.update(payload)
-            await flow_repo.record_handoff(
-                db,
-                org_id=org_id,
-                values={
-                    "run_id": run_id,
-                    "edge_id": e.id,
-                    "from_node": e.from_.node,
-                    "to_node": nid,
-                    "payload": payload,
-                    "truncated": truncated,
-                },
-            )
 
         # A step whose required input comes only from a branch that was not taken has nothing to
         # work on: it is skipped like the branch, not failed.
         if incoming[nid] and any(
             req and name not in values for name, req in g.input_names(node, agents)
         ):
-            await flow_repo.set_step(
-                db, org_id=org_id, step_id=step.id, status="skipped"
-            )
-            status[nid] = "skipped"
-            await db.commit()
+            await _skip(db, org_id, step, status, nid)
             continue
 
         if isinstance(node, g.ToolNode) and registry.get(node.tool).pauses:
             await _park(db, run, step, node, values.get("value", ""))
 
-        if not await flow_repo.claim_step(db, org_id=org_id, step_id=step.id):
-            raise _Stop  # another worker holds it
-        await db.commit()
-
-        output, model, latency = await _run_node(
-            db, llm, kit, run, step, node, agents, values
+        output = await _execute_step(
+            db, llm, kit, run, step, node, agents, values, org_id=org_id, run_id=run_id
         )
-        if not await flow_repo.set_step(
-            db,
-            org_id=org_id,
-            step_id=step.id,
-            only_if=(
-                "running",
-            ),  # the run may have been resumed under us: never overwrite it
-            status="done",
-            output=output,
-            model=model,
-            latency_ms=latency,
-            finished_at=func.now(),
-        ):
-            await db.rollback()
-            raise _Stop
-        await flow_repo.touch_run(db, org_id=org_id, run_id=run_id)
-        await db.commit()
         status[nid], outputs[nid] = "done", output
         if isinstance(node, g.OutputNode):
             result = output
     return result
+
+
+async def _load_run(
+    db: AsyncSession, *, org_id: UUID, run_id: UUID
+) -> tuple[
+    FlowRun, g.Graph, dict[UUID, g.AgentInfo], dict[UUID, FlowRunStep], list[UUID]
+]:
+    """The claimed run, its pinned graph and helpers, its step rows, and the execution order."""
+    run = await flow_repo.get_run(db, org_id=org_id, run_id=run_id)
+    assert run is not None  # claimed a moment ago
+    version = await flow_repo.get_flow_version_by_id(
+        db, org_id=org_id, version_id=run.flow_version_id
+    )
+    assert version is not None
+    graph = g.Graph.model_validate(version.graph)
+    agents = await load_agents(db, org_id=org_id, graph=graph)
+    nodes = {n.id: n for n in graph.nodes}
+    steps = {
+        s.node_id: s
+        for s in await flow_repo.list_steps(db, org_id=org_id, run_id=run_id)
+    }
+    order = g.topological(graph)
+    if order is None or set(steps) != set(nodes):
+        await _fail(db, run, None, "invalid_flow")
+    return run, graph, agents, steps, order
+
+
+async def _skip(
+    db: AsyncSession,
+    org_id: UUID,
+    step: FlowRunStep,
+    status: dict[UUID, str],
+    nid: UUID,
+) -> None:
+    await flow_repo.set_step(db, org_id=org_id, step_id=step.id, status="skipped")
+    status[nid] = "skipped"
+    await db.commit()
+
+
+async def _gather_inputs(
+    db: AsyncSession,
+    run: FlowRun,
+    step: FlowRunStep,
+    node: Any,
+    incoming: list[g.Edge],
+    active: list[g.Edge],
+    outputs: dict[UUID, dict[str, Any]],
+    *,
+    org_id: UUID,
+    run_id: UUID,
+    nid: UUID,
+) -> dict[str, str]:
+    """The step's input values from its active edges (each hand-off recorded) and typed text."""
+    # text typed on a step fills an input no link maps; a link owns its input, so one on a branch
+    # not taken leaves the input empty and the step is skipped as before
+    mapped = {m.input for e in incoming for m in e.map}
+    values: dict[str, str] = (
+        {k: v for k, v in node.fixed.items() if k not in mapped}
+        if isinstance(node, g.ToolNode)
+        else {}
+    )
+    linked: set[str] = set()
+    for e in active:
+        payload, truncated = g.render_map(e.map, outputs[e.from_.node])
+        for key in payload:
+            if key in linked:  # two live edges into one input: never guess which wins
+                await _fail(db, run, step, "ambiguous_input")
+        linked.update(payload)
+        values.update(payload)
+        await flow_repo.record_handoff(
+            db,
+            org_id=org_id,
+            values={
+                "run_id": run_id,
+                "edge_id": e.id,
+                "from_node": e.from_.node,
+                "to_node": nid,
+                "payload": payload,
+                "truncated": truncated,
+            },
+        )
+    return values
+
+
+async def _execute_step(
+    db: AsyncSession,
+    llm: LLMGateway,
+    kit: tools.ToolKit,
+    run: FlowRun,
+    step: FlowRunStep,
+    node: Any,
+    agents: dict[UUID, g.AgentInfo],
+    values: dict[str, str],
+    *,
+    org_id: UUID,
+    run_id: UUID,
+) -> dict[str, Any]:
+    """Claim the step, run it, store its output. Raises ``_Stop`` if another worker has it."""
+    if not await flow_repo.claim_step(db, org_id=org_id, step_id=step.id):
+        raise _Stop  # another worker holds it
+    await db.commit()
+
+    output, model, latency = await _run_node(
+        db, llm, kit, run, step, node, agents, values
+    )
+    if not await flow_repo.set_step(
+        db,
+        org_id=org_id,
+        step_id=step.id,
+        only_if=(
+            "running",
+        ),  # the run may have been resumed under us: never overwrite it
+        status="done",
+        output=output,
+        model=model,
+        latency_ms=latency,
+        finished_at=func.now(),
+    ):
+        await db.rollback()
+        raise _Stop
+    await flow_repo.touch_run(db, org_id=org_id, run_id=run_id)
+    await db.commit()
+    return output
 
 
 def _is_active(

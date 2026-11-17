@@ -1,7 +1,9 @@
 """The profile tool of the career pack (ADR 0039). Only the summary and the skills leave: never the
 contact details or the references (identity-free, like the coach's profile)."""
 
-from recruitai.core.tools import Call, Tool, register
+from typing import Any
+
+from recruitai.core.tools import Call, Tool, register, register_reader
 from recruitai.modules.candidates import service as candidates
 
 
@@ -24,3 +26,11 @@ register(
     ),
     _profile_read,
 )
+
+
+async def _profile(c: Call) -> dict[str, Any]:
+    """A helper's "profile" source: the whole profile (the helper drops the identity keys)."""
+    return (await candidates.require_profile(c.db, org_id=c.org_id)).data
+
+
+register_reader("profile", _profile)

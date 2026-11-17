@@ -1,8 +1,12 @@
 """Abuse limits: a script hammering the API, a huge body, and many accounts spending together."""
 
+import asyncio
+import time
 from uuid import uuid4
 
+import httpx
 import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from recruitai.ai.gateway import QuotaExceeded
@@ -67,3 +71,28 @@ async def test_the_global_daily_cap_stops_many_accounts_but_not_a_turn_in_progre
         finally:
             await session.close()
     await purge_tenant(db_engine, org_id=ctx.org_id, user_id=ctx.user_id)
+
+
+async def test_two_api_instances_on_one_database_share_the_per_user_limit(
+    app, ada, db_engine: AsyncEngine, monkeypatch
+):
+    from recruitai.core import db, throttle
+    from recruitai.main import create_app
+
+    monkeypatch.setattr(get_settings(), "api_rate_limit_per_min", 3)
+    monkeypatch.setattr(db, "_engine", db_engine)  # as the lifespan's init_db would
+    if time.time() % 60 > 50:  # stay inside one fixed window
+        await asyncio.sleep(61 - time.time() % 60)
+    other = create_app()
+    other.dependency_overrides = dict(app.dependency_overrides)
+    codes = []
+    try:
+        for instance in (app, app, other, other):
+            throttle._hits.clear()  # nothing left in memory: only the DB can count
+            transport = httpx.ASGITransport(app=instance)
+            async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+                codes.append((await c.get("/api/v1/me", headers=ada)).status_code)
+    finally:
+        async with db_engine.begin() as conn:
+            await conn.execute(text("DELETE FROM rate_hits"))
+    assert codes == [200, 200, 200, 429]

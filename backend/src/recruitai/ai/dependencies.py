@@ -72,7 +72,9 @@ class _RoutingGateway:
         # Provider-level facts: answered without building a client (a missing key or URL
         # must not fail a route that never calls a model).
         if self._settings.provider_for(feature) == "qwen":
-            return BackendCapabilities(function_calling=False, web_grounding=False)
+            return BackendCapabilities(
+                function_calling=self._settings.qwen_tools, web_grounding=False
+            )
         return BackendCapabilities()
 
     def converse(self, **kwargs: Any) -> AsyncGenerator[Any]:
