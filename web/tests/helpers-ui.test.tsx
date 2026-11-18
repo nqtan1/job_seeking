@@ -218,10 +218,12 @@ test('a failed run explains itself in plain words and can be resumed; skipped st
 
   expect(await screen.findAllByText(/reached today’s AI limit/)).not.toHaveLength(0)
   expect(screen.queryByText('quota_exceeded')).not.toBeInTheDocument() // never the raw code
-  expect(screen.getByText(/Skipped: the condition/)).toBeInTheDocument()
+  // the failed step opens first, with its way out; a skipped step says why when picked
   await user.click(screen.getByRole('button', { name: 'Resume from the failed step' }))
   await waitFor(() => expect(mocks.POST).toHaveBeenCalled())
   expect(mocks.POST.mock.calls[0][0]).toBe('/api/v1/flow-runs/{run_id}/resume')
+  await user.click(screen.getByRole('button', { name: /Skipped/ }))
+  expect(screen.getByText(/Skipped: the condition/)).toBeInTheDocument()
 })
 
 test('typing choice options with commas keeps what you type, and the draft sends only declared inputs', async () => {
@@ -312,7 +314,7 @@ test('a finished run leads with its summary and the result, then the steps', asy
   expect(screen.getByRole('region', { name: 'Result' })).toHaveTextContent(
     'A canned helper answer.',
   )
-  expect(screen.getAllByRole('button', { name: 'Details' })).toHaveLength(1) // start/result stay quiet
+  expect(screen.getByText(/· m1/)).toBeInTheDocument() // the trace opens on the agent step, not start/result
 })
 
 test('recent runs link back to their run page, newest first', async () => {
