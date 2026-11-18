@@ -148,13 +148,25 @@ export function JobSelect({
 }
 
 /** A helper's or step's output: text as written, fields as a small table, with a JSON toggle. */
+const FOLD_CHARS = 400 // longer text, or more than 6 lines, folds behind "Show more"
+const FOLD_LINES = 6
+const LIST_ITEMS = 5
+
+/** `job_title` → "Job title": field names read as labels, not code. */
+const label = (k: string) => (k.charAt(0).toUpperCase() + k.slice(1)).replaceAll('_', ' ')
+
+/**
+ * A step's data as blocks, one per field (like a trace viewer's Input / Output panes): long text
+ * folds, lists show their first items, nested records read as label/value pairs. Copy and a raw
+ * JSON view stay one click away.
+ */
 export function Result({
   value,
   bare,
   large,
 }: {
   value: Record<string, unknown> | null | undefined
-  /** No Copy/JSON toolbar (a quiet read-only view, e.g. inside a timeline row). */
+  /** No Copy/JSON toolbar (a quiet read-only view, e.g. inside a trace panel). */
   bare?: boolean
   /** Reading size, for the answer the person came for. */
   large?: boolean
@@ -166,11 +178,10 @@ export function Result({
   const keys = Object.keys(value).filter((k) => !k.startsWith('_') && k !== 'branch')
   // one written answer (a text result, or a single text field) reads as plain text
   const onlyText = keys.length === 1 && typeof value[keys[0]] === 'string'
-  const textOf = onlyText ? (value[keys[0]] as string) : ''
   const json = JSON.stringify(value, null, 2)
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(onlyText ? textOf : json)
+      await navigator.clipboard.writeText(onlyText ? (value[keys[0]] as string) : json)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -180,7 +191,7 @@ export function Result({
   return (
     <div className="space-y-2">
       {!bare && (
-        <div className={`flex justify-end gap-1${large ? ' -mt-9' : ''}`}>
+        <div className={cn('flex justify-end gap-1', large && '-mt-9')}>
           {!onlyText && (
             <Button variant="ghost" size="xs" onClick={() => setRaw((r) => !r)} aria-pressed={raw}>
               JSON
@@ -197,30 +208,100 @@ export function Result({
           {json}
         </pre>
       ) : onlyText ? (
-        <p
-          className={cn(
-            'max-w-prose overflow-auto text-sm leading-relaxed whitespace-pre-wrap',
-            large ? 'text-base leading-7' : 'max-h-72 rounded-lg bg-muted/60 p-3',
-          )}
-        >
-          {textOf}
-        </p>
+        <Folded text={value[keys[0]] as string} large={large} />
       ) : (
-        <dl className="divide-y rounded-lg border bg-background/50 text-sm">
-          {keys.map((k) => (
-            <div key={k} className="grid gap-1 p-2 sm:grid-cols-[10rem_1fr]">
-              <dt className="text-xs font-medium text-muted-foreground">{k}</dt>
-              <dd className="whitespace-pre-wrap">{display(value[k])}</dd>
+        keys.map((k) => (
+          <div key={k} className="overflow-hidden rounded-lg border bg-background/60">
+            <p className="border-b bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+              {label(k)}
+            </p>
+            <div className="px-3 py-2 text-sm">
+              <Value v={value[k]} />
             </div>
-          ))}
-        </dl>
+          </div>
+        ))
       )}
     </div>
   )
 }
 
-function display(v: unknown): string {
-  if (Array.isArray(v)) return v.map((x) => `• ${String(x)}`).join('\n')
+function Value({ v }: { v: unknown }) {
+  if (Array.isArray(v)) return <List items={v} />
+  if (v !== null && typeof v === 'object') return <Pairs record={v as Record<string, unknown>} />
+  return <Folded text={short(v)} />
+}
+
+/** Text that folds after a few lines, so a long page or letter never floods the view. */
+function Folded({ text, large }: { text: string; large?: boolean }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  if (!text) return <p className="text-sm text-muted-foreground">{t('helpers.ui.nothing')}</p>
+  const long = text.length > FOLD_CHARS || text.split('\n').length > FOLD_LINES
+  return (
+    <div className="space-y-1">
+      <p
+        className={cn(
+          'max-w-prose text-sm leading-relaxed break-words whitespace-pre-wrap',
+          large && 'text-base leading-7',
+          long && !open && 'line-clamp-6',
+        )}
+      >
+        {text}
+      </p>
+      {long && (
+        <Button variant="link" size="xs" className="px-0" onClick={() => setOpen((o) => !o)}>
+          {t(open ? 'helpers.ui.less' : 'helpers.ui.more')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function List({ items }: { items: unknown[] }) {
+  const t = useT()
+  const [all, setAll] = useState(false)
+  if (items.length === 0) return <p className="text-muted-foreground">{t('helpers.ui.nothing')}</p>
+  const shown = all ? items : items.slice(0, LIST_ITEMS)
+  return (
+    <div className="space-y-1.5">
+      <ul className="space-y-1.5">
+        {shown.map((x, i) => (
+          <li key={i} className="rounded-md bg-muted/50 px-2.5 py-1.5">
+            {x !== null && typeof x === 'object' && !Array.isArray(x) ? (
+              <Pairs record={x as Record<string, unknown>} />
+            ) : (
+              <span className="line-clamp-3 break-words">{short(x)}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {items.length > LIST_ITEMS && (
+        <Button variant="link" size="xs" className="px-0" onClick={() => setAll((a) => !a)}>
+          {all ? t('helpers.ui.less') : t('helpers.ui.show_all', { count: items.length })}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** A nested record: one line per field, values cut to a line (the JSON view has the rest). */
+function Pairs({ record }: { record: Record<string, unknown> }) {
+  const keys = Object.keys(record).filter((k) => !k.startsWith('_'))
+  return (
+    <dl className="grid grid-cols-[minmax(0,8rem)_1fr] gap-x-3 gap-y-0.5">
+      {keys.map((k) => (
+        <div key={k} className="contents">
+          <dt className="truncate text-xs text-muted-foreground">{label(k)}</dt>
+          <dd className="truncate" title={short(record[k])}>
+            {short(record[k])}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function short(v: unknown): string {
   if (typeof v === 'boolean') return v ? 'true' : 'false'
   if (v !== null && typeof v === 'object') return JSON.stringify(v)
   return v == null ? '' : String(v)

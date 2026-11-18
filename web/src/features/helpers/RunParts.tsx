@@ -1,7 +1,6 @@
 import {
   Ban,
   Check,
-  ChevronDown,
   Circle,
   Clock,
   ExternalLink,
@@ -11,7 +10,7 @@ import {
   Timer,
   X,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useI18n, useT } from '@/i18n'
 import { Spinner } from '@/components/Spinner'
 import {
@@ -123,21 +122,7 @@ const RAIL: Record<Status, { icon: ReactNode; ring: string }> = {
   pending: { icon: <Circle className="size-2" />, ring: 'bg-muted text-muted-foreground' },
 }
 
-/** The run, top to bottom: one row per step on a connecting line. Details stay folded until asked
- *  for, except on a failed step, where the reason and what to do about it are the point. */
-export function StepTimeline({
-  order,
-  steps,
-  graph,
-  titles,
-  avatars,
-  moods,
-  handoffs,
-  errText,
-  canResume,
-  resuming,
-  onResume,
-}: {
+type TraceProps = {
   order: string[]
   steps: Map<string, Step>
   graph: Graph
@@ -149,28 +134,146 @@ export function StepTimeline({
   canResume: boolean
   resuming: boolean
   onResume: () => void
+}
+
+/** Where each step sat in time, as fractions of the whole run (the waterfall bars). */
+function useBars(steps: Step[]): Map<string, { left: number; width: number }> {
+  return useMemo(() => {
+    const t = (v: string | null) => (v ? new Date(v).getTime() : null)
+    const starts = steps.map((s) => t(s.started_at)).filter((v): v is number => v !== null)
+    const ends = steps.map((s) => t(s.finished_at)).filter((v): v is number => v !== null)
+    if (starts.length === 0 || ends.length === 0) return new Map()
+    const from = Math.min(...starts)
+    const span = Math.max(Math.max(...ends) - from, 1)
+    return new Map(
+      steps.flatMap((s) => {
+        const start = t(s.started_at)
+        const end = t(s.finished_at) ?? from + span // still running: to the run's last known end
+        if (start === null) return []
+        const left = (start - from) / span
+        return [
+          [s.node_id, { left, width: Math.max(Math.min((end - start) / span, 1 - left), 0.02) }],
+        ]
+      }),
+    )
+  }, [steps])
+}
+
+/** The step to open first: the failed one, else the last real step that finished. */
+function firstPick(rows: string[], steps: Map<string, Step>, graph: Graph): string | undefined {
+  const work = (id: string) => {
+    const type = graph.nodes.find((n) => n.id === id)?.type
+    return type !== 'input' && type !== 'output'
+  }
+  return (
+    rows.find((id) => steps.get(id)?.status === 'failed') ??
+    [...rows].reverse().find((id) => work(id) && steps.get(id)?.status === 'done') ??
+    rows.at(-1)
+  )
+}
+
+/**
+ * The run as a trace: a compact list of steps (status, name, time, a waterfall bar) and one panel
+ * with the selected step's input and output. Side by side when there is room, stacked otherwise.
+ */
+export function Trace(p: TraceProps) {
+  const t = useT()
+  const rows = p.order.filter((id) => p.steps.has(id))
+  const bars = useBars([...p.steps.values()])
+  const [chosen, setChosen] = useState<string | null>(null)
+  const selected = chosen && p.steps.has(chosen) ? chosen : firstPick(rows, p.steps, p.graph)
+  const step = selected ? p.steps.get(selected) : undefined
+  return (
+    <div className="@container">
+      <div className="grid gap-3 @2xl:grid-cols-[minmax(13rem,17rem)_minmax(0,1fr)]">
+        <ol aria-label={t('helpers.view.steps')} className="space-y-1">
+          {rows.map((id) => (
+            <TraceRow
+              key={id}
+              step={p.steps.get(id)!}
+              title={p.titles.get(id) ?? ''}
+              avatar={p.avatars.get(id)}
+              mood={p.moods.get(id)}
+              bar={bars.get(id)}
+              selected={id === selected}
+              onSelect={() => setChosen(id)}
+            />
+          ))}
+        </ol>
+        {selected && step && (
+          <StepPanel
+            key={selected}
+            step={step}
+            node={p.graph.nodes.find((n) => n.id === selected)}
+            title={p.titles.get(selected) ?? ''}
+            received={p.handoffs.filter((h) => h.to_node === selected)}
+            errText={p.errText}
+            canResume={p.canResume}
+            resuming={p.resuming}
+            onResume={p.onResume}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TraceRow({
+  step: s,
+  title,
+  avatar,
+  mood,
+  bar,
+  selected,
+  onSelect,
+}: {
+  step: Step
+  title: string
+  avatar: AvatarSpec | undefined
+  mood: Mood | undefined
+  bar: { left: number; width: number } | undefined
+  selected: boolean
+  onSelect: () => void
 }) {
   const t = useT()
-  const rows = order.filter((id) => steps.has(id))
+  const rail = RAIL[s.status]
   return (
-    <ol aria-label={t('helpers.view.steps')} className="space-y-0">
-      {rows.map((id, i) => (
-        <Row
-          key={id}
-          last={i === rows.length - 1}
-          step={steps.get(id)!}
-          node={graph.nodes.find((n) => n.id === id)}
-          title={titles.get(id) ?? ''}
-          avatar={avatars.get(id)}
-          mood={moods.get(id)}
-          received={handoffs.filter((h) => h.to_node === id)}
-          errText={errText}
-          canResume={canResume}
-          resuming={resuming}
-          onResume={onResume}
-        />
-      ))}
-    </ol>
+    <li>
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onSelect}
+        className={cn(
+          'w-full space-y-1.5 rounded-lg border px-2.5 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
+          selected ? 'border-primary/40 bg-accent/60' : 'border-transparent hover:bg-muted/60',
+        )}
+      >
+        <span className="flex items-center gap-2">
+          <span className={cn('grid size-5 shrink-0 place-items-center rounded-full', rail.ring)}>
+            {rail.icon}
+            <span className="sr-only">{t(`helpers.run.status.${s.status}`)}</span>
+          </span>
+          {avatar && <Avatar spec={avatar} mood={mood} size={20} />}
+          <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+          {s.latency_ms != null && (
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {seconds(s.latency_ms)}
+            </span>
+          )}
+        </span>
+        {bar && (
+          <span aria-hidden className="relative block h-1 rounded-full bg-muted">
+            <span
+              className={cn(
+                'absolute inset-y-0 rounded-full',
+                s.status === 'failed' ? 'bg-destructive/70' : 'bg-primary/60',
+              )}
+              style={{ left: `${bar.left * 100}%`, width: `${bar.width * 100}%` }}
+            />
+          </span>
+        )}
+      </button>
+    </li>
   )
 }
 
@@ -214,38 +317,11 @@ function StepFailure({
   )
 }
 
-function StepDetails({ received, output }: { received: Handoff[]; output: Step['output'] }) {
-  const t = useT()
-  return (
-    <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
-      {received.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground">{t('helpers.ui.received')}</p>
-          {received.map((h) => (
-            <Result key={h.edge_id} value={h.payload} bare />
-          ))}
-        </div>
-      )}
-      <div className="space-y-1">
-        <p className="text-xs font-medium text-muted-foreground">{t('helpers.ui.produced')}</p>
-        {output ? (
-          <Result value={output} bare />
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('helpers.ui.nothing')}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function Row({
+function StepPanel({
   step: s,
   node,
   title,
-  avatar,
-  mood,
   received,
-  last,
   errText,
   canResume,
   resuming,
@@ -254,70 +330,60 @@ function Row({
   step: Step
   node: Graph['nodes'][number] | undefined
   title: string
-  avatar: AvatarSpec | undefined
-  mood: Mood | undefined
   received: Handoff[]
-  last: boolean
   errText: (code: string | null | undefined) => string
   canResume: boolean
   resuming: boolean
   onResume: () => void
 }) {
   const t = useT()
-  const failed = s.status === 'failed'
-  const [open, setOpen] = useState(failed)
-  const quiet = node?.type === 'output' || node?.type === 'input'
-  const hasDetails = !quiet && (s.output != null || received.length > 0)
-  const rail = RAIL[s.status]
+  const input = Object.assign({}, ...received.map((h) => h.payload)) as Record<string, unknown>
   return (
-    <li className="relative flex gap-3 pb-5 last:pb-0">
-      {!last && <span aria-hidden className="absolute top-8 bottom-0 left-3.5 w-px bg-border" />}
-      <span
-        className={cn('relative grid size-7 shrink-0 place-items-center rounded-full', rail.ring)}
-      >
-        {rail.icon}
-        <span className="sr-only">{t(`helpers.run.status.${s.status}`)}</span>
-      </span>
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="flex min-h-7 flex-wrap items-center gap-2">
-          {avatar && <Avatar spec={avatar} mood={mood} size={28} />}
-          <span className={cn('font-medium', quiet && 'text-muted-foreground')}>{title}</span>
-          {s.latency_ms != null && (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {seconds(s.latency_ms)}
-            </span>
-          )}
-          <span className="flex-1" />
-          {hasDetails && (
-            <Button
-              variant="ghost"
-              size="xs"
-              aria-expanded={open}
-              onClick={() => setOpen((o) => !o)}
-            >
-              {t('helpers.ui.details')}
-              <ChevronDown
-                data-icon="inline-end"
-                className={cn('transition-transform duration-200', open && 'rotate-180')}
-              />
-            </Button>
-          )}
-        </div>
-        {s.status === 'skipped' && (
-          <p className="text-sm text-muted-foreground">{t('helpers.step.skipped_why')}</p>
+    <section aria-label={title} className="min-w-0 space-y-3 rounded-xl border bg-card p-3 sm:p-4">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h3 className="font-semibold">{title}</h3>
+        <span className="text-xs text-muted-foreground">
+          {t(`helpers.run.status.${s.status}`)}
+          {s.latency_ms != null && ` · ${seconds(s.latency_ms)}`}
+          {s.model && ` · ${s.model}`}
+        </span>
+      </header>
+      {s.status === 'skipped' && (
+        <p className="text-sm text-muted-foreground">{t('helpers.step.skipped_why')}</p>
+      )}
+      {s.status === 'failed' && (
+        <StepFailure
+          node={node}
+          message={errText(s.error_code)}
+          canResume={canResume}
+          resuming={resuming}
+          onResume={onResume}
+        />
+      )}
+      {received.length > 0 && (
+        <Pane title={t('helpers.ui.received')}>
+          <Result value={input} bare />
+        </Pane>
+      )}
+      <Pane title={t('helpers.ui.produced')}>
+        {s.output ? (
+          <Result value={s.output} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{t('helpers.ui.nothing')}</p>
         )}
-        {failed && (
-          <StepFailure
-            node={node}
-            message={errText(s.error_code)}
-            canResume={canResume}
-            resuming={resuming}
-            onResume={onResume}
-          />
-        )}
-        {hasDetails && open && <StepDetails received={received} output={s.output} />}
-      </div>
-    </li>
+      </Pane>
+    </section>
+  )
+}
+
+function Pane({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h4>
+      {children}
+    </div>
   )
 }
 
@@ -512,7 +578,7 @@ export function LiveRunPanel({
       )}
       <ResultHero run={run} />
       <Details defaultOpen={live || run.status === 'failed'}>
-        <StepTimeline
+        <Trace
           order={orderOf(graph)}
           steps={started}
           graph={graph}

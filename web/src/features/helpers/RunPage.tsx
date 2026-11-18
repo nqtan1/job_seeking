@@ -33,7 +33,7 @@ import { DataFlowTable, EdgeInspector } from './FlowPanels'
 import { type Graph, orderOf } from './graph'
 import { when } from '@/lib/time'
 import { useLabels } from './lib'
-import { ResultHero, RunSummary, StepTimeline } from './RunParts'
+import { ResultHero, RunSummary, Trace } from './RunParts'
 import { StepsList } from './StepsList'
 import { Details } from './ui'
 import type { Selection } from './Canvas'
@@ -351,20 +351,10 @@ function View({ run }: { run: Run }) {
       {!graph ? (
         <ListSkeleton rows={3} />
       ) : (
-        <Details defaultOpen={run.status === 'failed'}>
-          <ReplayControls
-            run={run}
-            live={live}
-            replay={r.replay}
-            setReplay={r.setReplay}
-            frame={r.frame}
-            frameCount={r.frames.length}
-            playing={r.playing}
-          />
-
+        <>
           <section className="space-y-3">
-            <h2 className="text-base font-semibold tracking-tight">{t('helpers.view.steps')}</h2>
-            <StepTimeline
+            <h2 className="text-base font-semibold tracking-tight">{t('helpers.view.trace')}</h2>
+            <Trace
               order={orderOf(graph)}
               steps={stepOf}
               graph={graph}
@@ -379,25 +369,36 @@ function View({ run }: { run: Run }) {
             />
           </section>
 
-          <MapSection
-            run={run}
-            graph={graph}
-            specs={specs}
-            titles={titles}
-            avatars={avatars}
-            moods={r.shown}
-            packets={r.replayPackets ?? packets}
-            selection={selection}
-            onSelect={setSelection}
-          />
-          <DataFlowTable
-            graph={graph}
-            titles={titles}
-            avatars={avatars}
-            handoffs={run.handoffs}
-            onSelect={setSelection}
-          />
-        </Details>
+          <Details>
+            <ReplayControls
+              run={run}
+              live={live}
+              replay={r.replay}
+              setReplay={r.setReplay}
+              frame={r.frame}
+              frameCount={r.frames.length}
+              playing={r.playing}
+            />
+            <MapSection
+              run={run}
+              graph={graph}
+              specs={specs}
+              titles={titles}
+              avatars={avatars}
+              moods={r.shown}
+              packets={r.replayPackets ?? packets}
+              selection={selection}
+              onSelect={setSelection}
+            />
+            <DataFlowTable
+              graph={graph}
+              titles={titles}
+              avatars={avatars}
+              handoffs={run.handoffs}
+              onSelect={setSelection}
+            />
+          </Details>
+        </>
       )}
     </div>
   )
