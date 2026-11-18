@@ -145,6 +145,7 @@ register(
         ("items", "text", "count", "remaining"),
         cap=Cap(30, once=False),  # searches a day: each fetches up to 5 full offers
         ai_uses=1,  # reads the search sentence
+        chat=True,
     ),
     _find_offers,
 )

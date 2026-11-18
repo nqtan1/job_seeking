@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test'
 import { expectNoA11yViolations, places, signUp } from './support.ts'
 
-test('tools: the Tools page lists the tools and one opens on its own page', async ({ page }) => {
+test('tools: the Job search page lists the tools and one opens on its own page', async ({
+  page,
+}) => {
   await signUp(page, 'tools')
-  await places(page).getByRole('link', { name: 'Tools', exact: true }).click()
+  await places(page).getByRole('link', { name: 'Job search', exact: true }).click()
   const career = page.getByRole('region', { name: 'Career' })
   await expect(career.getByRole('link', { name: /^CV/ })).toBeVisible() // a career page
   await expect(career.getByRole('link', { name: /^Check my fit/ })).toBeVisible() // a registry tool

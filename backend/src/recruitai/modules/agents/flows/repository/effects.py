@@ -15,7 +15,7 @@ async def claim_effect(
     *,
     org_id: UUID,
     user_id: UUID,
-    run_id: UUID,
+    run_id: UUID | None,
     node_id: UUID,
     kind: str,
     daily_cap: int,
@@ -32,13 +32,18 @@ async def claim_effect(
             func.pg_advisory_xact_lock(func.hashtextextended(f"effects:{user_id}", 0))
         )
     )
-    if (
-        await session.execute(
-            select(FlowEffect.id).where(
-                FlowEffect.run_id == run_id, FlowEffect.node_id == node_id
+    # a chat action (ADR 0042, no run) is single-use by itself: it is only counted
+    done = (
+        run_id is not None
+        and (
+            await session.execute(
+                select(FlowEffect.id).where(
+                    FlowEffect.run_id == run_id, FlowEffect.node_id == node_id
+                )
             )
-        )
-    ).first():
+        ).first()
+    )
+    if done:
         return "done" if once else "new"
     today = func.date_trunc("day", func.now())
     used = (

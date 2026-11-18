@@ -304,3 +304,42 @@ async def statuses_for_jobs(
         )
     )
     return {job_id: status for job_id, status in rows.all() if job_id is not None}
+
+
+async def stale_applied(
+    session: AsyncSession, *, org_id: UUID, before: datetime, limit: int
+) -> list[tuple[str, str | None, datetime]]:
+    """(company, title, last status change) of "applied" cards not moved since ``before``, oldest first."""
+    last = func.coalesce(func.max(ApplicationEvent.at), Application.updated_at)
+    rows = await session.execute(
+        select(Application.company_name, Application.job_title, last)
+        .outerjoin(
+            ApplicationEvent,
+            (ApplicationEvent.application_id == Application.id)
+            & (ApplicationEvent.org_id == org_id),
+        )
+        .where(Application.org_id == org_id, Application.status == "applied")
+        .group_by(Application.id)
+        .having(last < before)
+        .order_by(last)
+        .limit(limit)
+    )
+    return [(c, t, at) for c, t, at in rows.all()]
+
+
+async def upcoming_interviews(
+    session: AsyncSession, *, org_id: UUID, after: datetime, limit: int
+) -> list[tuple[str, str | None, datetime]]:
+    rows = await session.execute(
+        select(
+            Application.company_name, Application.job_title, Application.interview_at
+        )
+        .where(
+            Application.org_id == org_id,
+            Application.status.not_in(("rejected", "ghosted")),
+            Application.interview_at >= after,
+        )
+        .order_by(Application.interview_at)
+        .limit(limit)
+    )
+    return [(c, t, at) for c, t, at in rows.all() if at is not None]

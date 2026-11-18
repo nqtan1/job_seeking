@@ -145,7 +145,7 @@ async def list_tools(
     return [
         ToolOut.of(t)
         for t in registry.all().values()
-        if t.flag is None or getattr(settings, t.flag)
+        if (t.flag is None or getattr(settings, t.flag)) and not t.chat_only
     ]
 
 

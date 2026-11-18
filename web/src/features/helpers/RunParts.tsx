@@ -24,7 +24,8 @@ import {
   useRerun,
   useResumeRun,
 } from './api'
-import { relTime, seconds, when } from './lib'
+import { relTime, when } from '@/lib/time'
+import { seconds } from './lib'
 import { Details, Result, RunStatusBadge } from './ui'
 import { Link } from 'react-router'
 import { ErrorMessage } from '@/components/ErrorMessage'

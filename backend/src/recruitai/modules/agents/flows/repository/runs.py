@@ -372,6 +372,26 @@ async def has_waiting_run(session: AsyncSession, *, schedule_id: UUID) -> bool:
     ).first() is not None
 
 
+async def ended_top_run(
+    session: AsyncSession, *, org_id: UUID, run_id: UUID
+) -> tuple[UUID | None, str, str | None, str] | None:
+    """(user id, status, error code, flow name) of a top-level run that is done or failed, read
+    from the database (not the session's copy); else None."""
+    row = (
+        await session.execute(
+            select(FlowRun.user_id, FlowRun.status, FlowRun.error_code, Flow.name)
+            .join(Flow, Flow.id == FlowRun.flow_id)
+            .where(
+                FlowRun.id == run_id,
+                FlowRun.org_id == org_id,
+                FlowRun.parent_run_id.is_(None),
+                FlowRun.status.in_(("done", "failed")),
+            )
+        )
+    ).one_or_none()
+    return None if row is None else (row[0], row[1], row[2], row[3])
+
+
 async def run_status(
     session: AsyncSession, *, org_id: UUID, run_id: UUID
 ) -> str | None:

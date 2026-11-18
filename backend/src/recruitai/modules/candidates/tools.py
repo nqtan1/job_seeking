@@ -34,3 +34,31 @@ async def _profile(c: Call) -> dict[str, Any]:
 
 
 register_reader("profile", _profile)
+
+
+async def _remember(c: Call) -> dict[str, str]:
+    added = await candidates.add_fact(c.db, org_id=c.org_id, text=c.get("text"))
+    return {"status": "saved" if added else "already saved"}
+
+
+register(
+    Tool(
+        "remember",
+        "career",
+        (("text", True),),
+        ("status",),
+        effect="write",
+        chat=True,
+        chat_only=True,  # no page text a flow read goes into memory
+    ),
+    _remember,
+)
+
+
+async def _memory(c: Call) -> dict[str, str] | None:
+    """A helper's "memory" source. The coach fences it as untrusted, not this reader."""
+    facts = await candidates.get_memory(c.db, org_id=c.org_id)
+    return {"text": "\n".join(f"- {f['text']}" for f in facts)} if facts else None
+
+
+register_reader("memory", _memory)

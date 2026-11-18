@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from recruitai.ai.gateway import LLMGateway
 from recruitai.ai.prompts import helper
 from recruitai.config import get_settings
+from recruitai.core import inbox
 from recruitai.core import tools as registry
 from recruitai.core.errors import AppError
 from recruitai.core.tasks import enqueue
@@ -140,12 +141,13 @@ async def execute(
         logger.error("flow run stopped", extra={"error_type": type(exc).__name__})
         try:
             await db.rollback()
-            await flow_repo.fail_active_run(
+            if await flow_repo.fail_active_run(
                 db,
                 org_id=org_id,
                 run_id=run_id,
                 code="run_failed" if crashed else "worker_stopped",
-            )
+            ):
+                await _report(db, org_id=org_id, run_id=run_id)
             await db.commit()
         except BaseException:  # noqa: BLE001  (best effort; the stale-run sweep is the backstop)
             logger.error("could not record the stop of a flow run")
@@ -155,8 +157,29 @@ async def execute(
     await flow_repo.finish_run(
         db, org_id=org_id, run_id=run_id, status="done", result=result
     )
+    await _report(db, org_id=org_id, run_id=run_id)
     await db.commit()
     _log_end(run_id, began, "done")
+
+
+async def _report(db: AsyncSession, *, org_id: UUID, run_id: UUID) -> None:
+    """Tell the user in their Assistant conversation (ADR 0042, ``core.inbox``), in the caller's
+    transaction: top-level runs only (not for_each children), and only a run this call ended (a
+    cancel that landed first stays silent). The text holds the flow's name and a fixed code."""
+    ended = await flow_repo.ended_top_run(db, org_id=org_id, run_id=run_id)
+    if ended is None:
+        return
+    user_id, status, code, name = ended
+    if user_id is None:
+        return
+    await inbox.post(
+        db,
+        org_id=org_id,
+        user_id=user_id,
+        kind="run_done" if status == "done" else "run_failed",
+        params={"name": name, "code": code or ""},
+        link=f"/automations/runs/{run_id}",
+    )
 
 
 def _log_end(run_id: UUID, began: float, status: str | None = None) -> None:
@@ -191,6 +214,7 @@ async def _fail(
     await flow_repo.finish_run(
         db, org_id=org_id, run_id=run_id, status="failed", error_code=code
     )
+    await _report(db, org_id=org_id, run_id=run_id)
     await db.commit()
     raise _Stop
 

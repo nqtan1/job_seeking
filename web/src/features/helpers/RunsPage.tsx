@@ -10,7 +10,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { cn } from 'cn'
 import { type RunListItem, type RunSummary, isLive, useAllRuns, useFlows, useRerun } from './api'
-import { relTime, when } from './lib'
+import { relTime, when } from '@/lib/time'
 import { RunStatusBadge } from './ui'
 
 const FILTERS = ['all', 'running', 'waiting', 'done', 'failed'] as const

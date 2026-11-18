@@ -2,11 +2,23 @@
 No photo, birth date, gender, nationality or marital status by design (ARCHITECTURE.md §11.3)."""
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    Field,
+    StringConstraints,
+    model_validator,
+)
+
+from recruitai.core.tools import visible
 
 SCHEMA_VERSION = 1
+MEMORY_SCHEMA_VERSION = 1  # of ``user_memory.facts``
+MEMORY_MAX_FACTS = 30
+MEMORY_MAX_CHARS = 200
 
 
 # Emails are plain ``str`` (not ``EmailStr``): vLLM guided decoding rejects the JSON-schema
@@ -123,3 +135,40 @@ class ProfileUpdate(BaseModel):
 
 class ExtractRequest(BaseModel):
     document_id: UUID
+
+
+def fact_text(text: str) -> str:
+    """The one rule for a fact's text, wherever it comes from (Settings, the chat): visible
+    characters on one line (PA-11)."""
+    return " ".join(visible(text).split())
+
+
+FactText = Annotated[
+    str,
+    BeforeValidator(lambda v: fact_text(v) if isinstance(v, str) else v),
+    StringConstraints(min_length=1, max_length=MEMORY_MAX_CHARS),
+]
+
+
+class FactIn(BaseModel):
+    """A fact sent by the client: without an id it is new and gets one."""
+
+    id: UUID | None = None
+    text: FactText
+    created_at: datetime | None = None
+
+
+class Fact(BaseModel):
+    id: UUID
+    text: str
+    created_at: datetime
+
+
+class MemoryIn(BaseModel):
+    """PUT body: the full list, replacing the stored one."""
+
+    facts: list[FactIn] = Field(max_length=MEMORY_MAX_FACTS)
+
+
+class MemoryOut(BaseModel):
+    facts: list[Fact]

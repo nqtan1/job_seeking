@@ -29,7 +29,18 @@ MAX_AGENTS_PER_ORG = 20
 MAX_AGENTS_EVER = 100  # archived ones count too: archiving is not a way around the cap
 PROFILE_CHARS, JOB_CHARS, FIT_CHARS = 6_000, 10_000, 4_000
 _IDENTITY_KEYS = ("personal_info", "references")
-COACH_TOOLS = DEFAULT_TOOLS  # the coach's chat tools: a helper's default set too
+# the coach's chat tools: a helper's reads by default, plus the writes it proposes (ADR 0042)
+COACH_TOOLS = [
+    *DEFAULT_TOOLS,
+    "remember",
+    "add_to_tracker",
+    "save_note",
+    "letter_draft",
+    "fit_check",
+    "find_offers",
+    "set_up_job_hunter",
+    "run_routine",
+]
 
 
 def default_avatar(agent_id: UUID) -> Avatar:
@@ -221,6 +232,15 @@ async def context_for(
                     "This helper needs a fit analysis: add a “Check my fit” step before it."
                 )
             out["fit"] = compact_json(fit)[:FIT_CHARS]
+    # ADR 0042: plain text the owner can see and edit in Settings
+    for source in ("memory", "situation"):
+        got = (
+            await registry.read(source, call)
+            if source in spec.context_sources
+            else None
+        )
+        if got:
+            out[source] = got["text"]
     return out
 
 

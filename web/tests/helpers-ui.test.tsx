@@ -134,7 +134,7 @@ test('the gallery starts a helper from a template', async () => {
   const user = userEvent.setup()
   mocks.POST.mockResolvedValueOnce({ data: { ...AGENT, id: 'new1' } })
   open(<HelpersPage />, '/helpers', '/helpers')
-  expect(await screen.findByText('No helper yet')).toBeInTheDocument()
+  expect(await screen.findByText('No agent yet')).toBeInTheDocument()
   await user.click(screen.getAllByRole('button', { name: /^Use:/ })[0])
   await waitFor(() => expect(mocks.POST).toHaveBeenCalled())
   expect(mocks.POST.mock.calls[0][1].body.name).toBe('Follow-up writer')

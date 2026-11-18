@@ -110,7 +110,7 @@ export function ToolsPage() {
     }))
     .filter((s) => s.cards.length > 0)
   return (
-    <Page title={t('nav.tools')}>
+    <Page title={t('nav.search')}>
       <Input
         type="search"
         aria-label={t('tools.search')}

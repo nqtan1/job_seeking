@@ -98,6 +98,12 @@ source_modules = ["recruitai.core.tools"]
 forbidden_modules = ["recruitai.modules"]
 
 [[tool.importlinter.contracts]]
+name = "core.inbox has no dependency on modules"
+type = "forbidden"
+source_modules = ["recruitai.core.inbox"]
+forbidden_modules = ["recruitai.modules"]
+
+[[tool.importlinter.contracts]]
 name = "config does not depend on main"
 type = "forbidden"
 source_modules = ["recruitai.config"]

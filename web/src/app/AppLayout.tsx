@@ -20,7 +20,7 @@ const readCollapsed = () => {
   }
 }
 
-/** The shell: the left column holds the five places and the account; the main area takes the rest.
+/** The shell: the left column holds the places and the account; the main area takes the rest.
  *  On a phone the places are a bottom tab bar and the column is a drawer. */
 export function AppLayout() {
   const t = useT()

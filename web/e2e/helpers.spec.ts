@@ -17,10 +17,10 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
   await expect(places(page)).toBeVisible()
-  await places(page).getByRole('link', { name: 'Agents' }).click()
+  await places(page).getByRole('link', { name: 'Studio' }).click()
 
   // A helper from a template opens in the editor with its own id and character.
-  await expect(page.getByText('No helper yet')).toBeVisible()
+  await expect(page.getByText('No agent yet')).toBeVisible()
   await page.getByRole('button', { name: /^Use:/ }).first().click()
   await expect(page.getByLabel('Instructions')).toContainText('follow-up')
   await page.locator('summary', { hasText: 'Advanced' }).click() // the rarely used settings
@@ -37,13 +37,13 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
 
   // A flow: Start → Mira → Result, built in the Steps view.
   await page.goto('/automations')
-  await page.getByRole('button', { name: 'New automation' }).first().click()
+  await page.getByRole('button', { name: 'New flow' }).first().click()
   await page.getByLabel('Name').fill('Follow-up flow')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await page.getByRole('button', { name: 'Steps', exact: true }).click()
   await addMenu(page).click()
   await page.getByRole('button', { name: 'Mira' }).click()
-  await expect(page.getByRole('button', { name: 'Mira Helper' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mira Agent' })).toBeVisible()
   // A just-added helper refuses links until its details have loaded ("still loading"): retry.
   await expect(async () => {
     await page.getByLabel('Send to…').first().selectOption({ label: 'Mira' }) // Start → Mira
@@ -145,8 +145,8 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
 
   // "Start an automation for each" needs its target: the checks say so until one is chosen.
   await addMenu(page).click()
-  await page.getByRole('button', { name: /Start an automation for each/ }).click()
-  await expect(page.getByText('Choose the automation to start.')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: /Start a flow for each/ }).click()
+  await expect(page.getByText('Choose the flow to start.')).toBeVisible({ timeout: 15_000 })
 
   // Contacts: add someone to email; they stay "waiting for their OK" until they confirm.
   await page.goto('/automations?tab=contacts')

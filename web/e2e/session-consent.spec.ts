@@ -48,7 +48,7 @@ test('consent, withdrawal, step-up before export, and the idle sign-out', async 
   await signUp(page, false)
 
   // Consent: unticked, disabled until ticked, then radars are on.
-  await places(page).getByRole('link', { name: 'Tools' }).click()
+  await places(page).getByRole('link', { name: 'Job search' }).click()
   await page.getByRole('region', { name: 'Career' }).getByRole('link', { name: /^Jobs/ }).click()
   await page
     .getByRole('navigation', { name: 'Section' })

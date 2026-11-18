@@ -28,7 +28,7 @@ MAX_FIELDS = 12
 MAX_INPUT_CHARS = (
     20_000  # per run, all inputs together (also the hand-off cap, ADR 0031)
 )
-ContextSource = Literal["profile", "job", "fit"]
+ContextSource = Literal["profile", "job", "fit", "memory", "situation"]
 # The tools a helper may call in chat (ADR 0039): registry ids with chat=True. 12 at most (AP-01
 # spike: tool choice slips beyond that). The default is the coach's own set.
 MAX_TOOLS = 12
@@ -36,8 +36,9 @@ DEFAULT_TOOLS = ["profile_read", "job_lookup", "fit_read", "web_search"]
 
 
 def chat_tool(id: str) -> bool:
+    """Writes and capped tools too: in chat they only propose, the user confirms (ADR 0042)."""
     tool = registry.all().get(id)
-    return tool is not None and tool.chat and tool.cap is None  # no daily cap in chat
+    return tool is not None and tool.chat and tool.effect != "outside"
 
 
 FieldName = Annotated[str, StringConstraints(pattern=NAME)]

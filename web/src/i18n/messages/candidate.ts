@@ -59,7 +59,7 @@ export const candidate = defineMessages({
     'candidate.p.update_cv': 'Update CV',
     'candidate.p.edit': 'Edit profile',
     'candidate.p.empty_title': 'No profile yet',
-    'candidate.p.empty_desc': 'Your CV powers job matching, letters and coaching.',
+    'candidate.p.empty_desc': 'Your CV powers job matching, letters and the assistant.',
   },
   fr: {
     'candidate.l.name': 'Nom',
@@ -121,7 +121,7 @@ export const candidate = defineMessages({
     'candidate.p.edit': 'Modifier le profil',
     'candidate.p.empty_title': 'Pas encore de profil',
     'candidate.p.empty_desc':
-      'Votre CV alimente la recherche d’offres, les lettres et le coaching.',
+      'Votre CV alimente la recherche d’offres, les lettres et l’assistant.',
   },
   vi: {
     'candidate.l.name': 'Họ tên',
@@ -181,6 +181,6 @@ export const candidate = defineMessages({
     'candidate.p.update_cv': 'Cập nhật CV',
     'candidate.p.edit': 'Chỉnh sửa hồ sơ',
     'candidate.p.empty_title': 'Chưa có hồ sơ',
-    'candidate.p.empty_desc': 'CV của bạn giúp ghép việc, viết thư và huấn luyện nghề nghiệp.',
+    'candidate.p.empty_desc': 'CV của bạn giúp ghép việc, viết thư và giúp trợ lý hiểu bạn.',
   },
 })

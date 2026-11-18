@@ -7,10 +7,10 @@ import { expectNoA11yViolations, narrow, places } from './support.ts'
 const FIXTURES = path.resolve(import.meta.dirname, '../../backend/tests/fixtures')
 const SHOTS = process.env.E2E_SHOTS
 
-/** Open a career screen through the menu: Tools, its card, then its tab when the page has several. */
+/** Open a career screen through the menu: Job search, its card, then its tab when the page has several. */
 const CARD: Record<string, string> = { Profile: 'CV', Radar: 'Jobs', Tracker: 'Applications' }
 const go = async (page: Page, name: string) => {
-  await places(page).getByRole('link', { name: 'Tools' }).click()
+  await places(page).getByRole('link', { name: 'Job search' }).click()
   await page
     .getByRole('region', { name: 'Career' })
     .getByRole('link', { name: new RegExp(`^${CARD[name] ?? name}`) })

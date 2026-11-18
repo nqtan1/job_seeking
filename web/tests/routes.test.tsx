@@ -9,7 +9,7 @@ vi.mock('@/features/auth/SessionGuard', () => ({ SessionGuard: () => null }))
 vi.mock('@/features/coach/ChatPage', () => ({ ChatPage: () => <h1>Coach</h1> }))
 vi.mock('@/features/today/TodayPage', () => ({ TodayPage: () => <h1>Next step</h1> }))
 const recent = vi.hoisted(() => ({ chats: [] as unknown[], letters: [] as unknown[] }))
-vi.mock('@/features/coach/api', () => ({ useConversations: () => ({ data: recent.chats }) }))
+vi.mock('@/features/coach/api', () => ({ useChats: () => ({ data: recent.chats }) }))
 vi.mock('@/features/letters/api', () => ({ useLetters: () => ({ data: recent.letters }) }))
 vi.mock('@/features/job-search/api', () => ({
   useJobs: () => ({ data: [{ id: 'j1', data: { company: { name: 'Café Acme' } } }] }),
@@ -29,6 +29,7 @@ vi.mock('@/features/letters/LettersPage', () => ({ LettersPage: () => <h1>Letter
 vi.mock('@/features/letters/LetterPage', () => ({ LetterPage: () => <h1>Letter</h1> }))
 vi.mock('@/features/fit/FitPage', () => ({ FitPage: () => <h1>Fit</h1> }))
 vi.mock('@/features/tools/ToolsPage', () => ({ ToolsPage: () => <h1>Tools</h1> }))
+vi.mock('@/features/helpers/AutomationsPage', () => ({ AutomationsPage: () => <h1>Flows</h1> }))
 
 const open = (path: string) =>
   render(<RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />)
@@ -44,14 +45,14 @@ test('protected routes: loading while unresolved, redirect when signed out', asy
   expect(await screen.findByText('Sign in page')).toBeInTheDocument()
 })
 
-test('signed in: index is Home, the menu switches places, career pages sit in Tools with their tabs, /signin bounces home', async () => {
+test('signed in: index is Home, the menu switches places, career pages sit in Job search with their tabs, /signin bounces home', async () => {
   state.user = { email: 'a@b.co' }
   const { unmount } = open('/')
   expect(await screen.findByRole('heading', { name: 'Next step' })).toBeInTheDocument()
   expect(screen.queryByRole('navigation', { name: 'Section' })).not.toBeInTheDocument()
   const main = within(screen.getByRole('navigation', { name: 'Main' }))
-  expect(main.getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Tools']) // helpers off
-  main.getByRole('link', { name: 'Tools' }).click()
+  expect(main.getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Job search']) // helpers off
+  main.getByRole('link', { name: 'Job search' }).click()
   expect(await screen.findByRole('heading', { name: 'Tools' })).toBeInTheDocument()
   unmount()
 
@@ -62,27 +63,34 @@ test('signed in: index is Home, the menu switches places, career pages sit in To
   tabs.getByRole('link', { name: 'Letters' }).click()
   expect(await screen.findByRole('heading', { name: 'Letters' })).toBeInTheDocument()
   const nav = within(screen.getByRole('navigation', { name: 'Main' }))
-  expect(nav.getByRole('link', { name: 'Tools' })).toHaveAttribute('aria-current', 'page')
+  expect(nav.getByRole('link', { name: 'Job search' })).toHaveAttribute('aria-current', 'page')
   unmount()
 
   open('/signin')
   expect(await screen.findByRole('heading', { name: 'Next step' })).toBeInTheDocument()
 })
 
-test('with helpers on: Agents, Flows and Activity join the menu, and the coach chat sits in Agents', async () => {
+test('with helpers on: Activity and Studio join the menu, the coach chat sits in Home, Studio holds Agents and Flows', async () => {
   state.user = { email: 'a@b.co' }
   state.me = { is_admin: false, helpers_enabled: true }
-  open('/chat')
+  const { unmount } = open('/chat')
   expect(await screen.findByRole('heading', { name: 'Coach' })).toBeInTheDocument()
   const main = within(screen.getByRole('navigation', { name: 'Main' }))
   expect(main.getAllByRole('link').map((a) => a.textContent)).toEqual([
     'Home',
-    'Tools',
-    'Agents',
-    'Flows',
+    'Job search',
     'Activity',
+    'Studio',
   ])
-  expect(main.getByRole('link', { name: 'Agents' })).toHaveAttribute('aria-current', 'page')
+  expect(main.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+  unmount()
+
+  open('/automations')
+  const tabs = within(await screen.findByRole('navigation', { name: 'Section' }))
+  expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Agents', 'Flows'])
+  expect(
+    within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Studio' }),
+  ).toHaveAttribute('aria-current', 'page')
   state.me = { is_admin: false }
 })
 

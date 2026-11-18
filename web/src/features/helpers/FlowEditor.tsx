@@ -229,7 +229,7 @@ function Workspace({
   fit: number
   setGraph: Dispatch<SetStateAction<Graph>>
   setSelection: (s: Selection) => void
-  setRefused: (r: Refusal) => void
+  setRefused: (r: Refusal | null) => void
   setLiveId: (id: string | null) => void
 }) {
   return (

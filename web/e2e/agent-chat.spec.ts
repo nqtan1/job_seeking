@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test'
 import { expectNoA11yViolations, places, saveProfileFromCv, signUp } from './support.ts'
 
-test('agent chat: from the Agents page, chat with a helper and get a reply', async ({ page }) => {
+test('agent chat: from the Studio Agents tab, chat with a helper and get a reply', async ({
+  page,
+}) => {
   await signUp(page, 'chat')
   await saveProfileFromCv(page) // a chat needs a profile
 
-  // A helper from a template, then back to the Agents page.
-  await places(page).getByRole('link', { name: 'Agents', exact: true }).click()
+  // A helper from a template, then back to the Agents tab.
+  await places(page).getByRole('link', { name: 'Studio', exact: true }).click()
   await page.getByRole('button', { name: 'Use: Follow-up writer' }).click()
   await expect(page).toHaveURL(/\/helpers\/[0-9a-f-]{36}/)
   await page.goto('/helpers')

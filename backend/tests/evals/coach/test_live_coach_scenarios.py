@@ -172,8 +172,8 @@ async def _run(db, settings: Settings, s: Scenario) -> Result:
         db, org_id=ctx.org_id, conversation_id=conversation.id
     )
     meta = stored[1].meta
-    queries = list(meta["queries"]) or queries
-    citations = len(meta["citations"])
+    queries = list(meta.queries) or queries
+    citations = len(meta.citations)
     steps = [d["tool"] for n, d in got if n == "step" and d["status"] == "done"]
     rows = (
         await db.execute(

@@ -28,9 +28,9 @@ test('New helper asks for the type first and creates a built-in helper from the 
   const user = userEvent.setup()
   renderWithApp(<HelpersPage />, { at: '/helpers', path: '/helpers' })
 
-  expect(await screen.findByText('No helper yet')).toBeInTheDocument()
+  expect(await screen.findByText('No agent yet')).toBeInTheDocument()
   expect(screen.getAllByRole('button', { name: /^Use:/ })).toHaveLength(5) // templates stay
-  await user.click(screen.getByRole('button', { name: 'New helper' }))
+  await user.click(screen.getByRole('button', { name: 'New agent' }))
   for (const n of ['Cover letter', 'Interview prep', 'CV advice', 'Write my own'])
     expect(screen.getByRole('button', { name: new RegExp(n) })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /Interview prep/ }))
@@ -64,7 +64,10 @@ test('agents are cards: the Coach first with its chat tools, then each agent wit
 
   await screen.findByText('Mira')
   const [coach, mira] = [...screen.getByRole('list', { name: 'Agents' }).children] as HTMLElement[]
-  expect(within(coach).getByRole('link', { name: 'Chat: Coach' })).toHaveAttribute('href', '/chat')
+  expect(within(coach).getByRole('link', { name: 'Chat: Assistant' })).toHaveAttribute(
+    'href',
+    '/chat',
+  )
   // the coach's own tools; an agent's tools from the list, a new pack tool by its id
   await waitFor(() =>
     expect(within(coach).getByRole('list', { name: 'Tools' })).toHaveTextContent(

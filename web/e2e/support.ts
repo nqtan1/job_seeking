@@ -21,9 +21,9 @@ export async function signUp(page: Page, prefix: string) {
   await expect(places(page)).toBeVisible()
 }
 
-/** Tools, then a career card (its name starts the link text). */
+/** Job search, then a career card (its name starts the link text). */
 export async function career(page: Page, card: string) {
-  await places(page).getByRole('link', { name: 'Tools', exact: true }).click()
+  await places(page).getByRole('link', { name: 'Job search', exact: true }).click()
   await page
     .getByRole('region', { name: 'Career' })
     .getByRole('link', { name: new RegExp(`^${card}`) })
@@ -46,7 +46,8 @@ export async function expectNoA11yViolations(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   // runs in the browser (a string: this tsconfig has no DOM types); an endless animation must not hang
   await page.evaluate(`Promise.race([
-    Promise.all(document.getAnimations().map((a) => a.finished)),
+    // a cancelled animation (its element left the page) rejects: settled all the same
+    Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))),
     new Promise((done) => setTimeout(done, 2000)),
   ])`)
   const { violations } = await new AxeBuilder({ page })

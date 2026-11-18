@@ -11,6 +11,17 @@ export const settings = defineMessages({
     'settings.free': 'Free',
     'settings.plan_hint': 'Paid plans are coming soon.',
     'settings.rem.title': 'Email reminders',
+    'settings.memory.title': 'Memory',
+    'settings.memory.desc':
+      'The assistant and the agents you allow use them. Never shown to anyone else.',
+    'settings.memory.empty':
+      'Nothing yet. Ask the assistant to remember something, or add it below.',
+    'settings.memory.add_label': 'Add a fact',
+    'settings.memory.add': 'Add',
+    'settings.memory.save': 'Save',
+    'settings.memory.cancel': 'Cancel',
+    'settings.memory.edit_aria': 'Edit “{text}”',
+    'settings.memory.delete': 'Delete',
     'settings.rem.desc':
       'One short email in the morning when an application has had no reply for a week, or an interview is 3 days or 1 day away. Nothing else, and never marketing.',
     'settings.rem.send': 'Send me reminders',
@@ -18,7 +29,7 @@ export const settings = defineMessages({
       'Monday goal: mention 3 quality applications a week (no streaks, no pressure)',
     'settings.ai.title': 'AI activity',
     'settings.ai.desc':
-      'When you use the AI (CV reading, fit, letters, coach), the text it needs is sent to the AI provider for that request only. Below, the latest calls made for you: what was used, never your text.',
+      'When you use the AI (CV reading, fit, letters, assistant), the text it needs is sent to the AI provider for that request only. Below, the latest calls made for you: what was used, never your text.',
     'settings.ai.none': 'No AI calls yet.',
     'settings.ai.failed': ' (failed)',
     'settings.ai.row': '{when} · {tokens} tokens',
@@ -58,6 +69,17 @@ export const settings = defineMessages({
     'settings.free': 'Gratuite',
     'settings.plan_hint': 'Des formules payantes arrivent bientôt.',
     'settings.rem.title': 'Rappels par e-mail',
+    'settings.memory.title': 'Mémoire',
+    'settings.memory.desc':
+      'L’assistant et les agents que vous autorisez les utilisent. Jamais montrés à qui que ce soit d’autre.',
+    'settings.memory.empty':
+      'Rien pour l’instant. Demandez à l’assistant de retenir quelque chose, ou ajoutez-le ci-dessous.',
+    'settings.memory.add_label': 'Ajouter un élément',
+    'settings.memory.add': 'Ajouter',
+    'settings.memory.save': 'Enregistrer',
+    'settings.memory.cancel': 'Annuler',
+    'settings.memory.edit_aria': 'Modifier « {text} »',
+    'settings.memory.delete': 'Supprimer',
     'settings.rem.desc':
       'Un court e-mail le matin lorsqu’une candidature reste sans réponse depuis une semaine, ou qu’un entretien a lieu dans 3 jours ou 1 jour. Rien d’autre, et jamais de publicité.',
     'settings.rem.send': 'M’envoyer des rappels',
@@ -65,7 +87,7 @@ export const settings = defineMessages({
       'Objectif du lundi : mentionner 3 candidatures de qualité par semaine (pas de séries, pas de pression)',
     'settings.ai.title': 'Activité de l’IA',
     'settings.ai.desc':
-      'Quand vous utilisez l’IA (lecture du CV, adéquation, lettres, coach), le texte nécessaire est envoyé au fournisseur d’IA pour cette seule requête. Ci-dessous, les derniers appels effectués pour vous : ce qui a été utilisé, jamais votre texte.',
+      'Quand vous utilisez l’IA (lecture du CV, adéquation, lettres, assistant), le texte nécessaire est envoyé au fournisseur d’IA pour cette seule requête. Ci-dessous, les derniers appels effectués pour vous : ce qui a été utilisé, jamais votre texte.',
     'settings.ai.none': 'Aucun appel IA pour l’instant.',
     'settings.ai.failed': ' (échec)',
     'settings.ai.row': '{when} · {tokens} tokens',
@@ -106,6 +128,16 @@ export const settings = defineMessages({
     'settings.free': 'Miễn phí',
     'settings.plan_hint': 'Các gói trả phí sắp ra mắt.',
     'settings.rem.title': 'Nhắc việc qua e-mail',
+    'settings.memory.title': 'Ghi nhớ',
+    'settings.memory.desc':
+      'Trợ lý và các agent bạn cho phép sẽ dùng chúng. Không bao giờ hiển thị cho người khác.',
+    'settings.memory.empty': 'Chưa có gì. Hãy nhờ trợ lý ghi nhớ một điều, hoặc thêm vào bên dưới.',
+    'settings.memory.add_label': 'Thêm một mục',
+    'settings.memory.add': 'Thêm',
+    'settings.memory.save': 'Lưu',
+    'settings.memory.cancel': 'Hủy',
+    'settings.memory.edit_aria': 'Sửa “{text}”',
+    'settings.memory.delete': 'Xóa',
     'settings.rem.desc':
       'Một e-mail ngắn vào buổi sáng khi một đơn ứng tuyển một tuần chưa có phản hồi, hoặc buổi phỏng vấn còn 3 ngày hay 1 ngày nữa. Không gì khác, và không bao giờ quảng cáo.',
     'settings.rem.send': 'Gửi nhắc việc cho tôi',
@@ -113,7 +145,7 @@ export const settings = defineMessages({
       'Mục tiêu thứ Hai: nhắc 3 đơn ứng tuyển chất lượng mỗi tuần (không chuỗi ngày, không áp lực)',
     'settings.ai.title': 'Hoạt động AI',
     'settings.ai.desc':
-      'Khi bạn dùng AI (đọc CV, đánh giá mức phù hợp, thư, huấn luyện), văn bản cần thiết chỉ được gửi cho nhà cung cấp AI cho yêu cầu đó. Bên dưới là các lần gọi gần nhất của bạn: những gì đã dùng, không bao giờ là văn bản của bạn.',
+      'Khi bạn dùng AI (đọc CV, đánh giá mức phù hợp, thư, trợ lý), văn bản cần thiết chỉ được gửi cho nhà cung cấp AI cho yêu cầu đó. Bên dưới là các lần gọi gần nhất của bạn: những gì đã dùng, không bao giờ là văn bản của bạn.',
     'settings.ai.none': 'Chưa có lần gọi AI nào.',
     'settings.ai.failed': ' (thất bại)',
     'settings.ai.row': '{when} · {tokens} token',

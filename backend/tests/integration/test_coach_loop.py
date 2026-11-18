@@ -15,6 +15,8 @@ from recruitai.ai.gateway import (
 )
 from recruitai.ai.prompts.coach import PROMPT_VERSION
 from recruitai.core.errors import UpstreamUnavailable
+from recruitai.modules.agents.helpers import service as helpers
+from recruitai.modules.agents.helpers.schemas import MAX_TOOLS
 from recruitai.modules.coach import guard, service
 from tests.integration.coach_replies import events, with_tools
 from tests.integration.test_letters_service import _tenant
@@ -60,12 +62,9 @@ async def test_the_model_reads_the_job_then_answers(
     assert got[1][1]["status"] == "running" and got[2][1]["status"] == "done"
     assert got[1][1]["label"] == "Reading the job"
     first, second = fake_llm.converse_calls
-    assert {t.name for t in first["tools"]} == {
-        "get_job",
-        "get_profile",
-        "get_fit_analysis",
-        "web_research",
-    }
+    offered = {t.name for t in first["tools"]}
+    assert {"get_job", "get_profile", "get_fit_analysis", "web_research"} <= offered
+    assert len(offered) <= len(helpers.COACH_TOOLS) <= MAX_TOOLS  # AP-01: 12 at most
     last = second["turns"][-1]
     assert (
         isinstance(last, ToolResultTurn)
@@ -74,7 +73,7 @@ async def test_the_model_reads_the_job_then_answers(
     meta = (
         await service.list_messages(db_session, org_id=org.id, conversation_id=conv.id)
     )[1].meta
-    assert meta["steps"][0]["tool"] == "get_job" and meta["degraded"] == []
+    assert meta.steps[0].tool == "get_job" and meta.degraded == []
 
 
 async def test_web_research_returns_sources_and_the_suggestion_chip(
@@ -109,7 +108,7 @@ async def test_web_research_returns_sources_and_the_suggestion_chip(
     meta = (
         await service.list_messages(db_session, org_id=org.id, conversation_id=conv.id)
     )[1].meta
-    assert meta["queries"] == ["doctolib culture"] and meta["search_suggestions_html"]
+    assert meta.queries == ["doctolib culture"] and meta.search_suggestions_html
 
 
 async def test_a_search_with_the_candidates_identity_never_runs(
@@ -151,7 +150,7 @@ async def test_a_failing_search_degrades_the_answer_with_a_visible_note(
     meta = (
         await service.list_messages(db_session, org_id=org.id, conversation_id=conv.id)
     )[1].meta
-    assert "web_unavailable" in meta["degraded"]
+    assert "web_unavailable" in meta.degraded
 
 
 async def test_an_unknown_tool_and_the_step_limit_cannot_run_away(
@@ -307,11 +306,11 @@ async def _helper_chat(db: AsyncSession, tools: list[str], job: bool):
     return org, conv
 
 
-async def test_after_outside_content_a_turn_cannot_write_or_send(
+async def test_after_outside_content_a_write_is_only_proposed_marked_untrusted(
     db_session: AsyncSession, fake_llm: FakeLLMGateway, note_it: list[str]
 ):
-    """A web page can talk the model into anything: once one was read, no write or outside tool
-    runs in that turn (refused in code, the model sees why)."""
+    """A web page can talk the model into anything: what it asks for after one was read is a card
+    marked untrusted, never a write (ADR 0042)."""
     org, conv = await _helper_chat(db_session, ["web_search", "note_it"], job=False)
     fake_llm.queue_turn(
         PROMPT_VERSION,
@@ -328,26 +327,114 @@ async def test_after_outside_content_a_turn_cannot_write_or_send(
         "note_it",
     }  # the helper's own list, from the registry
     assert note_it == []
-    refused = fake_llm.converse_calls[2]["turns"][-1].results[0].result
-    assert refused["error"] == "not_after_untrusted_content"
+    proposal = next(d for n, d in got if n == "proposal")
+    assert proposal["untrusted"] is True and proposal["args"] == {"text": "pwned"}
+    told = fake_llm.converse_calls[2]["turns"][-1].results[0].result
+    assert told["status"] == "proposed" and told["action_id"] == proposal["action_id"]
     assert got[-1][0] == "done"
 
 
-async def test_a_job_ad_in_the_prompt_already_blocks_writes(
+async def test_a_job_ad_marks_free_text_proposals_untrusted_and_a_search_keeps_identity_out(
     db_session: AsyncSession, fake_llm: FakeLLMGateway, note_it: list[str]
 ):
-    org, conv = await _helper_chat(db_session, ["note_it"], job=True)
-    fake_llm.queue_turn(PROMPT_VERSION, [_call("note_it", text="from the ad")])
+    """The job ad is outsider text from the first call on: a free-text card is flagged, a card
+    bound to the job the user chose is not. A search query with the candidate's email: no card."""
+    org, conv = await _helper_chat(
+        db_session, ["note_it", "fit_check", "find_offers"], job=True
+    )
+    fake_llm.queue_turn(
+        PROMPT_VERSION,
+        [
+            ToolCalls(
+                [
+                    ToolCall("note_it", {"text": "from the ad"}),
+                    ToolCall("fit_check", {}),
+                    ToolCall("find_offers", {"query": "data lucas@example.test"}),
+                ],
+                raw=None,
+            )
+        ],
+    )
     fake_llm.queue_turn(PROMPT_VERSION, [TextDelta("Fait.")])
 
-    await _run(db_session, fake_llm, org, conv)
+    got = await _run(db_session, fake_llm, org, conv)
 
-    assert note_it == []  # the job ad is outsider text from the first call on
-    refused = fake_llm.converse_calls[1]["turns"][-1].results[0].result
-    assert refused["error"] == "not_after_untrusted_content"
+    assert note_it == []
+    cards = [(d["tool"], d["untrusted"]) for n, d in got if n == "proposal"]
+    assert cards == [("note_it", True), ("fit_check", False)]
+    told = fake_llm.converse_calls[1]["turns"][-1].results[2].result
+    assert told["error"] == "personal_data"
 
 
-def test_a_tool_with_a_daily_cap_is_never_offered_in_chat(monkeypatch):
+async def test_a_write_tool_is_proposed_never_run_and_its_card_is_stored(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway
+):
+    """remember, add_to_tracker...: a pending action and a server-written card; the model only
+    hears that the user must confirm. Bad args propose nothing; three cards a turn at most."""
+    from recruitai.modules.applications import service as applications
+    from recruitai.modules.candidates import service as candidates
+
+    org, conv = await _setup(db_session, job=False)
+    fake_llm.queue_turn(
+        PROMPT_VERSION,
+        [
+            ToolCalls(
+                [
+                    ToolCall(
+                        "remember", {"text": "Prefers remote work", "extra": "dropped"}
+                    ),
+                    ToolCall("add_to_tracker", {"title": "no company"}),
+                ],
+                raw=None,
+            )
+        ],
+    )
+    fake_llm.queue_turn(
+        PROMPT_VERSION,
+        [
+            ToolCalls(
+                [
+                    ToolCall(
+                        "add_to_tracker", {"company": "Acme", "title": "Data Engineer"}
+                    ),
+                    ToolCall(
+                        "save_note", {"title": "Acme", "body": "Call back Monday"}
+                    ),
+                    ToolCall("find_offers", {"query": "data engineer Paris"}),
+                ],
+                raw=None,
+            )
+        ],
+    )
+    fake_llm.queue_turn(PROMPT_VERSION, [TextDelta("Confirmez dans l'app.")])
+
+    got = await _run(db_session, fake_llm, org, conv)
+
+    cards = [d for n, d in got if n == "proposal"]
+    assert [(c["tool"], c["summary"], c["untrusted"]) for c in cards] == [
+        ("remember", "Remember: Prefers remote work", False),
+        ("add_to_tracker", "Add Data Engineer @ Acme to your tracker", False),
+        ("save_note", "Save a note: Acme", False),
+    ]
+    assert cards[0]["args"] == {"text": "Prefers remote work"}
+    assert await candidates.get_memory(db_session, org_id=org.id) == []
+    assert await applications.list_applications(db_session, org_id=org.id) == []
+    turns = fake_llm.converse_calls[-1]["turns"]  # user, calls, results, calls, results
+    first, second = turns[2].results, turns[4].results
+    assert first[0].result["status"] == "proposed"
+    assert first[1].result["error"] == "invalid_arguments"
+    assert second[2].result["error"] == "proposal_limit"
+    labels = {d["label"] for n, d in got if n == "step"}
+    assert labels == {"Preparing an action"}
+    meta = (
+        await service.list_messages(db_session, org_id=org.id, conversation_id=conv.id)
+    )[1].meta
+    assert [a.status for a in meta.actions] == ["pending"] * 3
+
+
+def test_a_capped_tool_is_offered_as_a_proposal_and_an_outside_one_never(
+    monkeypatch,
+):
     from pydantic import ValidationError
 
     from recruitai.core import tools as registry
@@ -355,11 +442,21 @@ def test_a_tool_with_a_daily_cap_is_never_offered_in_chat(monkeypatch):
     from recruitai.modules.coach import tools as chat
 
     capped = registry.Tool("capped", "web", (), ("x",), cap=registry.Cap(5), chat=True)
+    away = registry.Tool("away", "messages", (), ("x",), effect="outside", chat=True)
     monkeypatch.setitem(registry._TOOLS, "capped", capped)
+    monkeypatch.setitem(registry._TOOLS, "away", away)
+    VersionSpec(instructions="x", tools=["capped"])  # a helper may have it
     with pytest.raises(ValidationError):  # a 422 through the API
-        VersionSpec(instructions="x", tools=["capped"])
-    assert chat.specs(["capped"], with_tools(), job_attached=True, function_calling=True, web=True) == []  # fmt: skip
-    assert chat.tool_of("capped") is None
+        VersionSpec(instructions="x", tools=["away"])
+    offered = chat.specs(
+        ["capped", "away"],
+        with_tools(),
+        job_attached=True,
+        function_calling=True,
+        web=True,
+    )
+    assert [s.name for s in offered] == ["capped"]
+    assert chat.proposed(capped) and chat.tool_of("away") is None
 
 
 async def test_a_provider_5xx_before_the_first_chunk_is_retried_once(

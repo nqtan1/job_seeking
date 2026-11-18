@@ -10,16 +10,21 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.core.errors import NotFound
 from recruitai.modules.agents.flows import graph as g
 from recruitai.modules.agents.flows import service as flows
 from recruitai.modules.agents.flows.models import Flow, FlowVersion
-from recruitai.modules.agents.flows.schemas import FlowCreate
+from recruitai.modules.agents.flows.schemas import FlowCreate, FlowVersionCreate
 from recruitai.modules.agents.helpers import service
 from recruitai.modules.agents.helpers.schemas import AgentCreate, VersionSpec
 
 HUNTER = "Job hunter"
 PROCESSOR = "Offer processor"
-MIN_FIT = "60"
+MIN_FIT = 60
+PROCESSOR_TEXT = (
+    "One saved offer: fit check, then letter, interview prep, CV advice and a tracker card if "
+    "the fit is above {}."
+)
 ROLE_HELPERS = (
     (
         "letter",
@@ -46,7 +51,7 @@ def _field(name: str, label: str, required: bool = False) -> dict[str, Any]:
     return {"name": name, "label": label, "required": required}
 
 
-def _processor(helpers: dict[str, tuple[UUID, UUID]]) -> g.Graph:
+def _processor(helpers: dict[str, tuple[UUID, UUID]], min_fit: int) -> g.Graph:
     n = {
         k: uuid4()
         for k in (
@@ -74,7 +79,7 @@ def _processor(helpers: dict[str, tuple[UUID, UUID]]) -> g.Graph:
         {"id": n["start"], "type": "input", "position": {"x": 0, "y": 200},
          "fields": [_field("title", "Job title"), _field("company", "Company")]},
         {"id": n["fit"], "type": "tool", "tool": "fit_check", "position": {"x": 280, "y": 200}},
-        {"id": n["cond"], "type": "condition", "op": "gt", "value": MIN_FIT,
+        {"id": n["cond"], "type": "condition", "op": "gt", "value": str(min_fit),
          "position": {"x": 560, "y": 200}},
         *agents,
         {"id": n["track"], "type": "tool", "tool": "add_to_tracker", "position": {"x": 840, "y": 450}},
@@ -118,7 +123,7 @@ def _hunter(processor_id: UUID) -> g.Graph:
 
 
 async def install_job_hunter(
-    db: AsyncSession, *, org_id: UUID
+    db: AsyncSession, *, org_id: UUID, min_fit: int = MIN_FIT
 ) -> tuple[Flow, FlowVersion]:
     """Creates the three built-in helpers and the two automations. Asking twice returns the hunter
     that already exists instead of making a second set."""
@@ -144,8 +149,8 @@ async def install_job_hunter(
         org_id=org_id,
         data=FlowCreate(
             name=PROCESSOR,
-            description="One saved offer: fit check, then letter, interview prep, CV advice and a tracker card if the fit is above 60.",
-            graph=_processor(helpers),
+            description=PROCESSOR_TEXT.format(min_fit),
+            graph=_processor(helpers, min_fit),
             note="job hunter",
         ),
     )
@@ -159,3 +164,48 @@ async def install_job_hunter(
             note="job hunter",
         ),
     )
+
+
+async def set_min_fit(
+    db: AsyncSession, *, org_id: UUID, hunter: FlowVersion, min_fit: int
+) -> bool:
+    """The fit above which the processor prepares an offer, saved as a new version when it
+    changed. False: the user edited the automations and there is no such step to set."""
+    each = next(
+        (
+            n
+            for n in flows.graph_of(hunter).nodes
+            if isinstance(n, g.ToolNode) and n.flow_id
+        ),
+        None,
+    )
+    if each is None or each.flow_id is None:
+        return False
+    try:
+        processor, version = await flows.get_detail(
+            db, org_id=org_id, flow_id=each.flow_id
+        )
+    except NotFound:
+        return False
+    graph = flows.graph_of(version)
+    cond = next((n for n in graph.nodes if isinstance(n, g.ConditionNode)), None)
+    if cond is None or processor.archived_at is not None:
+        return False
+    if cond.value != str(min_fit):
+        cond.value = str(min_fit)
+        await flows.add_version(
+            db,
+            org_id=org_id,
+            flow_id=processor.id,
+            data=FlowVersionCreate(
+                based_on=processor.current_version, graph=graph, note="job hunter"
+            ),
+        )
+        await flows.patch_flow(
+            db,
+            org_id=org_id,
+            flow_id=processor.id,
+            name=None,
+            description=PROCESSOR_TEXT.format(min_fit),
+        )
+    return True

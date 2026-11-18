@@ -22,6 +22,9 @@ from recruitai.modules.agents.flows.models import (
 )
 from recruitai.modules.agents.flows.schemas import FlowCreate, FlowVersionCreate
 
+# the daily-cap ledger of outside effects, shared with chat actions (ADR 0042): one budget
+claim_effect = repo.claim_effect
+
 MAX_FLOWS_PER_ORG = 20
 MAX_FLOWS_EVER = 100  # archived ones count too: archiving is not a way around the cap
 
@@ -63,7 +66,7 @@ async def check(
         if not isinstance(n, g.ToolNode):
             continue
         tool = registry.get(n.tool)
-        if tool.flag and not getattr(settings, tool.flag):
+        if tool.chat_only or (tool.flag and not getattr(settings, tool.flag)):
             issues.append(g.Issue("tool_off", "This tool is switched off.", n.id))
         if tool.starts_runs:
             issues += await _target_issues(db, org_id, flow_id, n)

@@ -317,10 +317,15 @@ export function GraphView({
   fit: number
   setGraph: SetGraph
   setSelection: (s: Selection) => void
-  setRefused: (r: Refusal) => void
+  setRefused: (r: Refusal | null) => void
 }) {
   const { titles, avatars } = labels
   const { moods, packets, statusLabels } = live
+  // an edit that went through ends any earlier refusal: "still loading" must not outlive the retry
+  const edit: SetGraph = (g) => {
+    setRefused(null)
+    setGraph(g)
+  }
   return view === 'canvas' ? (
     <Suspense fallback={<ListSkeleton rows={4} />}>
       <Canvas
@@ -334,7 +339,7 @@ export function GraphView({
         readOnly={locked}
         selection={selection}
         fitSignal={fit}
-        onGraph={setGraph}
+        onGraph={edit}
         onSelect={setSelection}
         onRefuse={setRefused}
       />
@@ -348,7 +353,7 @@ export function GraphView({
       moods={locked ? moods : undefined}
       readOnly={locked}
       selection={selection}
-      onGraph={setGraph}
+      onGraph={edit}
       onSelect={setSelection}
       onRefuse={setRefused}
     />

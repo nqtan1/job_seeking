@@ -616,7 +616,7 @@ function JobRow({ e, showCompany, locale }: { e: Entry; showCompany: boolean; lo
               {letters[0] ? t('jobs.open_letter') : t('jobs.write_letter')}
             </Link>
             <Link
-              to={`/?job=${j.id}`}
+              to={`/chat?job=${j.id}`}
               className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
               {t('jobs.discuss')}

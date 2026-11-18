@@ -1,5 +1,5 @@
 import '@/features/helpers/lib'
-import { Check, CircleDot, History, RotateCcw, Save, Shuffle } from 'lucide-react'
+import { Check, CircleDot, History, RotateCcw, Save } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router'
 import { useI18n, useT } from '@/i18n'
@@ -21,10 +21,11 @@ import {
   usePatchAgent,
 } from './api'
 import { Avatar } from './Avatar'
-import { AvatarPicker, InstructionsField, Receives, SpecForm, TryPanel } from './HelperForm'
-import { clearDraft, loadDraft, relTime, saveDraft } from './lib'
+import { InstructionsField, Receives, SpecForm, TryPanel } from './HelperForm'
+import { relTime } from '@/lib/time'
+import { clearDraft, loadDraft, saveDraft } from './lib'
 import { ConflictBanner, LeaveGuard } from './ui'
-import { type AvatarSpec, safe, shuffled } from './avatar'
+import { type AvatarSpec, safe } from './avatar'
 import type { VersionSpec } from './graph'
 
 type Fields = { name: string; description: string; avatar: AvatarSpec; spec: VersionSpec }
@@ -197,7 +198,7 @@ function NameRow({ draft, setDraft }: { draft: Fields; setDraft: (f: Fields) => 
   return (
     <>
       <div className="flex flex-wrap items-end gap-3">
-        <Avatar spec={draft.avatar} size={56} label={t('helpers.avatar')} />
+        <Avatar spec={draft.avatar} size={56} />
         <div className="min-w-48 flex-1 space-y-1.5">
           <Label htmlFor="h-name">{t('helpers.name')}</Label>
           <Input
@@ -207,14 +208,6 @@ function NameRow({ draft, setDraft }: { draft: Fields; setDraft: (f: Fields) => 
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           />
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setDraft({ ...draft, avatar: shuffled() })}
-        >
-          <Shuffle data-icon="inline-start" />
-          {t('helpers.shuffle')}
-        </Button>
       </div>
       {role !== 'custom' && (
         <p className="-mt-2 text-xs text-muted-foreground">
@@ -258,7 +251,6 @@ function Advanced({
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           />
         </div>
-        <AvatarPicker value={draft.avatar} onChange={(avatar) => setDraft({ ...draft, avatar })} />
         <SpecForm spec={draft.spec} onChange={setSpec} />
         <Receives spec={draft.spec} />
         <div className="space-y-1.5">

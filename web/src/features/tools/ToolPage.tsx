@@ -17,10 +17,10 @@ export function ToolPage() {
   useEffect(() => track('tool_opened'), [id])
   const tools = useTools()
   const tool = tools.data?.find((x) => x.id === id && x.pack !== 'core')
-  const back = { to: '/tools', label: t('nav.tools') }
+  const back = { to: '/tools', label: t('nav.search') }
   if (!tool)
     return (
-      <Page title={t('nav.tools')} back={back}>
+      <Page title={t('nav.search')} back={back}>
         <ErrorMessage error={tools.error} />
         {tools.isLoading ? (
           <ListSkeleton />

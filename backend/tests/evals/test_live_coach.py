@@ -140,7 +140,7 @@ async def test_model_uses_tools_and_web_research_and_keeps_pii_out_of_queries(
     )
     meta = stored[1].meta
     print(
-        f"\nLIVE coach loop: events={names}\nsteps={steps}\nqueries={meta['queries']}\n{reply[:600]}"
+        f"\nLIVE coach loop: events={names}\nsteps={steps}\nqueries={meta.queries}\n{reply[:600]}"
     )
     assert names[0] == "context" and names[-1] == "done"
     assert len(reply) > 200

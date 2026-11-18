@@ -24,7 +24,7 @@ test('a built-in role keeps its own prompt and format: only extra preferences ar
   })
   expect(screen.getByText('What you give it')).toBeInTheDocument()
 
-  await user.selectOptions(screen.getByLabelText('Type of helper'), 'letter')
+  await user.selectOptions(screen.getByLabelText('Type of agent'), 'letter')
   expect(onChange).toHaveBeenCalledWith(
     expect.objectContaining({
       role: 'letter',

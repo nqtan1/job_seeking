@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +30,29 @@ class CandidateProfile(Base):
     schema_version: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class UserMemory(Base):
+    """Facts the user asked the assistant to remember (ADR 0042), one row per org. Its own table:
+    a user with no CV still has memory. ``facts``: [{id, text, created_at}]."""
+
+    __tablename__ = "user_memory"
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    )
+    facts: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    schema_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("1")
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

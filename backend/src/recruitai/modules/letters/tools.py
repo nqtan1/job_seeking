@@ -38,6 +38,7 @@ register(
         ai_uses=2,  # the fit analysis (none if one exists) and the letter
         needs_job=True,
         page="/letters",
+        chat=True,
     ),
     _letter_draft,
 )

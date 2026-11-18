@@ -444,3 +444,241 @@ async def test_a_switched_off_or_archived_helper_cannot_be_chatted_with(
     assert (await client.post(BASE, headers=ada, json={"agent_id": agent_id})).status_code == 404  # fmt: skip
     assert (await client.post(turn, headers=ada, json={"content": "hi"})).status_code == 404  # fmt: skip
     assert fake_llm.converse_calls == []
+
+
+async def _proposed(
+    app: FastAPI, client: httpx.AsyncClient, llm: FakeLLMGateway, who, *texts: str
+) -> tuple[str, list[str]]:
+    """A conversation whose reply proposed one ``remember`` per text: (its id, the action ids)."""
+    from recruitai.ai.gateway import TextDelta, ToolCall, ToolCalls
+    from recruitai.config import get_settings
+    from tests.integration.coach_replies import with_tools
+
+    app.dependency_overrides[get_settings] = with_tools
+    await _add_profile(client, llm, who)
+    conv_id = (await client.post(BASE, headers=who, json={})).json()["id"]
+    calls = [ToolCall("remember", {"text": t}) for t in texts]
+    llm.queue_turn(PROMPT_VERSION, [ToolCalls(calls, raw=None)])
+    llm.queue_turn(PROMPT_VERSION, [TextDelta("Confirmez.")])
+    resp = await client.post(
+        f"{BASE}/{conv_id}/messages", headers=who, json={"content": "Retiens ça"}
+    )
+    return conv_id, [d["action_id"] for n, d in parse_sse(resp.text) if n == "proposal"]
+
+
+async def _facts(client: httpx.AsyncClient, who) -> list[str]:
+    memory = await client.get("/api/v1/profile/memory", headers=who)
+    return [f["text"] for f in memory.json()["facts"]]
+
+
+async def _cards(client: httpx.AsyncClient, who, conv_id: str) -> list[dict]:
+    messages = (await client.get(f"{BASE}/{conv_id}/messages", headers=who)).json()
+    return [a for m in messages if m["meta"] for a in m["meta"]["actions"]]
+
+
+async def test_confirm_runs_the_action_once_and_the_card_survives_a_reload(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada
+):
+    texts = ("Prefers remote work", "One too many")
+    conv_id, [action_id, late] = await _proposed(app, client, fake_llm, ada, *texts)
+    assert await _facts(client, ada) == []  # proposed, not run
+    url = f"{BASE}/{conv_id}/actions/{action_id}"
+
+    done = await client.post(url, headers=ada, json={"decision": "confirm"})
+
+    assert done.status_code == 200
+    assert done.json() == {"status": "done", "result": None, "code": None}
+    assert await _facts(client, ada) == ["Prefers remote work"]
+    for decision in ("confirm", "cancel"):  # single use: a double click runs nothing
+        again = await client.post(url, headers=ada, json={"decision": decision})
+        assert again.status_code == 409 and again.json()["code"] == "action_decided"
+    assert await _facts(client, ada) == ["Prefers remote work"]
+    messages = (await client.get(f"{BASE}/{conv_id}/messages", headers=ada)).json()
+    assert messages[-1]["role"] == "assistant"
+    assert messages[-1]["content"] == "Done: Remember: Prefers remote work."
+    card = messages[1]["meta"]["actions"][0]
+    assert card["action_id"] == action_id and card["status"] == "done"
+    newest = await client.get(
+        f"{BASE}/{conv_id}/messages", headers=ada, params={"latest": True, "limit": 2}
+    )
+    assert [m["content"] for m in newest.json()] == [  # the newest two, oldest first
+        "Confirmez.",
+        "Done: Remember: Prefers remote work.",
+    ]
+
+    # a full memory is a fixed code at confirm, never a 500
+    full = {"facts": [{"text": f"fact {n}"} for n in range(30)]}
+    await client.put("/api/v1/profile/memory", headers=ada, json=full)
+    refused = await client.post(
+        f"{BASE}/{conv_id}/actions/{late}", headers=ada, json={"decision": "confirm"}
+    )
+    assert refused.json() == {"status": "failed", "result": None, "code": "memory_full"}
+
+
+async def test_cancel_or_a_regenerated_reply_drops_the_action(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada
+):
+    texts = ("Hates Java", "Likes Go")
+    conv_id, [action_id, other] = await _proposed(app, client, fake_llm, ada, *texts)
+    url = f"{BASE}/{conv_id}/actions"
+
+    resp = await client.post(
+        f"{url}/{action_id}", headers=ada, json={"decision": "cancel"}
+    )
+
+    assert resp.json() == {"status": "cancelled", "result": None, "code": None}
+    cards = await _cards(client, ada, conv_id)
+    assert [c["status"] for c in cards] == ["cancelled", "pending"]
+
+    # the regenerated reply's cards leave with it: the pending one can no longer run
+    fake_llm.queue_stream(PROMPT_VERSION, ["Autre réponse."])
+    assert (await client.post(f"{BASE}/{conv_id}/regenerate", headers=ada)).is_success
+    late = await client.post(
+        f"{url}/{other}", headers=ada, json={"decision": "confirm"}
+    )
+    assert late.status_code == 409 and late.json()["code"] == "action_decided"
+    assert await _facts(client, ada) == []
+
+
+async def test_an_action_older_than_15_minutes_expires(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, db_session
+):
+    conv_id, [action_id] = await _proposed(app, client, fake_llm, ada, "Likes Rust")
+    await db_session.execute(
+        text("UPDATE coach_actions SET created_at = now() - interval '16 minutes'")
+    )
+    assert [c["status"] for c in await _cards(client, ada, conv_id)] == ["expired"]
+    url = f"{BASE}/{conv_id}/actions/{action_id}"
+
+    for _ in range(2):  # stays expired
+        resp = await client.post(url, headers=ada, json={"decision": "confirm"})
+        assert resp.status_code == 410 and resp.json()["code"] == "action_expired"
+    assert await _facts(client, ada) == []
+
+
+async def test_another_org_cannot_decide_or_see_an_action(
+    app: FastAPI, client: httpx.AsyncClient, fake_llm: FakeLLMGateway, ada, bob
+):
+    conv_id, [action_id] = await _proposed(app, client, fake_llm, ada, "Speaks Thai")
+    bob_conv, _ = await _proposed(app, client, fake_llm, bob)
+
+    for conv in (conv_id, bob_conv):  # Ada's action, Bob's token
+        resp = await client.post(
+            f"{BASE}/{conv}/actions/{action_id}",
+            headers=bob,
+            json={"decision": "confirm"},
+        )
+        assert resp.status_code == 404
+    assert await _facts(client, ada) == [] and await _facts(client, bob) == []
+    assert [c["status"] for c in await _cards(client, ada, conv_id)] == ["pending"]
+
+
+async def test_the_daily_cap_is_checked_at_confirm_in_the_flows_ledger(
+    app: FastAPI,
+    client: httpx.AsyncClient,
+    fake_llm: FakeLLMGateway,
+    ada,
+    db_session,
+    monkeypatch,
+):
+    """One budget for flows and chat: a confirmed action is a flow_effects row (no run)."""
+    from dataclasses import replace
+
+    from recruitai.core import tools as registry
+
+    capped = replace(registry.get("remember"), cap=registry.Cap(1))
+    monkeypatch.setitem(registry._TOOLS, "remember", capped)
+    conv_id, ids = await _proposed(app, client, fake_llm, ada, "Likes Go", "Likes C")
+    decide = lambda i: client.post(
+        f"{BASE}/{conv_id}/actions/{i}", headers=ada, json={"decision": "confirm"}
+    )
+
+    assert (await decide(ids[0])).json()["status"] == "done"
+    second = (await decide(ids[1])).json()
+
+    assert second == {"status": "failed", "result": None, "code": "cap_reached"}
+    assert await _facts(client, ada) == ["Likes Go"]
+    rows = (
+        await db_session.execute(
+            text("SELECT run_id, node_id::text, kind FROM flow_effects")
+        )
+    ).all()
+    assert rows == [(None, ids[0], "remember")]
+
+
+async def test_a_card_holds_exactly_what_runs_and_dies_with_its_helper(
+    app: FastAPI,
+    client: httpx.AsyncClient,
+    fake_llm: FakeLLMGateway,
+    ada,
+    monkeypatch,
+):
+    """Args are stored as the handler uses them (clamped, defaulted, hidden characters gone), in
+    the event, the stored card and the run. A helper archived since: its cards no longer run."""
+    from recruitai.ai.gateway import TextDelta, ToolCall, ToolCalls
+    from recruitai.config import get_settings
+    from recruitai.core import tools as registry
+    from tests.integration.coach_replies import with_tools
+
+    app.dependency_overrides[get_settings] = with_tools
+    await _add_profile(client, fake_llm, ada)
+    spec = {"instructions": "Help.", "tools": ["set_up_job_hunter", "remember"]}
+    agent = (
+        await client.post(
+            "/api/v1/agents", headers=ada, json={"name": "Mira", "spec": spec}
+        )
+    ).json()
+    conv_id = (
+        await client.post(BASE, headers=ada, json={"agent_id": agent["id"]})
+    ).json()["id"]
+    fact = "Prefers remote roles " + "and small teams " * 8  # past the old 80-char cut
+    fake_llm.queue_turn(
+        PROMPT_VERSION,
+        [
+            ToolCalls(
+                [
+                    ToolCall(
+                        "set_up_job_hunter",
+                        {
+                            "query": "data\u200b engineer\u202e",
+                            "hour": "25",
+                            "min_fit": "abc",
+                        },
+                    ),
+                    ToolCall("remember", {"text": fact}),
+                ],
+                raw=None,
+            )
+        ],
+    )
+    fake_llm.queue_turn(PROMPT_VERSION, [TextDelta("Confirmez.")])
+    resp = await client.post(
+        f"{BASE}/{conv_id}/messages", headers=ada, json={"content": "Go"}
+    )
+    hunter, remember = [d for n, d in parse_sse(resp.text) if n == "proposal"]
+
+    runs = {"query": "data engineer", "min_fit": "60", "hour": "23"}
+    assert hunter["args"] == runs
+    assert remember["summary"] == f"Remember: {fact.strip()}"
+    assert [c["args"] for c in await _cards(client, ada, conv_id)] == [
+        runs,
+        {"text": fact.strip()},
+    ]
+    seen: list[dict[str, str]] = []
+
+    async def hunter_handler(c: registry.Call) -> dict[str, str]:
+        seen.append(dict(c.values))
+        return {"text": "ok"}
+
+    monkeypatch.setitem(registry._HANDLERS, "set_up_job_hunter", hunter_handler)
+    url = f"{BASE}/{conv_id}/actions"
+    confirm = {"decision": "confirm"}
+    done = await client.post(f"{url}/{hunter['action_id']}", headers=ada, json=confirm)
+    assert done.json()["status"] == "done" and seen == [runs]
+
+    assert (
+        await client.delete(f"/api/v1/agents/{agent['id']}", headers=ada)
+    ).status_code == 204
+    off = await client.post(f"{url}/{remember['action_id']}", headers=ada, json=confirm)
+    assert off.json() == {"status": "failed", "result": None, "code": "tool_off"}
+    assert await _facts(client, ada) == []

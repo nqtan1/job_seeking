@@ -285,6 +285,24 @@ export interface paths {
         patch: operations["update_profile_api_v1_profile_patch"];
         trace?: never;
     };
+    "/api/v1/profile/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Memory */
+        get: operations["read_memory_api_v1_profile_memory_get"];
+        /** Replace Memory */
+        put: operations["replace_memory_api_v1_profile_memory_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs": {
         parameters: {
             query?: never;
@@ -830,6 +848,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/coach/assistant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Assistant
+         * @description The user's Assistant conversation, where run results and reminders land (created on first
+         *     call; needs a profile). Read its messages with ``GET .../conversations/{id}/messages``.
+         */
+        get: operations["get_assistant_api_v1_coach_assistant_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/coach/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -884,6 +923,27 @@ export interface paths {
         put?: never;
         /** Regenerate */
         post: operations["regenerate_api_v1_coach_conversations__conversation_id__regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/coach/conversations/{conversation_id}/actions/{action_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Action
+         * @description Confirm (runs it, once) or cancel an action the chat proposed. 409 once decided, 410 after
+         *     15 minutes. A refused or failed run is a 200 with ``status: failed`` and a fixed ``code``.
+         */
+        post: operations["decide_action_api_v1_coach_conversations__conversation_id__actions__action_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2015,6 +2075,33 @@ export interface components {
              */
             truncate_at_chars: number;
         };
+        /** ActionDecision */
+        ActionDecision: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "confirm" | "cancel";
+        };
+        /**
+         * ActionOutcome
+         * @description ``done``: ``result`` holds the ids the run produced (``run_id``, ``flow_id``...), if any.
+         *     ``failed``: ``code`` says why (``tool_off``, ``cap_reached``, ``memory_full``, ``no_job``,
+         *     ``tool_failed``...).
+         */
+        ActionOutcome: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "cancelled" | "failed";
+            /** Result */
+            result?: {
+                [key: string]: string;
+            } | null;
+            /** Code */
+            code?: string | null;
+        };
         /** AdminStats */
         AdminStats: {
             users: components["schemas"]["UserCounts"];
@@ -2883,6 +2970,12 @@ export interface components {
             /** Agent Id */
             agent_id: string | null;
             /**
+             * Kind
+             * @default chat
+             * @enum {string}
+             */
+            kind: "chat" | "assistant";
+            /**
              * Started At
              * Format: date-time
              */
@@ -2906,6 +2999,13 @@ export interface components {
             id: string;
             /** Job Id */
             job_id: string | null;
+            /**
+             * Kind
+             * @description 'assistant': the inbox conversation (GET /coach/assistant).
+             * @default chat
+             * @enum {string}
+             */
+            kind: "chat" | "assistant";
             /**
              * Title
              * @description The first message, clipped; null if none was sent.
@@ -3174,6 +3274,33 @@ export interface components {
              * Format: uuid
              */
             document_id: string;
+        };
+        /** Fact */
+        Fact: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Text */
+            text: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * FactIn
+         * @description A fact sent by the client: without an id it is new and gets one.
+         */
+        FactIn: {
+            /** Id */
+            id?: string | null;
+            /** Text */
+            text: string;
+            /** Created At */
+            created_at?: string | null;
         };
         /**
          * FileJobIn
@@ -3578,6 +3705,22 @@ export interface components {
             missing: string[];
             /** Summary */
             summary?: string | null;
+        };
+        /**
+         * InboxMeta
+         * @description An item the app posted to the Assistant conversation (ADR 0042): no model wrote it.
+         */
+        InboxMeta: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "run_done" | "run_failed" | "reminder";
+            /**
+             * Link
+             * @description An app path, e.g. /automations/runs/{id}.
+             */
+            link?: string | null;
         };
         /** InputField */
         InputField: {
@@ -4027,6 +4170,19 @@ export interface components {
             cv_review_enabled: boolean;
             session: components["schemas"]["SessionPolicyOut"];
         };
+        /**
+         * MemoryIn
+         * @description PUT body: the full list, replacing the stored one.
+         */
+        MemoryIn: {
+            /** Facts */
+            facts: components["schemas"]["FactIn"][];
+        };
+        /** MemoryOut */
+        MemoryOut: {
+            /** Facts */
+            facts: components["schemas"]["Fact"][];
+        };
         /** MessageIn */
         MessageIn: {
             /** Content */
@@ -4071,6 +4227,12 @@ export interface components {
              * @description Notice codes: web_unavailable, step_limit, turn_timeout, tool_error.
              */
             degraded?: string[];
+            /**
+             * Actions
+             * @description Actions this reply proposed; confirm or cancel with POST .../actions/{action_id}.
+             */
+            actions?: components["schemas"]["ProposalMeta"][];
+            inbox?: components["schemas"]["InboxMeta"] | null;
         };
         /** MessageOut */
         MessageOut: {
@@ -4461,6 +4623,43 @@ export interface components {
              * @enum {string}
              */
             step: "to_apply" | "applied" | "in_review" | "interview" | "offer" | "rejected" | "ghosted";
+        };
+        /**
+         * ProposalMeta
+         * @description A card the reply proposed (ADR 0042). The SSE ``proposal`` event carries the same fields
+         *     except ``status`` and ``code``. In ``GET .../messages`` both are read live from the action, so
+         *     a card re-renders with its current state after a reload (pending older than 15 min: expired).
+         *     ``summary`` is built by the server from ``args``; ``untrusted``: suggested after outside content
+         *     (a web page, a job ad) was read.
+         */
+        ProposalMeta: {
+            /**
+             * Action Id
+             * Format: uuid
+             */
+            action_id: string;
+            /** Tool */
+            tool: string;
+            /** Summary */
+            summary: string;
+            /** Args */
+            args: {
+                [key: string]: string;
+            };
+            /** Untrusted */
+            untrusted: boolean;
+            /**
+             * Status
+             * @default pending
+             * @enum {string}
+             */
+            status: "pending" | "done" | "cancelled" | "failed" | "expired";
+            /** Code */
+            code?: string | null;
+            /** Result */
+            result?: {
+                [key: string]: string;
+            } | null;
         };
         /** QueryIn */
         QueryIn: {
@@ -5648,7 +5847,7 @@ export interface components {
              * Context Sources
              * @default []
              */
-            context_sources: ("profile" | "job" | "fit")[];
+            context_sources: ("profile" | "job" | "fit" | "memory" | "situation")[];
             /**
              * @default {
              *       "kind": "text",
@@ -6718,6 +6917,92 @@ export interface operations {
             };
             /** @description The requested resource was not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    read_memory_api_v1_profile_memory_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_memory_api_v1_profile_memory_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8920,6 +9205,47 @@ export interface operations {
             };
         };
     };
+    get_assistant_api_v1_coach_assistant_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Org-Id"?: string | null;
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
     get_conversation_api_v1_coach_conversations__conversation_id__get: {
         parameters: {
             query?: never;
@@ -9083,6 +9409,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                latest?: boolean;
             };
             header?: {
                 "X-Org-Id"?: string | null;
@@ -9152,7 +9479,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Server-Sent Events: `token` {text}, then one `done` or `error` {code, detail}. */
+            /** @description Server-Sent Events: `token` {text}, `proposal` {action_id, tool, summary, args, untrusted} (a card to confirm), then one `done` or `error` {code, detail}. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9257,6 +9584,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+        };
+    };
+    decide_action_api_v1_coach_conversations__conversation_id__actions__action_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                conversation_id: string;
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActionDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActionOutcome"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request conflicts with the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description This action expired: ask for it again in the chat. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

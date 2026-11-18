@@ -3,7 +3,11 @@ import { expectNoA11yViolations, places, signUp } from './support.ts'
 
 test('flow template: install a ready-made flow, run it, the run finishes', async ({ page }) => {
   await signUp(page, 'flow')
-  await places(page).getByRole('link', { name: 'Flows', exact: true }).click()
+  await places(page).getByRole('link', { name: 'Studio', exact: true }).click()
+  await page
+    .getByRole('navigation', { name: 'Section' })
+    .getByRole('link', { name: 'Flows', exact: true })
+    .click()
   await page.getByRole('button', { name: 'Use: Follow up after applying' }).click()
   await expect(page).toHaveURL(/\/automations\/[0-9a-f-]{36}/, { timeout: 30_000 })
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()

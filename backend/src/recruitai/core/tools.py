@@ -5,6 +5,7 @@ handler its module registers with it. Flows, agents and the web read this regist
 cannot leave one of them behind. Each module registers its own tools at import time. No dependency
 on any feature module."""
 
+import unicodedata
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal, NamedTuple
@@ -35,14 +36,21 @@ class Call:
         return self.values.get(name, default)
 
 
-Handler = Callable[
-    [Any], Awaitable[dict[str, str]]
-]  # takes a Call (or a flow step's Ctx, a Call)
+# takes a Call (or a flow step's Ctx, a Call)
+Handler = Callable[[Any], Awaitable[dict[str, str]]]
 
 
 def one_line(value: str | None) -> str:
     """Text a tool hands on in one line (titles, names, places)."""
     return " ".join((value or "").split())
+
+
+def visible(text: str) -> str:
+    """Without control characters (newlines kept; NUL breaks JSONB) or format ones (zero-width,
+    bidi overrides): what is stored or shown on a card is exactly what the user reads (PA-11)."""
+    return "".join(
+        c for c in text if c == "\n" or unicodedata.category(c) not in ("Cc", "Cf")
+    )
 
 
 class ToolFailed(AppError):
@@ -79,13 +87,12 @@ class Tool:
     starts_runs: bool = False  # starts other runs: allowed one level deep only
     pauses: bool = False  # parks the run until it is woken (the engine owns this state)
     chat: bool = False  # an agent may call it in chat
+    chat_only: bool = False  # acts on flows or memory itself: never a flow step
     page: str | None = None  # web route of its own screen
-    untrusted: bool = (
-        False  # its output is text written by outsiders (web pages, search results)
-    )
-    flag: str | None = (
-        None  # name of the Settings bool that switches its pack on; None: always on
-    )
+    # its output is text written by outsiders (web pages, search results)
+    untrusted: bool = False
+    # name of the Settings bool that switches its pack on; None: always on
+    flag: str | None = None
 
 
 _TOOLS: dict[str, Tool] = {}
@@ -126,5 +133,7 @@ def register_reader(source: str, reader: Reader) -> None:
     _READERS[source] = reader
 
 
-def read(source: str, call: Call) -> Awaitable[dict[str, Any] | None]:
-    return _READERS[source](call)
+async def read(source: str, call: Call) -> dict[str, Any] | None:
+    """None too when no module registered ``source`` (its pack is not loaded)."""
+    reader = _READERS.get(source)
+    return None if reader is None else await reader(call)

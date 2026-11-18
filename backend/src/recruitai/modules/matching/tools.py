@@ -67,6 +67,7 @@ register(
         FIT_OUTPUTS,
         ai_uses=1,
         needs_job=True,
+        chat=True,
     ),
     _fit_check,
 )

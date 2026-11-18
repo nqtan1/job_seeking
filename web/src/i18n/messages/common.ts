@@ -27,7 +27,7 @@ export const common = defineMessages({
     'nav.today': 'Home',
     'nav.applications': 'Applications',
     'nav.cv': 'CV',
-    'nav.coach': 'Coach',
+    'nav.coach': 'Assistant',
     'nav.more': 'More',
     'nav.saved': 'Saved',
     'nav.review': 'Review',
@@ -37,6 +37,8 @@ export const common = defineMessages({
     'nav.radar': 'Radar',
     'nav.letters': 'Letters',
     'nav.tools': 'Tools',
+    'nav.search': 'Job search',
+    'nav.studio': 'Studio',
     'nav.agents': 'Agents',
     'nav.flows': 'Flows',
     'nav.activity': 'Activity',
@@ -97,7 +99,7 @@ export const common = defineMessages({
     'auth.reason.idle': 'You were signed out because of inactivity.',
     'auth.reason.reauth': 'Your session has expired. Please sign in again.',
     'auth.reason.other_tab': 'You signed out in another tab.',
-    'auth.tagline': 'Your job search, with a coach by your side.',
+    'auth.tagline': 'Your job search, with an assistant by your side.',
     'auth.pitch':
       'Build your profile from your CV, find the jobs that fit, and write letters that sound like you.',
     'auth.data_yours': 'Your data stays yours: export or delete it anytime.',
@@ -128,13 +130,13 @@ export const common = defineMessages({
       'RecruitAI helps you with your job search. This page says what we keep, where, and for how long.',
     'privacy.h_process': 'What we process',
     'privacy.process':
-      'The information you give us or that you upload: your CV and the profile extracted from it, the jobs you save, the letters and applications you write, and your chat with the coach. We do not keep a photo, date of birth, gender, nationality or marital status from your CV.',
+      'The information you give us or that you upload: your CV and the profile extracted from it, the jobs you save, the letters and applications you write, and your chats with the assistant. We do not keep a photo, date of birth, gender, nationality or marital status from your CV.',
     'privacy.h_where': 'Where and who',
     'privacy.where_a':
       'Your data is stored and processed in the European Union (Google Cloud, europe-west9), and Google Cloud acts as our processor under its data processing terms. AI features use Google Vertex AI in the EU.',
     'privacy.where_b': 'Your content is never used to train AI models.',
     'privacy.h_keep': 'How long we keep it',
-    'privacy.r1': 'Account, profile, jobs, letters, applications, coach chats, job radar',
+    'privacy.r1': 'Account, profile, jobs, letters, applications, assistant chats, job radar',
     'privacy.d1': 'While your account is active',
     'privacy.r2': 'Uploaded files (CV, job descriptions)',
     'privacy.d2': 'While your account is active; you can delete any file at any time',
@@ -238,7 +240,7 @@ export const common = defineMessages({
     'nav.today': 'Accueil',
     'nav.applications': 'Candidatures',
     'nav.cv': 'CV',
-    'nav.coach': 'Coach',
+    'nav.coach': 'Assistant',
     'nav.more': 'Plus',
     'nav.saved': 'Enregistrées',
     'nav.review': 'Analyse',
@@ -248,6 +250,8 @@ export const common = defineMessages({
     'nav.radar': 'Radar',
     'nav.letters': 'Lettres',
     'nav.tools': 'Outils',
+    'nav.search': 'Recherche d’emploi',
+    'nav.studio': 'Studio',
     'nav.agents': 'Agents',
     'nav.flows': 'Flux',
     'nav.activity': 'Activité',
@@ -310,7 +314,7 @@ export const common = defineMessages({
     'auth.reason.idle': 'Vous avez été déconnecté en raison d’une période d’inactivité.',
     'auth.reason.reauth': 'Votre session a expiré. Veuillez vous reconnecter.',
     'auth.reason.other_tab': 'Vous vous êtes déconnecté dans un autre onglet.',
-    'auth.tagline': 'Votre recherche d’emploi, avec un coach à vos côtés.',
+    'auth.tagline': 'Votre recherche d’emploi, avec un assistant à vos côtés.',
     'auth.pitch':
       'Créez votre profil à partir de votre CV, trouvez les offres qui vous correspondent et rédigez des lettres qui vous ressemblent.',
     'auth.data_yours':
@@ -344,14 +348,14 @@ export const common = defineMessages({
       'RecruitAI vous accompagne dans votre recherche d’emploi. Cette page indique ce que nous conservons, où, et pendant combien de temps.',
     'privacy.h_process': 'Ce que nous traitons',
     'privacy.process':
-      'Les informations que vous nous donnez ou que vous importez : votre CV et le profil qui en est extrait, les offres que vous enregistrez, les lettres et candidatures que vous rédigez, et vos échanges avec le coach. Nous ne conservons ni photo, ni date de naissance, ni sexe, ni nationalité, ni situation familiale issus de votre CV.',
+      'Les informations que vous nous donnez ou que vous importez : votre CV et le profil qui en est extrait, les offres que vous enregistrez, les lettres et candidatures que vous rédigez, et vos échanges avec l’assistant. Nous ne conservons ni photo, ni date de naissance, ni sexe, ni nationalité, ni situation familiale issus de votre CV.',
     'privacy.h_where': 'Où et par qui',
     'privacy.where_a':
       'Vos données sont stockées et traitées dans l’Union européenne (Google Cloud, europe-west9), et Google Cloud agit comme notre sous-traitant selon ses conditions de traitement des données. Les fonctions d’IA utilisent Google Vertex AI dans l’UE.',
     'privacy.where_b': 'Votre contenu n’est jamais utilisé pour entraîner des modèles d’IA.',
     'privacy.h_keep': 'Combien de temps nous le conservons',
     'privacy.r1':
-      'Compte, profil, offres, lettres, candidatures, conversations avec le coach, radar d’offres',
+      'Compte, profil, offres, lettres, candidatures, conversations avec l’assistant, radar d’offres',
     'privacy.d1': 'Tant que votre compte est actif',
     'privacy.r2': 'Fichiers importés (CV, descriptions d’offres)',
     'privacy.d2':
@@ -466,7 +470,9 @@ export const common = defineMessages({
     'nav.radar': 'Radar',
     'nav.letters': 'Thư xin việc',
     'nav.tools': 'Công cụ',
-    'nav.agents': 'Trợ lý',
+    'nav.search': 'Tìm việc',
+    'nav.studio': 'Studio',
+    'nav.agents': 'Agent',
     'nav.flows': 'Quy trình',
     'nav.activity': 'Hoạt động',
     'nav.tracker': 'Theo dõi',
@@ -527,7 +533,7 @@ export const common = defineMessages({
     'auth.reason.idle': 'Bạn đã bị đăng xuất do không hoạt động.',
     'auth.reason.reauth': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
     'auth.reason.other_tab': 'Bạn đã đăng xuất ở một thẻ khác.',
-    'auth.tagline': 'Hành trình tìm việc của bạn, với một huấn luyện viên đồng hành.',
+    'auth.tagline': 'Hành trình tìm việc của bạn, với một trợ lý đồng hành.',
     'auth.pitch':
       'Tạo hồ sơ từ CV của bạn, tìm việc phù hợp và viết thư xin việc đúng chất của bạn.',
     'auth.data_yours': 'Dữ liệu luôn thuộc về bạn: xuất hoặc xóa bất cứ lúc nào.',
@@ -558,14 +564,14 @@ export const common = defineMessages({
       'RecruitAI giúp bạn tìm việc. Trang này cho biết chúng tôi lưu những gì, ở đâu và trong bao lâu.',
     'privacy.h_process': 'Dữ liệu chúng tôi xử lý',
     'privacy.process':
-      'Thông tin bạn cung cấp hoặc tải lên: CV và hồ sơ trích xuất từ CV, các việc làm bạn lưu, thư và hồ sơ ứng tuyển bạn viết, cùng cuộc trò chuyện với huấn luyện viên. Chúng tôi không lưu ảnh, ngày sinh, giới tính, quốc tịch hay tình trạng hôn nhân từ CV của bạn.',
+      'Thông tin bạn cung cấp hoặc tải lên: CV và hồ sơ trích xuất từ CV, các việc làm bạn lưu, thư và hồ sơ ứng tuyển bạn viết, cùng cuộc trò chuyện với trợ lý. Chúng tôi không lưu ảnh, ngày sinh, giới tính, quốc tịch hay tình trạng hôn nhân từ CV của bạn.',
     'privacy.h_where': 'Ở đâu và do ai',
     'privacy.where_a':
       'Dữ liệu của bạn được lưu trữ và xử lý tại Liên minh châu Âu (Google Cloud, europe-west9), và Google Cloud là bên xử lý dữ liệu của chúng tôi theo điều khoản xử lý dữ liệu của họ. Các tính năng AI dùng Google Vertex AI tại EU.',
     'privacy.where_b': 'Nội dung của bạn không bao giờ được dùng để huấn luyện mô hình AI.',
     'privacy.h_keep': 'Thời gian lưu trữ',
     'privacy.r1':
-      'Tài khoản, hồ sơ, việc làm, thư, hồ sơ ứng tuyển, trò chuyện với huấn luyện viên, radar việc làm',
+      'Tài khoản, hồ sơ, việc làm, thư, hồ sơ ứng tuyển, trò chuyện với trợ lý, radar việc làm',
     'privacy.d1': 'Khi tài khoản còn hoạt động',
     'privacy.r2': 'Tệp đã tải lên (CV, mô tả công việc)',
     'privacy.d2': 'Khi tài khoản còn hoạt động; bạn có thể xóa bất kỳ tệp nào bất cứ lúc nào',

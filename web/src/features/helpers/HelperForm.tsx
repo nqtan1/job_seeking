@@ -1,4 +1,16 @@
-import { Briefcase, FileText, Plus, Rows3, Sparkles, Target, UserRound, X, Zap } from 'lucide-react'
+import {
+  Brain,
+  Briefcase,
+  Compass,
+  FileText,
+  Plus,
+  Rows3,
+  Sparkles,
+  Target,
+  UserRound,
+  X,
+  Zap,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useT } from '@/i18n'
 import { Button } from '@/components/ui/button'
@@ -10,7 +22,6 @@ import { MAX_FIELDS, MAX_INPUTS, type VersionSpec, freeName } from './graph'
 import { toolText, useTools } from '@/features/tools/api'
 import { ChoiceCard } from './ui'
 
-export { AvatarPicker } from './AvatarPicker'
 export { Receives, TryPanel } from './TryPanel'
 
 const NAME = /[^a-z0-9_]/g
@@ -57,7 +68,13 @@ const TYPES = ['text', 'number', 'boolean', 'choice', 'list'] as const
 
 const ROLES = ['custom', 'letter', 'interview', 'cv_advice'] as const
 
-const SOURCE_ICON = { profile: UserRound, job: Briefcase, fit: Target } as const
+const SOURCE_ICON = {
+  profile: UserRound,
+  job: Briefcase,
+  fit: Target,
+  memory: Brain,
+  situation: Compass,
+} as const
 
 /** A flat titled group inside "Advanced": no card, at most one short hint. */
 function Block({
@@ -229,7 +246,7 @@ function SourcesBlock({ spec, set }: Part) {
   return (
     <Block title={t('helpers.sources')} hint={t('helpers.sources_help')}>
       <div className="grid gap-2 sm:grid-cols-3">
-        {(['profile', 'job', 'fit'] as const).map((s) => (
+        {(['profile', 'job', 'fit', 'memory', 'situation'] as const).map((s) => (
           <ChoiceCard
             key={s}
             type="checkbox"
