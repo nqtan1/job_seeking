@@ -33,7 +33,6 @@ from recruitai.modules.agents.flows.service import (
     get_flow,
     graph_of,
 )
-from recruitai.modules.jobs import service as jobs
 
 MAX_ACTIVE_RUNS = 2  # waiting runs do not count (accepted: they hold no worker)
 MAX_ACTIVE_CHILDREN = 10  # runs started by for_each steps, all together
@@ -96,7 +95,9 @@ async def prepare_run(
     if _needs_job(graph, agents) and data.job_id is None:
         raise ValidationFailed("This flow needs a job: pick one.")
     if data.job_id is not None:
-        await jobs.get_job(db, org_id=org_id, job_id=data.job_id)  # 404 across orgs
+        await registry.read(
+            "job", registry.Call(db, None, org_id, None, data.job_id, {})
+        )  # 404 across orgs
     return flow, version, graph
 
 
@@ -216,7 +217,9 @@ async def fan_out(
         except ValueError as exc:
             raise ValidationFailed("An item has an invalid job.") from exc
         if job is not None:
-            await jobs.get_job(db, org_id=parent.org_id, job_id=job)  # 404 across orgs
+            await registry.read(
+                "job", registry.Call(db, None, parent.org_id, None, job, {})
+            )  # 404 across orgs
         prepared.append(
             (inputs, job)
         )  # every item is checked before the first run starts

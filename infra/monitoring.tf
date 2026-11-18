@@ -1,5 +1,5 @@
 # alerts from handbook 04 §5 (email only)
-# Not yet covered: new-error-type (Error Reporting), queue backlog, DB connections, daily AI spend.
+# New error types: Sentry (ADR 0040). Not yet covered: queue backlog, DB connections, daily AI spend.
 
 resource "google_monitoring_notification_channel" "email" {
   display_name = "recruitai-${var.env}"
@@ -100,6 +100,116 @@ resource "google_monitoring_alert_policy" "this" {
           per_series_aligner   = "ALIGN_RATE"
           cross_series_reducer = "REDUCE_SUM"
         }
+      }
+    }
+  }
+}
+
+# SLOs (plan R / P3, Google SRE Workbook ch. 2), 28-day window. Error-budget rule: docs/handbook/runbooks.md §1.
+# Latency counts reads only: the AI and streaming routes are POSTs, and /jobs/search waits on the job board.
+resource "google_logging_metric" "read_latency" {
+  name   = "recruitai_read_latency"
+  filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"recruitai-api\" AND jsonPayload.message=\"http_request\" AND jsonPayload.method=\"GET\" AND NOT jsonPayload.path:\"/jobs/search\""
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "DISTRIBUTION"
+    unit        = "ms"
+  }
+  value_extractor = "EXTRACT(jsonPayload.duration_ms)"
+  bucket_options {
+    explicit_buckets { bounds = [100, 250, 500, 1000, 2500, 5000] }
+  }
+}
+
+resource "google_monitoring_custom_service" "api" {
+  service_id   = "recruitai-api"
+  display_name = "RecruitAI API"
+}
+
+locals {
+  slos = {
+    availability = { name = "99.5% of API requests succeed (not 5xx)", goal = 0.995 }
+    read_latency = { name = "95% of reads answer in under 1 s", goal = 0.95 }
+  }
+}
+
+resource "google_monitoring_slo" "api" {
+  for_each            = local.slos
+  service             = google_monitoring_custom_service.api.service_id
+  slo_id              = replace(each.key, "_", "-")
+  display_name        = each.value.name
+  goal                = each.value.goal
+  rolling_period_days = 28
+
+  request_based_sli {
+    dynamic "good_total_ratio" {
+      for_each = each.key == "availability" ? [1] : []
+      content {
+        bad_service_filter   = "${local.run_api} AND metric.type=\"run.googleapis.com/request_count\" AND metric.labels.response_code_class=\"5xx\""
+        total_service_filter = "${local.run_api} AND metric.type=\"run.googleapis.com/request_count\""
+      }
+    }
+    dynamic "distribution_cut" {
+      for_each = each.key == "read_latency" ? [1] : []
+      content {
+        distribution_filter = "metric.type=\"logging.googleapis.com/user/${google_logging_metric.read_latency.name}\" AND resource.type=\"cloud_run_revision\""
+        range { max = 1000 }
+      }
+    }
+  }
+}
+
+# Fast burn: at 10x, a 28-day budget is gone in under 3 days. Page by e-mail.
+resource "google_monitoring_alert_policy" "slo_burn" {
+  for_each              = local.slos
+  display_name          = "recruitai-${var.env}: SLO burning fast: ${each.value.name}"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email.id]
+  user_labels           = local.labels
+  conditions {
+    display_name = "burn rate > 10 over 1 h"
+    condition_threshold {
+      filter          = "select_slo_burn_rate(\"${google_monitoring_slo.api[each.key].id}\", \"3600s\")"
+      comparison      = "COMPARISON_GT"
+      threshold_value = 10
+      duration        = "0s"
+    }
+  }
+}
+
+resource "google_monitoring_uptime_check_config" "health" {
+  count        = var.deploy_run ? 1 : 0
+  display_name = "recruitai-${var.env} /health"
+  timeout      = "10s"
+  period       = "300s"
+  http_check {
+    path    = "/health"
+    use_ssl = true
+  }
+  monitored_resource {
+    type   = "uptime_url"
+    labels = { project_id = var.project_id, host = trimprefix(google_cloud_run_v2_service.api[0].uri, "https://") }
+  }
+}
+
+resource "google_monitoring_alert_policy" "uptime" {
+  count                 = var.deploy_run ? 1 : 0
+  display_name          = "recruitai-${var.env}: /health is down"
+  combiner              = "OR"
+  notification_channels = [google_monitoring_notification_channel.email.id]
+  user_labels           = local.labels
+  conditions {
+    display_name = "uptime check failing (10 min)"
+    condition_threshold {
+      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND resource.type=\"uptime_url\" AND metric.labels.check_id=\"${google_monitoring_uptime_check_config.health[0].uptime_check_id}\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 1
+      duration        = "600s"
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_NEXT_OLDER"
+        cross_series_reducer = "REDUCE_COUNT_FALSE"
+        group_by_fields      = ["resource.label.host"]
       }
     }
   }

@@ -15,7 +15,8 @@ async def test_get_tools_lists_the_packs_that_are_on(
     r = await client.get("/api/v1/tools", headers=ada)
     assert r.status_code == 200
     by_id = {t["id"]: t for t in r.json()}
-    assert set(by_id) == set(tools.all())
+    # chat only: no flow step
+    assert set(by_id) == {i for i, t in tools.all().items() if not t.chat_only}
     assert by_id["send_email"] == {
         "id": "send_email",
         "pack": "messages",

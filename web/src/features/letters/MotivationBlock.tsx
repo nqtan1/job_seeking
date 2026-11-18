@@ -39,21 +39,13 @@ export function MotivationBlock({
   onAnswers: (v: Answer[]) => void
 }) {
   const t = useT()
-  const fit = useLatestFit(jobId)
   const ask = useMotivationQuestions()
   const [texts, setTexts] = useState<string[]>([])
   const questions = ask.data?.questions ?? []
-  const strengths = fit.data?.data.strengths ?? []
   const real = texts.filter((x) => x.trim().length >= REAL_ANSWER_CHARS).length
   const noteIsReal = note.trim().length >= REAL_ANSWER_CHARS
   const enough = real >= 2 || (real >= 1 && noteIsReal)
 
-  const toggle = (s: string) =>
-    onHighlights(
-      highlights.includes(s)
-        ? highlights.filter((h) => h !== s)
-        : [...highlights, s].slice(0, MAX_HIGHLIGHTS),
-    )
   const setText = (i: number, text: string) => {
     const next = questions.map((_, n) => (n === i ? text : (texts[n] ?? '')))
     setTexts(next)
@@ -62,37 +54,12 @@ export function MotivationBlock({
 
   return (
     <div className="space-y-4 sm:col-span-3">
-      <div className="space-y-1">
-        <Label>{t('letters.motivation.why_fit')}</Label>
-        {strengths.length > 0 ? (
-          <>
-            <p className="text-sm text-muted-foreground">
-              {t(own ? 'letters.motivation.tap_own' : 'letters.motivation.tap_ai', {
-                max: MAX_HIGHLIGHTS,
-              })}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {strengths.map((s) => (
-                <Button
-                  key={s}
-                  type="button"
-                  size="sm"
-                  variant={highlights.includes(s) ? 'default' : 'outline'}
-                  aria-pressed={highlights.includes(s)}
-                  onClick={() => toggle(s)}
-                  className="h-auto whitespace-normal py-1 text-left"
-                >
-                  {s}
-                </Button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {jobId ? t('letters.motivation.fit_auto') : t('letters.motivation.choose_job')}
-          </p>
-        )}
-      </div>
+      <StrengthsPicker
+        own={own}
+        jobId={jobId}
+        highlights={highlights}
+        onHighlights={onHighlights}
+      />
 
       <div className="space-y-2">
         <Label>{t('letters.motivation.why_want')}</Label>
@@ -120,37 +87,15 @@ export function MotivationBlock({
         )}
         {ask.isError && <ErrorMessage error={ask.error} />}
         {questions.map((q, i) => (
-          <div key={q.question} className="space-y-1">
-            <Label htmlFor={`answer-${i}`}>
-              {i + 1}. {q.question}
-            </Label>
-            <Textarea
-              id={`answer-${i}`}
-              rows={3}
-              maxLength={MAX_ANSWER}
-              value={texts[i] ?? ''}
-              onChange={(e) => setText(i, e.target.value)}
-              aria-describedby={`answer-hint-${i}`}
-            />
-            <p id={`answer-hint-${i}`} className="text-xs text-muted-foreground">
-              {q.hint}
-            </p>
-          </div>
+          <AnswerField
+            key={q.question}
+            q={q}
+            i={i}
+            value={texts[i] ?? ''}
+            onChange={(v) => setText(i, v)}
+          />
         ))}
-        {questions.length > 0 && (
-          <div className="space-y-1">
-            <Label htmlFor="motivation">
-              {own ? t('letters.motivation.note_own') : t('letters.motivation.note_ai')}
-            </Label>
-            <Textarea
-              id="motivation"
-              rows={3}
-              maxLength={1500}
-              value={note}
-              onChange={(e) => onNote(e.target.value)}
-            />
-          </div>
-        )}
+        {questions.length > 0 && <NoteField own={own} note={note} onNote={onNote} />}
         {!enough && (
           <p
             role="status"
@@ -162,6 +107,118 @@ export function MotivationBlock({
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+function StrengthsPicker({
+  own,
+  jobId,
+  highlights,
+  onHighlights,
+}: {
+  own: boolean
+  jobId: string
+  highlights: string[]
+  onHighlights: (v: string[]) => void
+}) {
+  const t = useT()
+  const fit = useLatestFit(jobId)
+  const strengths = fit.data?.data.strengths ?? []
+  const toggle = (s: string) =>
+    onHighlights(
+      highlights.includes(s)
+        ? highlights.filter((h) => h !== s)
+        : [...highlights, s].slice(0, MAX_HIGHLIGHTS),
+    )
+  return (
+    <div className="space-y-1">
+      <Label>{t('letters.motivation.why_fit')}</Label>
+      {strengths.length > 0 ? (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {t(own ? 'letters.motivation.tap_own' : 'letters.motivation.tap_ai', {
+              max: MAX_HIGHLIGHTS,
+            })}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {strengths.map((s) => (
+              <Button
+                key={s}
+                type="button"
+                size="sm"
+                variant={highlights.includes(s) ? 'default' : 'outline'}
+                aria-pressed={highlights.includes(s)}
+                onClick={() => toggle(s)}
+                className="h-auto whitespace-normal py-1 text-left"
+              >
+                {s}
+              </Button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {jobId ? t('letters.motivation.fit_auto') : t('letters.motivation.choose_job')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function AnswerField({
+  q,
+  i,
+  value,
+  onChange,
+}: {
+  q: { question: string; hint: string }
+  i: number
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={`answer-${i}`}>
+        {i + 1}. {q.question}
+      </Label>
+      <Textarea
+        id={`answer-${i}`}
+        rows={3}
+        maxLength={MAX_ANSWER}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-describedby={`answer-hint-${i}`}
+      />
+      <p id={`answer-hint-${i}`} className="text-xs text-muted-foreground">
+        {q.hint}
+      </p>
+    </div>
+  )
+}
+
+function NoteField({
+  own,
+  note,
+  onNote,
+}: {
+  own: boolean
+  note: string
+  onNote: (v: string) => void
+}) {
+  const t = useT()
+  return (
+    <div className="space-y-1">
+      <Label htmlFor="motivation">
+        {own ? t('letters.motivation.note_own') : t('letters.motivation.note_ai')}
+      </Label>
+      <Textarea
+        id="motivation"
+        rows={3}
+        maxLength={1500}
+        value={note}
+        onChange={(e) => onNote(e.target.value)}
+      />
     </div>
   )
 }

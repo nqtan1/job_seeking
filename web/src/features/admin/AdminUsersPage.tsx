@@ -108,8 +108,7 @@ function Overview() {
 
 /** Admin-only (the API answers 403 to anyone else). Account metadata only, never user content. */
 export function AdminUsersPage() {
-  const { t, locale } = useI18n()
-  const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(locale) : '—')
+  const { t } = useI18n()
   const [q, setQ] = useState('')
   const [page, setPage] = useState(0)
   const users = useAdminUsers(q, page)
@@ -150,44 +149,7 @@ export function AdminUsersPage() {
               </thead>
               <tbody>
                 {users.data.items.map((u) => (
-                  <tr key={u.id} className="border-t">
-                    <td className="p-3">{u.email}</td>
-                    <td className="p-3">{u.display_name ?? '—'}</td>
-                    <td className="p-3">{day(u.created_at)}</td>
-                    <td className="p-3">{day(u.last_active_at)}</td>
-                    <td className="p-3">
-                      {u.blocked ? (
-                        <span className="text-destructive">{t('admin.blocked')}</span>
-                      ) : (
-                        <span className="text-muted-foreground">{t('admin.active')}</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      {u.email.toLowerCase() !== me &&
-                        (u.blocked ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={setBlocked.isPending}
-                            aria-label={t('admin.unblock_aria', { email: u.email })}
-                            onClick={() => setBlocked.mutate({ id: u.id, blocked: false })}
-                          >
-                            {t('admin.unblock')}
-                          </Button>
-                        ) : (
-                          <ConfirmButton
-                            label={t('admin.block')}
-                            aria-label={t('admin.block_aria', { email: u.email })}
-                            confirmLabel={t('admin.confirm_block')}
-                            confirmAriaLabel={t('admin.confirm_block_aria', { email: u.email })}
-                            pending={setBlocked.isPending}
-                            onConfirm={(reset) =>
-                              setBlocked.mutate({ id: u.id, blocked: true }, { onSettled: reset })
-                            }
-                          />
-                        ))}
-                    </td>
-                  </tr>
+                  <UserRow key={u.id} u={u} me={me} setBlocked={setBlocked} />
                 ))}
                 {users.data.items.length === 0 && (
                   <tr>
@@ -223,5 +185,58 @@ export function AdminUsersPage() {
         </>
       )}
     </Page>
+  )
+}
+
+function UserRow({
+  u,
+  me,
+  setBlocked,
+}: {
+  u: NonNullable<ReturnType<typeof useAdminUsers>['data']>['items'][number]
+  me: string | undefined
+  setBlocked: ReturnType<typeof useSetBlocked>
+}) {
+  const { t, locale } = useI18n()
+  const day = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(locale) : '—')
+  return (
+    <tr className="border-t">
+      <td className="p-3">{u.email}</td>
+      <td className="p-3">{u.display_name ?? '—'}</td>
+      <td className="p-3">{day(u.created_at)}</td>
+      <td className="p-3">{day(u.last_active_at)}</td>
+      <td className="p-3">
+        {u.blocked ? (
+          <span className="text-destructive">{t('admin.blocked')}</span>
+        ) : (
+          <span className="text-muted-foreground">{t('admin.active')}</span>
+        )}
+      </td>
+      <td className="p-3 text-right">
+        {u.email.toLowerCase() !== me &&
+          (u.blocked ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={setBlocked.isPending}
+              aria-label={t('admin.unblock_aria', { email: u.email })}
+              onClick={() => setBlocked.mutate({ id: u.id, blocked: false })}
+            >
+              {t('admin.unblock')}
+            </Button>
+          ) : (
+            <ConfirmButton
+              label={t('admin.block')}
+              aria-label={t('admin.block_aria', { email: u.email })}
+              confirmLabel={t('admin.confirm_block')}
+              confirmAriaLabel={t('admin.confirm_block_aria', { email: u.email })}
+              pending={setBlocked.isPending}
+              onConfirm={(reset) =>
+                setBlocked.mutate({ id: u.id, blocked: true }, { onSettled: reset })
+              }
+            />
+          ))}
+      </td>
+    </tr>
   )
 }

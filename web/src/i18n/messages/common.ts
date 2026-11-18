@@ -6,6 +6,8 @@ export const common = defineMessages({
     'lang.hint': 'Used for the app, the AI answers, your letters and the e-mails we send.',
     'err.generic': 'Something went wrong. Please try again.',
     'err.request_id': 'request id: {id}',
+    'err.crash': 'Something went wrong',
+    'err.reload': 'Reload',
     'err.unauthorized': 'Your session has ended. Please sign in again.',
     'err.reauth_required': 'Please sign in again to confirm it is you.',
     'err.forbidden': 'You are not allowed to do this.',
@@ -25,7 +27,7 @@ export const common = defineMessages({
     'nav.today': 'Home',
     'nav.applications': 'Applications',
     'nav.cv': 'CV',
-    'nav.coach': 'Coach',
+    'nav.coach': 'Assistant',
     'nav.more': 'More',
     'nav.saved': 'Saved',
     'nav.review': 'Review',
@@ -35,6 +37,8 @@ export const common = defineMessages({
     'nav.radar': 'Radar',
     'nav.letters': 'Letters',
     'nav.tools': 'Tools',
+    'nav.search': 'Job search',
+    'nav.studio': 'Studio',
     'nav.agents': 'Agents',
     'nav.flows': 'Flows',
     'nav.activity': 'Activity',
@@ -95,7 +99,7 @@ export const common = defineMessages({
     'auth.reason.idle': 'You were signed out because of inactivity.',
     'auth.reason.reauth': 'Your session has expired. Please sign in again.',
     'auth.reason.other_tab': 'You signed out in another tab.',
-    'auth.tagline': 'Your job search, with a coach by your side.',
+    'auth.tagline': 'Your job search, with an assistant by your side.',
     'auth.pitch':
       'Build your profile from your CV, find the jobs that fit, and write letters that sound like you.',
     'auth.data_yours': 'Your data stays yours: export or delete it anytime.',
@@ -126,13 +130,13 @@ export const common = defineMessages({
       'RecruitAI helps you with your job search. This page says what we keep, where, and for how long.',
     'privacy.h_process': 'What we process',
     'privacy.process':
-      'The information you give us or that you upload: your CV and the profile extracted from it, the jobs you save, the letters and applications you write, and your chat with the coach. We do not keep a photo, date of birth, gender, nationality or marital status from your CV.',
+      'The information you give us or that you upload: your CV and the profile extracted from it, the jobs you save, the letters and applications you write, and your chats with the assistant. We do not keep a photo, date of birth, gender, nationality or marital status from your CV.',
     'privacy.h_where': 'Where and who',
     'privacy.where_a':
       'Your data is stored and processed in the European Union (Google Cloud, europe-west9), and Google Cloud acts as our processor under its data processing terms. AI features use Google Vertex AI in the EU.',
     'privacy.where_b': 'Your content is never used to train AI models.',
     'privacy.h_keep': 'How long we keep it',
-    'privacy.r1': 'Account, profile, jobs, letters, applications, coach chats, job radar',
+    'privacy.r1': 'Account, profile, jobs, letters, applications, assistant chats, job radar',
     'privacy.d1': 'While your account is active',
     'privacy.r2': 'Uploaded files (CV, job descriptions)',
     'privacy.d2': 'While your account is active; you can delete any file at any time',
@@ -150,6 +154,19 @@ export const common = defineMessages({
     'privacy.d8': '30 days; they never contain your CV, letters or email',
     'privacy.r9': 'Backups',
     'privacy.d9': 'At most 7 days: deleted data is gone from backups within 7 days',
+    'privacy.r10': 'Notes saved by your helpers (title, text, source link), so you can reuse them',
+    'privacy.d10': 'While your account is active; deleted with the note or with your account',
+    'privacy.r11': 'Error reports (Sentry)',
+    'privacy.d11': '90 days',
+    'privacy.r12': 'Usage statistics (PostHog, EU), only if you accept',
+    'privacy.d12': '12 months',
+    'privacy.r13': 'Request counts per account (abuse limits)',
+    'privacy.d13': '2 days',
+    'privacy.h_services': 'Other services',
+    'privacy.sentry':
+      'Sentry receives a report when the app crashes: the error type and where it happened. It contains no CV, job, letter or chat text, no e-mail and no request content.',
+    'privacy.posthog':
+      'PostHog (EU servers) receives anonymous counts of the steps you use, such as “letter made”, only if you accept. Never your content, no recording of your screen. You can change your choice in Settings.',
     'privacy.h_rights': 'Your rights',
     'privacy.rights':
       'In Settings you can export all your data as a ZIP at any time, and delete your account: your data and files are then deleted immediately. You also have the right of access, rectification, objection and complaint to the CNIL (cnil.fr).',
@@ -199,6 +216,8 @@ export const common = defineMessages({
       'Utilisée pour l’application, les réponses de l’IA, vos lettres et les e-mails que nous envoyons.',
     'err.generic': 'Une erreur est survenue. Veuillez réessayer.',
     'err.request_id': 'identifiant de requête : {id}',
+    'err.crash': 'Un problème est survenu',
+    'err.reload': 'Recharger',
     'err.unauthorized': 'Votre session est terminée. Veuillez vous reconnecter.',
     'err.reauth_required': 'Veuillez vous reconnecter pour confirmer votre identité.',
     'err.forbidden': 'Vous n’avez pas le droit d’effectuer cette action.',
@@ -221,7 +240,7 @@ export const common = defineMessages({
     'nav.today': 'Accueil',
     'nav.applications': 'Candidatures',
     'nav.cv': 'CV',
-    'nav.coach': 'Coach',
+    'nav.coach': 'Assistant',
     'nav.more': 'Plus',
     'nav.saved': 'Enregistrées',
     'nav.review': 'Analyse',
@@ -231,6 +250,8 @@ export const common = defineMessages({
     'nav.radar': 'Radar',
     'nav.letters': 'Lettres',
     'nav.tools': 'Outils',
+    'nav.search': 'Recherche d’emploi',
+    'nav.studio': 'Studio',
     'nav.agents': 'Agents',
     'nav.flows': 'Flux',
     'nav.activity': 'Activité',
@@ -293,7 +314,7 @@ export const common = defineMessages({
     'auth.reason.idle': 'Vous avez été déconnecté en raison d’une période d’inactivité.',
     'auth.reason.reauth': 'Votre session a expiré. Veuillez vous reconnecter.',
     'auth.reason.other_tab': 'Vous vous êtes déconnecté dans un autre onglet.',
-    'auth.tagline': 'Votre recherche d’emploi, avec un coach à vos côtés.',
+    'auth.tagline': 'Votre recherche d’emploi, avec un assistant à vos côtés.',
     'auth.pitch':
       'Créez votre profil à partir de votre CV, trouvez les offres qui vous correspondent et rédigez des lettres qui vous ressemblent.',
     'auth.data_yours':
@@ -327,14 +348,14 @@ export const common = defineMessages({
       'RecruitAI vous accompagne dans votre recherche d’emploi. Cette page indique ce que nous conservons, où, et pendant combien de temps.',
     'privacy.h_process': 'Ce que nous traitons',
     'privacy.process':
-      'Les informations que vous nous donnez ou que vous importez : votre CV et le profil qui en est extrait, les offres que vous enregistrez, les lettres et candidatures que vous rédigez, et vos échanges avec le coach. Nous ne conservons ni photo, ni date de naissance, ni sexe, ni nationalité, ni situation familiale issus de votre CV.',
+      'Les informations que vous nous donnez ou que vous importez : votre CV et le profil qui en est extrait, les offres que vous enregistrez, les lettres et candidatures que vous rédigez, et vos échanges avec l’assistant. Nous ne conservons ni photo, ni date de naissance, ni sexe, ni nationalité, ni situation familiale issus de votre CV.',
     'privacy.h_where': 'Où et par qui',
     'privacy.where_a':
       'Vos données sont stockées et traitées dans l’Union européenne (Google Cloud, europe-west9), et Google Cloud agit comme notre sous-traitant selon ses conditions de traitement des données. Les fonctions d’IA utilisent Google Vertex AI dans l’UE.',
     'privacy.where_b': 'Votre contenu n’est jamais utilisé pour entraîner des modèles d’IA.',
     'privacy.h_keep': 'Combien de temps nous le conservons',
     'privacy.r1':
-      'Compte, profil, offres, lettres, candidatures, conversations avec le coach, radar d’offres',
+      'Compte, profil, offres, lettres, candidatures, conversations avec l’assistant, radar d’offres',
     'privacy.d1': 'Tant que votre compte est actif',
     'privacy.r2': 'Fichiers importés (CV, descriptions d’offres)',
     'privacy.d2':
@@ -354,6 +375,20 @@ export const common = defineMessages({
     'privacy.r9': 'Sauvegardes',
     'privacy.d9':
       '7 jours au maximum : les données supprimées disparaissent des sauvegardes en 7 jours',
+    'privacy.r10':
+      'Notes enregistrées par vos assistants (titre, texte, lien source), pour les réutiliser',
+    'privacy.d10': 'Tant que votre compte est actif ; supprimées avec la note ou avec votre compte',
+    'privacy.r11': 'Rapports d’erreur (Sentry)',
+    'privacy.d11': '90 jours',
+    'privacy.r12': 'Statistiques d’utilisation (PostHog, UE), seulement si vous acceptez',
+    'privacy.d12': '12 mois',
+    'privacy.r13': 'Compteurs de requêtes par compte (limites anti-abus)',
+    'privacy.d13': '2 jours',
+    'privacy.h_services': 'Autres services',
+    'privacy.sentry':
+      'Sentry reçoit un rapport quand l’application plante : le type d’erreur et l’endroit où elle s’est produite. Il ne contient aucun texte de CV, d’offre, de lettre ou de conversation, ni e-mail, ni contenu de requête.',
+    'privacy.posthog':
+      'PostHog (serveurs dans l’UE) reçoit des comptages anonymes des étapes que vous utilisez, comme « lettre créée », seulement si vous acceptez. Jamais votre contenu, aucun enregistrement de votre écran. Vous pouvez changer votre choix dans les Paramètres.',
     'privacy.h_rights': 'Vos droits',
     'privacy.rights':
       'Dans les Paramètres, vous pouvez à tout moment exporter toutes vos données au format ZIP et supprimer votre compte : vos données et fichiers sont alors supprimés immédiatement. Vous disposez aussi des droits d’accès, de rectification, d’opposition et de réclamation auprès de la CNIL (cnil.fr).',
@@ -403,6 +438,8 @@ export const common = defineMessages({
     'lang.hint': 'Dùng cho ứng dụng, câu trả lời của AI, thư xin việc và các email chúng tôi gửi.',
     'err.generic': 'Đã xảy ra lỗi. Vui lòng thử lại.',
     'err.request_id': 'mã yêu cầu: {id}',
+    'err.crash': 'Đã xảy ra sự cố',
+    'err.reload': 'Tải lại',
     'err.unauthorized': 'Phiên đăng nhập đã kết thúc. Vui lòng đăng nhập lại.',
     'err.reauth_required': 'Vui lòng đăng nhập lại để xác nhận đó là bạn.',
     'err.forbidden': 'Bạn không có quyền thực hiện thao tác này.',
@@ -433,7 +470,9 @@ export const common = defineMessages({
     'nav.radar': 'Radar',
     'nav.letters': 'Thư xin việc',
     'nav.tools': 'Công cụ',
-    'nav.agents': 'Trợ lý',
+    'nav.search': 'Tìm việc',
+    'nav.studio': 'Studio',
+    'nav.agents': 'Agent',
     'nav.flows': 'Quy trình',
     'nav.activity': 'Hoạt động',
     'nav.tracker': 'Theo dõi',
@@ -494,7 +533,7 @@ export const common = defineMessages({
     'auth.reason.idle': 'Bạn đã bị đăng xuất do không hoạt động.',
     'auth.reason.reauth': 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
     'auth.reason.other_tab': 'Bạn đã đăng xuất ở một thẻ khác.',
-    'auth.tagline': 'Hành trình tìm việc của bạn, với một huấn luyện viên đồng hành.',
+    'auth.tagline': 'Hành trình tìm việc của bạn, với một trợ lý đồng hành.',
     'auth.pitch':
       'Tạo hồ sơ từ CV của bạn, tìm việc phù hợp và viết thư xin việc đúng chất của bạn.',
     'auth.data_yours': 'Dữ liệu luôn thuộc về bạn: xuất hoặc xóa bất cứ lúc nào.',
@@ -525,14 +564,14 @@ export const common = defineMessages({
       'RecruitAI giúp bạn tìm việc. Trang này cho biết chúng tôi lưu những gì, ở đâu và trong bao lâu.',
     'privacy.h_process': 'Dữ liệu chúng tôi xử lý',
     'privacy.process':
-      'Thông tin bạn cung cấp hoặc tải lên: CV và hồ sơ trích xuất từ CV, các việc làm bạn lưu, thư và hồ sơ ứng tuyển bạn viết, cùng cuộc trò chuyện với huấn luyện viên. Chúng tôi không lưu ảnh, ngày sinh, giới tính, quốc tịch hay tình trạng hôn nhân từ CV của bạn.',
+      'Thông tin bạn cung cấp hoặc tải lên: CV và hồ sơ trích xuất từ CV, các việc làm bạn lưu, thư và hồ sơ ứng tuyển bạn viết, cùng cuộc trò chuyện với trợ lý. Chúng tôi không lưu ảnh, ngày sinh, giới tính, quốc tịch hay tình trạng hôn nhân từ CV của bạn.',
     'privacy.h_where': 'Ở đâu và do ai',
     'privacy.where_a':
       'Dữ liệu của bạn được lưu trữ và xử lý tại Liên minh châu Âu (Google Cloud, europe-west9), và Google Cloud là bên xử lý dữ liệu của chúng tôi theo điều khoản xử lý dữ liệu của họ. Các tính năng AI dùng Google Vertex AI tại EU.',
     'privacy.where_b': 'Nội dung của bạn không bao giờ được dùng để huấn luyện mô hình AI.',
     'privacy.h_keep': 'Thời gian lưu trữ',
     'privacy.r1':
-      'Tài khoản, hồ sơ, việc làm, thư, hồ sơ ứng tuyển, trò chuyện với huấn luyện viên, radar việc làm',
+      'Tài khoản, hồ sơ, việc làm, thư, hồ sơ ứng tuyển, trò chuyện với trợ lý, radar việc làm',
     'privacy.d1': 'Khi tài khoản còn hoạt động',
     'privacy.r2': 'Tệp đã tải lên (CV, mô tả công việc)',
     'privacy.d2': 'Khi tài khoản còn hoạt động; bạn có thể xóa bất kỳ tệp nào bất cứ lúc nào',
@@ -551,6 +590,20 @@ export const common = defineMessages({
     'privacy.d8': '30 ngày; không bao giờ chứa CV, thư hay email của bạn',
     'privacy.r9': 'Bản sao lưu',
     'privacy.d9': 'Tối đa 7 ngày: dữ liệu đã xóa biến mất khỏi bản sao lưu trong vòng 7 ngày',
+    'privacy.r10':
+      'Ghi chú do trợ lý của bạn lưu (tiêu đề, nội dung, liên kết nguồn), để bạn dùng lại',
+    'privacy.d10': 'Khi tài khoản còn hoạt động; bị xóa cùng ghi chú hoặc cùng tài khoản',
+    'privacy.r11': 'Báo cáo lỗi (Sentry)',
+    'privacy.d11': '90 ngày',
+    'privacy.r12': 'Thống kê sử dụng (PostHog, EU), chỉ khi bạn đồng ý',
+    'privacy.d12': '12 tháng',
+    'privacy.r13': 'Số lượt gọi theo tài khoản (giới hạn chống lạm dụng)',
+    'privacy.d13': '2 ngày',
+    'privacy.h_services': 'Dịch vụ khác',
+    'privacy.sentry':
+      'Sentry nhận báo cáo khi ứng dụng gặp sự cố: loại lỗi và vị trí xảy ra. Báo cáo không chứa nội dung CV, việc làm, thư hay trò chuyện, không có email và không có nội dung yêu cầu.',
+    'privacy.posthog':
+      'PostHog (máy chủ tại EU) nhận số liệu ẩn danh về các bước bạn dùng, như “đã tạo thư”, chỉ khi bạn đồng ý. Không bao giờ có nội dung của bạn, không ghi lại màn hình. Bạn có thể đổi lựa chọn trong Cài đặt.',
     'privacy.h_rights': 'Quyền của bạn',
     'privacy.rights':
       'Trong Cài đặt, bạn có thể xuất toàn bộ dữ liệu dạng ZIP bất cứ lúc nào và xóa tài khoản: dữ liệu và tệp của bạn sẽ bị xóa ngay lập tức. Bạn cũng có quyền truy cập, chỉnh sửa, phản đối và khiếu nại tới CNIL (cnil.fr).',

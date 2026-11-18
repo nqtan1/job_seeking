@@ -1,4 +1,5 @@
 import { SearchX } from 'lucide-react'
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -6,18 +7,20 @@ import { Page } from '@/components/Page'
 import { ListSkeleton } from '@/components/Skeleton'
 import { buttonVariants } from '@/components/ui/button'
 import { useT } from '@/i18n'
+import { track } from '@/lib/analytics'
 import { toolText, useTools } from './api'
 
 /** One tool: what it does, takes and gives. No direct run: it is used in a flow or by an agent. */
 export function ToolPage() {
   const t = useT()
   const { id = '' } = useParams()
+  useEffect(() => track('tool_opened'), [id])
   const tools = useTools()
   const tool = tools.data?.find((x) => x.id === id && x.pack !== 'core')
-  const back = { to: '/tools', label: t('nav.tools') }
+  const back = { to: '/tools', label: t('nav.search') }
   if (!tool)
     return (
-      <Page title={t('nav.tools')} back={back}>
+      <Page title={t('nav.search')} back={back}>
         <ErrorMessage error={tools.error} />
         {tools.isLoading ? (
           <ListSkeleton />

@@ -8,11 +8,13 @@ import {
   SendHorizontal,
   Sparkles,
   Square,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { ConfirmButton } from '@/components/ConfirmButton'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { Skeleton } from '@/components/Skeleton'
@@ -26,6 +28,7 @@ import {
   regenerateReply,
   streamMessage,
   useConversation,
+  useDeleteConversation,
   useMessages,
   useSetFocus,
   type Citation,
@@ -33,14 +36,14 @@ import {
   type StreamData,
 } from './api'
 import { Activity, Sources } from './Activity'
+import { ActionCard, ActionCards, InboxRow } from './ActionCard'
+import { cardFromEvent, saveLiveActions, type ActionCardData } from './actions'
 import { stepsFromMeta, type Context, type Step } from './activity'
-import { DeleteChatButton } from './DeleteChatButton'
+import { MAX_MESSAGE } from './link'
 import { Markdown } from './Markdown'
 import { companyOf } from '@/features/job-search/label'
 import { useAgent } from '@/features/helpers/api'
 import { Avatar } from '@/features/helpers/Avatar'
-
-const MAX = 4000
 
 /** The reply being streamed: everything the events have said so far. */
 type Pending = {
@@ -51,6 +54,7 @@ type Pending = {
   citations: Citation[]
   suggestions?: string
   notices: string[]
+  proposals: ActionCardData[]
   replacing: boolean // regenerating: the stored last reply is hidden meanwhile
 }
 
@@ -72,6 +76,8 @@ function applyEvent(p: Pending, name: string, data: StreamData): Pending {
       return { ...p, suggestions: String(data.html ?? '') }
     case 'notice':
       return { ...p, notices: [...p.notices, String(data.code)] }
+    case 'proposal':
+      return { ...p, proposals: [...p.proposals, cardFromEvent(data)] }
     default:
       return p
   }
@@ -200,87 +206,29 @@ function JobFocus({
   )
 }
 
-/** The home screen: the career coach. `/` starts a chat; `/chat/:conversationId` reopens one. */
+/** The assistant chat. `/chat` starts a chat; `/chat/:conversationId` reopens one. */
 export function ChatPage() {
   const t = useT()
   const { conversationId } = useParams()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
   const profile = useProfile()
   const history = useMessages(conversationId)
   const conversation = useConversation(conversationId)
   const setFocus = useSetFocus(conversationId)
   const [params] = useSearchParams()
-  // `/?job=<id>` ("Discuss this job"): the job to focus a new chat on.
+  // `/chat?job=<id>` ("Discuss this job"): the job to focus a new chat on.
   const [draftJob, setDraftJob] = useState<string | null>(params.get('job'))
   // `/chat?agent=<id>` (Agents page): chat with that helper; a stored chat keeps its own.
   const agentId = conversationId ? (conversation.data?.agent_id ?? null) : params.get('agent')
-  const agent = useAgent(agentId ?? undefined)
   const focusJob = conversationId ? (conversation.data?.job_id ?? null) : draftJob
-  // `/?ask=…` (from the tracker) prefills the box; the user reviews it and sends.
-  const [text, setText] = useState(params.get('ask') ?? '')
-  const [pending, setPending] = useState<Pending>()
-  const [error, setError] = useState<unknown>()
-  const end = useRef<HTMLDivElement>(null)
-  const abort = useRef<AbortController>(undefined)
-
-  useEffect(() => () => abort.current?.abort(), [])
-  useEffect(() => {
-    end.current?.scrollIntoView?.({ block: 'end' }) // may return a Promise: never return it
-  }, [history.data, pending])
-
-  /** Run one streamed turn. `start` posts to the right endpoint; nothing is stored unless the
-   *  reply completes, so on a failure or a stop the user's text goes back in the box. */
-  const run = async (
-    user: string,
-    replacing: boolean,
-    start: (id: string, onEvent: OnEvent, signal: AbortSignal) => Promise<void>,
-  ) => {
-    if (pending) return
-    setError(undefined)
-    setPending({ user, assistant: '', steps: [], citations: [], notices: [], replacing })
-    abort.current = new AbortController()
-    try {
-      const id =
-        conversationId ?? (await createConversation({ job_id: draftJob, agent_id: agentId })).id
-      await start(
-        id,
-        (name, data) => setPending((p) => p && applyEvent(p, name, data)),
-        abort.current.signal,
-      )
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: ['messages', id] }),
-        qc.invalidateQueries({ queryKey: ['conversations'] }),
-      ])
-      setPending(undefined)
-      if (!conversationId) navigate(`/chat/${id}`, { replace: true })
-    } catch (e) {
-      setPending(undefined)
-      if (!replacing) setText(user)
-      if (!abort.current?.signal.aborted) setError(e) // a stop is not an error
-    }
-  }
-
-  const send = async (content: string) => {
-    if (!content.trim()) return
-    setText('')
-    await run(content, false, (id, onEvent, signal) => streamMessage(id, content, onEvent, signal))
-  }
-
-  const regenerate = (userText: string) =>
-    conversationId &&
-    void run(userText, true, (id, onEvent, signal) => regenerateReply(id, onEvent, signal))
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    void send(text)
-  }
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      void send(text)
-    }
-  }
+  // `/chat?draft=…` (askCoachUrl, from the tracker) prefills the box; the user reviews it and sends.
+  const { text, setText, pending, error, end, stop, send, regenerate } = useChatTurn(
+    conversationId,
+    draftJob,
+    agentId,
+    params.get('draft') ?? '',
+    history.data,
+  )
+  useAskOnce(send, !conversationId && !!profile.data)
 
   if (profile.isPending) return <Skeleton className="m-6 h-24" />
   if (!profile.data && !profile.isError)
@@ -306,22 +254,7 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center border-b px-6">
-        <h1 className="flex min-w-0 items-center gap-2 text-lg font-semibold tracking-tight">
-          {agent.data && <Avatar spec={agent.data.avatar} size={28} />}
-          <span className="truncate">
-            {agentId ? (agent.data?.name ?? t('coach.agent')) : t('coach.title')}
-          </span>
-        </h1>
-        {conversationId && (
-          <div className="ml-auto">
-            <DeleteChatButton
-              id={conversationId}
-              onDeleted={() => navigate('/chat', { replace: true })}
-            />
-          </div>
-        )}
-      </header>
+      <ChatHeader agentId={agentId} conversationId={conversationId} />
       <JobFocus
         jobId={focusJob}
         focus={conversationId ? conversation.data?.focus : undefined}
@@ -331,110 +264,335 @@ export function ChatPage() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-4 p-6">
           {history.isError && <ErrorMessage error={history.error} />}
-          {empty && (
-            <div className="space-y-6 pt-10 text-center">
-              <h2 className="text-2xl font-semibold tracking-tight">{t('coach.home')}</h2>
-              <div className="mx-auto grid max-w-xl gap-2 sm:grid-cols-2">
-                {PROMPTS.map(({ icon: Icon, key }) => (
-                  <button
-                    key={key}
-                    className={card}
-                    onClick={() => void send(t(`coach.prompt.${key}.send` as Key))}
-                  >
-                    <Icon className="size-4 text-primary" />
-                    {t(`coach.prompt.${key}` as Key)}
-                  </button>
-                ))}
-                {LINKS.map(({ icon: Icon, key, to }) => (
-                  <Link key={key} to={to} className={card}>
-                    <Icon className="size-4 text-primary" />
-                    {t(`coach.link.${key}` as Key)}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-          {shown.map((m, i) => (
-            <div key={m.id} className="space-y-2">
-              {m.role === 'assistant' && m.meta && (
-                <Activity
-                  steps={stepsFromMeta(m.meta, t)}
-                  context={m.meta.context as Context}
-                  queries={m.meta.queries}
-                  citations={m.meta.citations}
-                  notices={m.meta.degraded}
-                />
-              )}
-              <Bubble role={m.role}>{m.content}</Bubble>
-              {m.role === 'assistant' && m.meta && (
-                <Sources
-                  citations={m.meta.citations ?? []}
-                  suggestionsHtml={m.meta.search_suggestions_html}
-                />
-              )}
-              {i === shown.length - 1 && m.role === 'assistant' && !pending && lastUser && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => regenerate(lastUser)}
-                >
-                  <RefreshCw className="size-3" aria-hidden />
-                  {t('coach.regenerate')}
-                </button>
-              )}
-            </div>
-          ))}
-          {pending && !pending.replacing && <Bubble role="user">{pending.user}</Bubble>}
-          {pending && (
-            <div className="space-y-2">
-              <Activity
-                running={!pending.assistant}
-                steps={pending.steps}
-                context={pending.context}
-                citations={pending.citations}
-                notices={pending.notices}
-              />
-              {pending.assistant && (
-                <Bubble role="assistant" streaming>
-                  {pending.assistant}
-                </Bubble>
-              )}
-              <Sources citations={pending.citations} suggestionsHtml={pending.suggestions} />
-            </div>
-          )}
+          {empty && <ChatHome send={send} />}
+          <Transcript
+            conversationId={conversationId}
+            shown={shown}
+            pending={pending}
+            lastUser={lastUser}
+            regenerate={regenerate}
+          />
           {error != null && <ErrorMessage error={error} />}
           <div ref={end} />
         </div>
       </div>
-      <form onSubmit={submit} className="shrink-0 border-t bg-background p-4">
-        <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card p-2 shadow-xs focus-within:ring-3 focus-within:ring-ring/40">
-          <textarea
-            aria-label={t('coach.message_aria')}
-            rows={1}
-            value={text}
-            maxLength={MAX}
-            placeholder={t('coach.placeholder')}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKey}
-            className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none [field-sizing:content]"
-          />
-          {pending ? (
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              aria-label={t('coach.stop')}
-              onClick={() => abort.current?.abort()}
-            >
-              <Square />
-            </Button>
-          ) : (
-            <Button type="submit" size="icon" aria-label={t('coach.send')} disabled={!text.trim()}>
-              <SendHorizontal />
-            </Button>
-          )}
-        </div>
-      </form>
+      <Composer text={text} setText={setText} pending={!!pending} send={send} onStop={stop} />
     </div>
+  )
+}
+
+/** `/chat?ask=…` (the Today ask box) sends at once. The param leaves the address bar without a
+ *  router navigation (that would remount the page and abort the stream); a reload then does not
+ *  resend, and the first reply navigates to `/chat/:id` anyway. */
+function useAskOnce(send: (content: string) => Promise<void>, ready: boolean) {
+  const [params] = useSearchParams()
+  const ask = params.get('ask')
+  const sent = useRef(false)
+  useEffect(() => {
+    if (!ask || !ready || sent.current) return
+    // next tick: StrictMode's mount-unmount-mount would otherwise abort the stream just started
+    const timer = setTimeout(() => {
+      sent.current = true
+      const url = new URL(window.location.href)
+      url.searchParams.delete('ask')
+      window.history.replaceState(window.history.state, '', url)
+      void send(ask)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [ask, ready, send])
+}
+
+/** One streamed turn at a time, and what is typed in the box meanwhile. */
+function useChatTurn(
+  conversationId: string | undefined,
+  draftJob: string | null,
+  agentId: string | null,
+  initialText: string,
+  messages: unknown,
+) {
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [text, setText] = useState(initialText)
+  const [pending, setPending] = useState<Pending>()
+  const [error, setError] = useState<unknown>()
+  const end = useRef<HTMLDivElement>(null)
+  const abort = useRef<AbortController>(undefined)
+
+  useEffect(() => () => abort.current?.abort(), [])
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: 'end' }) // may return a Promise: never return it
+  }, [messages, pending])
+
+  /** Run one streamed turn. `start` posts to the right endpoint; nothing is stored unless the
+   *  reply completes, so on a failure or a stop the user's text goes back in the box. */
+  const run = async (
+    user: string,
+    replacing: boolean,
+    start: (id: string, onEvent: OnEvent, signal: AbortSignal) => Promise<void>,
+  ) => {
+    if (pending) return
+    setError(undefined)
+    setPending({
+      user,
+      assistant: '',
+      steps: [],
+      citations: [],
+      notices: [],
+      proposals: [],
+      replacing,
+    })
+    abort.current = new AbortController()
+    const cards: ActionCardData[] = []
+    let messageId = ''
+    try {
+      const id =
+        conversationId ?? (await createConversation({ job_id: draftJob, agent_id: agentId })).id
+      await start(
+        id,
+        (name, data) => {
+          if (name === 'proposal') cards.push(cardFromEvent(data))
+          if (name === 'done') messageId = String(data.message_id ?? '')
+          setPending((p) => p && applyEvent(p, name, data))
+        },
+        abort.current.signal,
+      )
+      if (cards.length && messageId) saveLiveActions(qc, id, messageId, cards)
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['messages', id] }),
+        qc.invalidateQueries({ queryKey: ['conversations'] }),
+      ])
+      setPending(undefined)
+      if (!conversationId) navigate(`/chat/${id}`, { replace: true })
+    } catch (e) {
+      setPending(undefined)
+      if (!replacing) setText(user)
+      if (!abort.current?.signal.aborted) setError(e) // a stop is not an error
+    }
+  }
+
+  const send = async (content: string) => {
+    if (!content.trim()) return
+    setText('')
+    await run(content, false, (id, onEvent, signal) => streamMessage(id, content, onEvent, signal))
+  }
+
+  const regenerate = (userText: string) =>
+    conversationId &&
+    void run(userText, true, (id, onEvent, signal) => regenerateReply(id, onEvent, signal))
+
+  const stop = () => abort.current?.abort()
+  return { text, setText, pending, error, end, stop, send, regenerate }
+}
+
+function ChatHeader({
+  agentId,
+  conversationId,
+}: {
+  agentId: string | null
+  conversationId: string | undefined
+}) {
+  const t = useT()
+  const navigate = useNavigate()
+  const agent = useAgent(agentId ?? undefined)
+  return (
+    <header className="flex h-14 shrink-0 items-center border-b px-6">
+      <h1 className="flex min-w-0 items-center gap-2 text-lg font-semibold tracking-tight">
+        {agent.data && <Avatar spec={agent.data.avatar} size={28} />}
+        <span className="truncate">
+          {agentId ? (agent.data?.name ?? t('coach.agent')) : t('coach.title')}
+        </span>
+      </h1>
+      {conversationId && (
+        <div className="ml-auto">
+          <DeleteChatButton
+            id={conversationId}
+            onDeleted={() => navigate('/chat', { replace: true })}
+          />
+        </div>
+      )}
+    </header>
+  )
+}
+
+function ChatHome({ send }: { send: (content: string) => Promise<void> }) {
+  const t = useT()
+  return (
+    <div className="space-y-6 pt-10 text-center">
+      <h2 className="text-2xl font-semibold tracking-tight">{t('coach.home')}</h2>
+      <div className="mx-auto grid max-w-xl gap-2 sm:grid-cols-2">
+        {PROMPTS.map(({ icon: Icon, key }) => (
+          <button
+            key={key}
+            className={card}
+            onClick={() => void send(t(`coach.prompt.${key}.send` as Key))}
+          >
+            <Icon className="size-4 text-primary" />
+            {t(`coach.prompt.${key}` as Key)}
+          </button>
+        ))}
+        {LINKS.map(({ icon: Icon, key, to }) => (
+          <Link key={key} to={to} className={card}>
+            <Icon className="size-4 text-primary" />
+            {t(`coach.link.${key}` as Key)}
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Two clicks: "Delete chat", then "Confirm delete" (nothing is undone by one stray click). */
+function DeleteChatButton({ id, onDeleted }: { id: string; onDeleted: () => void }) {
+  const t = useT()
+  const del = useDeleteConversation()
+  return (
+    <ConfirmButton
+      variant="ghost"
+      label={
+        <>
+          <Trash2 /> {t('coach.delete')}
+        </>
+      }
+      confirmLabel={t('coach.delete.confirm')}
+      pendingLabel={t('coach.delete.deleting')}
+      cancelLabel={t('coach.delete.cancel')}
+      pending={del.isPending}
+      onConfirm={() => del.mutate(id, { onSuccess: onDeleted })}
+    />
+  )
+}
+
+type Message = NonNullable<ReturnType<typeof useMessages>['data']>[number]
+
+function Transcript({
+  conversationId,
+  shown,
+  pending,
+  lastUser,
+  regenerate,
+}: {
+  conversationId: string | undefined
+  shown: Message[]
+  pending: Pending | undefined
+  lastUser: string | undefined
+  regenerate: (userText: string) => void
+}) {
+  const t = useT()
+  return (
+    <>
+      {shown.map((m, i) =>
+        m.meta?.inbox ? (
+          <InboxRow key={m.id} inbox={m.meta.inbox} text={m.content} />
+        ) : (
+          <div key={m.id} className="space-y-2">
+            {m.role === 'assistant' && m.meta && (
+              <Activity
+                steps={stepsFromMeta(m.meta, t)}
+                context={m.meta.context as Context}
+                queries={m.meta.queries}
+                citations={m.meta.citations}
+                notices={m.meta.degraded}
+              />
+            )}
+            <Bubble role={m.role}>{m.content}</Bubble>
+            {m.role === 'assistant' && <ActionCards conversationId={conversationId} message={m} />}
+            {m.role === 'assistant' && m.meta && (
+              <Sources
+                citations={m.meta.citations ?? []}
+                suggestionsHtml={m.meta.search_suggestions_html}
+              />
+            )}
+            {i === shown.length - 1 && m.role === 'assistant' && !pending && lastUser && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => regenerate(lastUser)}
+              >
+                <RefreshCw className="size-3" aria-hidden />
+                {t('coach.regenerate')}
+              </button>
+            )}
+          </div>
+        ),
+      )}
+      {pending && !pending.replacing && <Bubble role="user">{pending.user}</Bubble>}
+      {pending && (
+        <div className="space-y-2">
+          <Activity
+            running={!pending.assistant}
+            steps={pending.steps}
+            context={pending.context}
+            citations={pending.citations}
+            notices={pending.notices}
+          />
+          {pending.assistant && (
+            <Bubble role="assistant" streaming>
+              {pending.assistant}
+            </Bubble>
+          )}
+          {pending.proposals.map((c) => (
+            <ActionCard key={c.action_id} card={c} />
+          ))}
+          <Sources citations={pending.citations} suggestionsHtml={pending.suggestions} />
+        </div>
+      )}
+    </>
+  )
+}
+
+function Composer({
+  text,
+  setText,
+  pending,
+  send,
+  onStop,
+}: {
+  text: string
+  setText: (text: string) => void
+  pending: boolean
+  send: (content: string) => Promise<void>
+  onStop: () => void
+}) {
+  const t = useT()
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    void send(text)
+  }
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      void send(text)
+    }
+  }
+  return (
+    <form onSubmit={submit} className="shrink-0 border-t bg-background p-4">
+      <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border bg-card p-2 shadow-xs focus-within:ring-3 focus-within:ring-ring/40">
+        <textarea
+          aria-label={t('coach.message_aria')}
+          rows={1}
+          value={text}
+          maxLength={MAX_MESSAGE}
+          placeholder={t('coach.placeholder')}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKey}
+          className="max-h-40 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none [field-sizing:content]"
+        />
+        {pending ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            aria-label={t('coach.stop')}
+            onClick={onStop}
+          >
+            <Square />
+          </Button>
+        ) : (
+          <Button type="submit" size="icon" aria-label={t('coach.send')} disabled={!text.trim()}>
+            <SendHorizontal />
+          </Button>
+        )}
+      </div>
+    </form>
   )
 }

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/bundle-budget.mjs",
     "lint": "oxlint --deny-warnings",
     "preview": "vite preview",
     "typecheck": "tsc -b",
@@ -20,6 +20,7 @@
     "@base-ui/react": "^1.8.0",
     "@fontsource-variable/geist": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
+    "@sentry/react": "^11.12.0",
     "@tanstack/react-query": "^5.104.1",
     "@xyflow/react": "12.10.2",
     "class-variance-authority": "^0.7.1",
@@ -27,6 +28,7 @@
     "firebase": "^12.19.0",
     "lucide-react": "^1.51.0",
     "openapi-fetch": "^0.17.0",
+    "posthog-js": "^1.450.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.89.0",
@@ -37,6 +39,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",

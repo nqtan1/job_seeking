@@ -54,6 +54,6 @@ export const tools = defineMessages({
     'tools.outputs': 'Trả về',
     'tools.optional': 'không bắt buộc',
     'tools.use_flow': 'Dùng trong quy trình',
-    'tools.give_agent': 'Giao cho trợ lý',
+    'tools.give_agent': 'Giao cho agent',
   },
 })

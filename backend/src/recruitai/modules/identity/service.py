@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai import overrides, usage
 from recruitai.config import AGENTS, Settings
+from recruitai.core import inbox
 from recruitai.core.email import EmailSender
 from recruitai.core.errors import NotFound, ValidationFailed
 from recruitai.core.language import Language
@@ -395,7 +396,9 @@ async def send_application_reminders(
 ) -> int:
     """One digest email per user, in their language: follow-ups and interviews due today, plus
     ``extra_lines`` (e.g. the radar's new matches, per org). Skips users who opted out or are
-    blocked. A failed send is logged by type only and does not stop the rest."""
+    blocked. A failed send is logged by type only and does not stop the rest. The count of due
+    reminders also goes, as one line, to each owner's Assistant inbox (ADR 0042), opted out of
+    email or not; the inbox keeps it to one a day."""
     due: dict[UUID, list[applications.Reminder]] = {}
     for r in await applications.due_reminders(db, today=now.date()):
         due.setdefault(r.org_id, []).append(r)
@@ -418,17 +421,29 @@ async def send_application_reminders(
     if not orgs:
         return 0
     owners = await db.execute(
-        select(Membership.org_id, User.email, User.language)
+        select(
+            Membership.org_id, User.id, User.email, User.language, User.email_reminders
+        )
         .join(User, User.id == Membership.user_id)
         .where(
             Membership.org_id.in_(orgs),
             Membership.role == "owner",
-            User.email_reminders.is_(True),
             User.blocked_at.is_(None),
         )
     )
     sent = 0
-    for org_id, email, lang in owners.all():
+    for org_id, user_id, email, lang, wants_email in owners.all():
+        if org_id in due:
+            await inbox.post(
+                db,
+                org_id=org_id,
+                user_id=user_id,
+                kind="reminder",
+                params={"count": len(due[org_id])},
+                link="/tracker",
+            )
+        if not wants_email:
+            continue
         language = _lang(lang)
         lines = [_line(r, language) for r in due.get(org_id, [])]
         if org_id in extra:
@@ -444,6 +459,7 @@ async def send_application_reminders(
             sent += 1
         except Exception as exc:  # noqa: BLE001  (one bad address must not stop the others)
             logger.error("reminder failed", extra={"error_type": type(exc).__name__})
+    await db.commit()  # the inbox lines
     return sent
 
 

@@ -45,6 +45,22 @@ type Props = {
   onSave: () => void
 }
 
+function useBlockSelection(value: string) {
+  // A selection and an AI suggestion carry offsets into the text they were made on: once the
+  // text changes (typing, a spelling correction...) they no longer apply, so they are ignored
+  // instead of being spliced into the wrong place.
+  const [picked, setPicked] = useState<Range & { base: string }>()
+  const [proposed, setProposed] = useState<Range & { text: string; base: string }>()
+  const selection = picked?.base === value ? picked : undefined
+  const suggestion = proposed?.base === value ? proposed : undefined
+  const hasSelection = selection && selection.end > selection.start
+  const reset = () => {
+    setPicked(undefined)
+    setProposed(undefined)
+  }
+  return { setPicked, setProposed, selection, suggestion, hasSelection, reset }
+}
+
 /** One editable block: textarea, select-text AI actions with an accept/dismiss suggestion, Save. */
 export function BlockEditor({
   letterId,
@@ -65,23 +81,11 @@ export function BlockEditor({
   onChange,
   onSave,
 }: Props) {
-  const t = useT()
-  const assist = useAssist(letterId)
   const textarea = useRef<HTMLTextAreaElement>(null)
-  // A selection and an AI suggestion carry offsets into the text they were made on: once the
-  // text changes (typing, a spelling correction...) they no longer apply, so they are ignored
-  // instead of being spliced into the wrong place.
-  const [picked, setPicked] = useState<Range & { base: string }>()
-  const [proposed, setProposed] = useState<Range & { text: string; base: string }>()
-  const selection = picked?.base === value ? picked : undefined
-  const suggestion = proposed?.base === value ? proposed : undefined
-  const hasSelection = selection && selection.end > selection.start
+  const { setPicked, setProposed, selection, suggestion, hasSelection, reset } =
+    useBlockSelection(value)
   const dirty = value !== block.text
 
-  const reset = () => {
-    setPicked(undefined)
-    setProposed(undefined)
-  }
   const focusText = (caret: number) => {
     textarea.current?.focus()
     textarea.current?.setSelectionRange(caret, caret)
@@ -90,16 +94,7 @@ export function BlockEditor({
   return (
     <div className="space-y-1">
       <Label htmlFor={block.key}>{block.label}</Label>
-      {ideas.length > 0 && (
-        <div className="rounded-md border border-dashed bg-muted/40 p-2 text-sm">
-          <p className="font-medium">{t('letters.editor.ideas')}</p>
-          <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
-            {ideas.map((idea) => (
-              <li key={idea}>{idea}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <IdeasBox ideas={ideas} />
       <Textarea
         id={block.key}
         ref={textarea}
@@ -117,7 +112,86 @@ export function BlockEditor({
           })
         }
       />
-      {hasSelection && (
+      <AssistPanel
+        letterId={letterId}
+        block={block}
+        value={value}
+        selection={hasSelection ? selection : undefined}
+        onProposed={setProposed}
+      />
+      {suggestion && (
+        <SuggestionBox
+          text={suggestion.text}
+          onUse={() => {
+            onChange(
+              value.slice(0, suggestion.start) + suggestion.text + value.slice(suggestion.end),
+            )
+            reset()
+          }}
+          onDismiss={() => setProposed(undefined)}
+        />
+      )}
+      {onCheck && (
+        <SpellPanel
+          label={block.label}
+          value={value}
+          issues={issues}
+          ignored={ignored}
+          stale={staleCheck}
+          unsaved={dirty}
+          onApplyIssue={(i) => onApplyIssue?.(i)}
+          onApplyAll={() => onApplyAll?.()}
+          onIgnoreIssue={(i) => onIgnoreIssue?.(i)}
+          onFocusText={focusText}
+        />
+      )}
+      {checkError !== undefined && checkError !== null && <ErrorMessage error={checkError} />}
+      <BlockActions
+        label={block.label}
+        canSave={dirty && !saving}
+        onSave={onSave}
+        onCheck={onCheck}
+        checking={checking}
+        canCheck={!(checking || checkDisabled || !value.trim())}
+      />
+    </div>
+  )
+}
+
+function IdeasBox({ ideas }: { ideas: string[] }) {
+  const t = useT()
+  if (ideas.length === 0) return null
+  return (
+    <div className="rounded-md border border-dashed bg-muted/40 p-2 text-sm">
+      <p className="font-medium">{t('letters.editor.ideas')}</p>
+      <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+        {ideas.map((idea) => (
+          <li key={idea}>{idea}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function AssistPanel({
+  letterId,
+  block,
+  value,
+  selection,
+  onProposed,
+}: {
+  letterId: string
+  block: EditorBlock
+  value: string
+  /** The non-empty selection the actions apply to, if any. */
+  selection?: Range
+  onProposed: (p: Range & { text: string; base: string }) => void
+}) {
+  const t = useT()
+  const assist = useAssist(letterId)
+  return (
+    <>
+      {selection && (
         <div
           role="group"
           aria-label={t('letters.editor.ai_actions', { label: block.label })}
@@ -138,8 +212,7 @@ export function BlockEditor({
                     action,
                   },
                   {
-                    onSuccess: (r) =>
-                      setProposed({ ...selection, text: r.suggestion, base: value }),
+                    onSuccess: (r) => onProposed({ ...selection, text: r.suggestion, base: value }),
                   },
                 )
               }
@@ -154,67 +227,76 @@ export function BlockEditor({
           <Spinner className="size-3.5" /> {t('letters.editor.rewriting')}
         </p>
       )}
-      {assist.isError && hasSelection && <ErrorMessage error={assist.error} />}
-      {suggestion && (
-        <div className="space-y-2 rounded-md border border-primary/50 p-2 text-sm">
-          <p className="font-medium">{t('letters.editor.suggestion')}</p>
-          <p>{suggestion.text}</p>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() => {
-                onChange(
-                  value.slice(0, suggestion.start) + suggestion.text + value.slice(suggestion.end),
-                )
-                reset()
-              }}
-            >
-              {t('letters.editor.use')}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setProposed(undefined)}>
-              {t('letters.editor.dismiss')}
-            </Button>
-          </div>
-        </div>
-      )}
+      {assist.isError && selection && <ErrorMessage error={assist.error} />}
+    </>
+  )
+}
+
+function SuggestionBox({
+  text,
+  onUse,
+  onDismiss,
+}: {
+  text: string
+  onUse: () => void
+  onDismiss: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="space-y-2 rounded-md border border-primary/50 p-2 text-sm">
+      <p className="font-medium">{t('letters.editor.suggestion')}</p>
+      <p>{text}</p>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={onUse}>
+          {t('letters.editor.use')}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onDismiss}>
+          {t('letters.editor.dismiss')}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function BlockActions({
+  label,
+  canSave,
+  onSave,
+  onCheck,
+  checking,
+  canCheck,
+}: {
+  label: string
+  canSave: boolean
+  onSave: () => void
+  onCheck?: () => void
+  checking: boolean
+  canCheck: boolean
+}) {
+  const t = useT()
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={!canSave}
+        aria-label={t('letters.editor.save_aria', { label })}
+        onClick={onSave}
+      >
+        {t('letters.editor.save')}
+      </Button>
       {onCheck && (
-        <SpellPanel
-          label={block.label}
-          value={value}
-          issues={issues}
-          ignored={ignored}
-          stale={staleCheck}
-          unsaved={dirty}
-          onApplyIssue={(i) => onApplyIssue?.(i)}
-          onApplyAll={() => onApplyAll?.()}
-          onIgnoreIssue={(i) => onIgnoreIssue?.(i)}
-          onFocusText={focusText}
-        />
-      )}
-      {checkError !== undefined && checkError !== null && <ErrorMessage error={checkError} />}
-      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
           variant="outline"
-          disabled={!dirty || saving}
-          aria-label={t('letters.editor.save_aria', { label: block.label })}
-          onClick={onSave}
+          disabled={!canCheck}
+          aria-busy={checking}
+          aria-label={t('letters.editor.check_aria', { label })}
+          onClick={onCheck}
         >
-          {t('letters.editor.save')}
+          {checking ? t('letters.editor.checking') : t('letters.editor.check')}
         </Button>
-        {onCheck && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={checking || checkDisabled || !value.trim()}
-            aria-busy={checking}
-            aria-label={t('letters.editor.check_aria', { label: block.label })}
-            onClick={onCheck}
-          >
-            {checking ? t('letters.editor.checking') : t('letters.editor.check')}
-          </Button>
-        )}
-      </div>
+      )}
     </div>
   )
 }

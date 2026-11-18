@@ -116,7 +116,7 @@ export function FitPage() {
       actions={
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to={`/?job=${jobId}`}
+            to={`/chat?job=${jobId}`}
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
             {t('jobs.discuss')}

@@ -34,7 +34,7 @@ export function PlaceTabs() {
   )
 }
 
-/** Phone only: the five places one thumb away (the drawer keeps the rest). */
+/** Phone only: the places one thumb away (the drawer keeps the rest). */
 export function BottomTabs() {
   const t = useT()
   const { pathname } = useLocation()

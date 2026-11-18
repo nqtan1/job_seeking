@@ -26,13 +26,17 @@ from recruitai.ai.gateway import (
     T,
     TextDelta,
     TextPart,
+    ToolCall,
+    ToolCalls,
+    ToolCallTurn,
+    ToolResultTurn,
     ToolSpec,
     Turn,
     UserTurn,
     provider_errors,
     without_nul,
 )
-from recruitai.ai.usage import CallStats, tracked_call
+from recruitai.ai.usage import NO_LIMIT, CallStats, tracked_call
 from recruitai.config import Settings
 from recruitai.core.errors import UpstreamUnavailable, ValidationFailed
 
@@ -125,6 +129,57 @@ def _with_schema(system: str, schema: type[BaseModel]) -> str:
     return f"{system}\n\nReturn one JSON object matching this JSON schema:\n{compact}"
 
 
+def _messages(system: str, turns: list[Turn]) -> list[dict[str, Any]]:
+    """OpenAI chat messages. A tool result has no call id of its own: results come in call order,
+    so they are paired with the ids of the assistant message just before them."""
+    out: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    ids: list[str] = []
+    for turn in turns:
+        if isinstance(turn, UserTurn):
+            out.append({"role": "user", "content": turn.text})
+        elif isinstance(turn, ToolCallTurn):
+            out.append(
+                turn.raw
+            )  # the assistant message as the server sent it, ids included
+            ids = [c["id"] for c in turn.raw["tool_calls"]]
+        elif isinstance(turn, ToolResultTurn):
+            out += [
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": json.dumps(r.result, ensure_ascii=False),
+                }
+                for call_id, r in zip(ids, turn.results, strict=True)
+            ]
+    return out
+
+
+def _args(arguments: str) -> dict[str, Any]:
+    """A malformed argument string becomes ``{}``: the tool then rejects it cleanly."""
+    try:
+        args = json.loads(arguments or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return args if isinstance(args, dict) else {}
+
+
+def _tool_calls(pending: dict[int, dict[str, str]], text: str) -> ToolCalls:
+    """Streamed tool-call fragments (keyed by index) as one ``ToolCalls`` event."""
+    ordered = [c for _, c in sorted(pending.items())]
+    raw_calls = [
+        {
+            "id": c["id"] or f"call_{i}",
+            "type": "function",
+            "function": {"name": c["name"], "arguments": c["arguments"]},
+        }
+        for i, c in enumerate(ordered)
+    ]
+    return ToolCalls(
+        calls=[ToolCall(name=c["name"], args=_args(c["arguments"])) for c in ordered],
+        raw={"role": "assistant", "content": text or None, "tool_calls": raw_calls},
+    )
+
+
 class QwenGateway:
     """Same per-request construction as ``GeminiGateway`` — see its docstring."""
 
@@ -165,7 +220,7 @@ class QwenGateway:
         return parts, client, model_name or "unset-qwen-model"
 
     def _tracked(
-        self, feature: str, model_name: str
+        self, feature: str, model_name: str, *, continuation: bool = False
     ) -> AbstractAsyncContextManager[CallStats]:
         return tracked_call(
             self._db,
@@ -173,7 +228,8 @@ class QwenGateway:
             user_id=self._user_id,
             feature=feature,
             model=model_name,
-            quota=self._settings.ai_daily_quota_per_user,
+            # A follow-up call of a turn the user already started is counted, not refused.
+            quota=NO_LIMIT if continuation else self._settings.ai_daily_quota_per_user,
         )
 
     async def generate(
@@ -267,9 +323,10 @@ class QwenGateway:
                         yield chunk.choices[0].delta.content
 
     def capabilities(self, feature: str | None = None) -> BackendCapabilities:
-        # ponytail: no tool calling or web grounding on the OpenAI-compatible backend yet
-        # (the vLLM server needs --enable-auto-tool-choice; unverified). Plain answers only.
-        return BackendCapabilities(function_calling=False, web_grounding=False)
+        # Tool calling needs the vLLM server started with --enable-auto-tool-choice (QWEN_TOOLS).
+        return BackendCapabilities(
+            function_calling=self._settings.qwen_tools, web_grounding=False
+        )
 
     async def converse(
         self,
@@ -282,11 +339,62 @@ class QwenGateway:
         allow_tools: bool = True,
         continuation: bool = False,
     ) -> AsyncGenerator[ChatEvent]:
-        text = "\n".join(t.text for t in turns if isinstance(t, UserTurn))
-        async for chunk in self.stream(
-            system=system, parts=[TextPart(text)], feature=feature, model=model
-        ):
-            yield TextDelta(chunk)
+        model_name = self.model_name(model, feature)
+        timeout = self._settings.ai_call_timeout_s
+        extra: dict[str, Any] = {}
+        if tools:
+            extra["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters,
+                    },
+                }
+                for t in tools
+            ]
+            # "none" keeps the declarations (the history holds earlier calls) but forbids new ones.
+            extra["tool_choice"] = "auto" if allow_tools else "none"
+        pending: dict[int, dict[str, str]] = {}
+        texts: list[str] = []
+        async with self._tracked(
+            feature, model_name, continuation=continuation
+        ) as call:
+            with provider_errors(APIError):
+                completion = await wait_for(
+                    self._client.chat.completions.create(  # type: ignore[call-overload]  # plain-dict messages, as in stream()
+                        model=model_name,
+                        messages=_messages(system, turns),
+                        stream=True,
+                        stream_options={"include_usage": True},
+                        **extra,
+                    ),
+                    timeout=timeout,
+                )
+                iterator = completion.__aiter__()
+                while True:
+                    try:
+                        chunk = await wait_for(iterator.__anext__(), timeout=timeout)
+                    except StopAsyncIteration:
+                        break
+                    if chunk.usage is not None:
+                        call.input_tokens = chunk.usage.prompt_tokens
+                        call.output_tokens = chunk.usage.completion_tokens
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    for tc in (delta.tool_calls if delta else None) or []:
+                        slot = pending.setdefault(
+                            tc.index, {"id": "", "name": "", "arguments": ""}
+                        )
+                        slot["id"] = tc.id or slot["id"]
+                        if tc.function is not None:
+                            slot["name"] += tc.function.name or ""
+                            slot["arguments"] += tc.function.arguments or ""
+                    if delta is not None and delta.content:
+                        texts.append(delta.content)
+                        yield TextDelta(delta.content)
+        if pending:
+            yield _tool_calls(pending, "".join(texts))
 
     async def ground(
         self, *, query: str, system: str, feature: str, continuation: bool = True

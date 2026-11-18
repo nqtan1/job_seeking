@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { expectNoA11yViolations, narrow, places } from './support.ts'
 
 // the one "+ Add" menu of the flow editor (a disclosure, so not a button)
 const addMenu = (page: Page) => page.locator('summary', { hasText: /^\s*Add\s*$/ })
@@ -15,11 +16,11 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await page.getByLabel('Password', { exact: true }).fill('password123')
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Agents' }).click()
+  await expect(places(page)).toBeVisible()
+  await places(page).getByRole('link', { name: 'Studio' }).click()
 
   // A helper from a template opens in the editor with its own id and character.
-  await expect(page.getByText('No helper yet')).toBeVisible()
+  await expect(page.getByText('No agent yet')).toBeVisible()
   await page.getByRole('button', { name: /^Use:/ }).first().click()
   await expect(page.getByLabel('Instructions')).toContainText('follow-up')
   await page.locator('summary', { hasText: 'Advanced' }).click() // the rarely used settings
@@ -36,13 +37,13 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
 
   // A flow: Start → Mira → Result, built in the Steps view.
   await page.goto('/automations')
-  await page.getByRole('button', { name: 'New automation' }).first().click()
+  await page.getByRole('button', { name: 'New flow' }).first().click()
   await page.getByLabel('Name').fill('Follow-up flow')
   await page.getByRole('button', { name: 'Create', exact: true }).click()
   await page.getByRole('button', { name: 'Steps', exact: true }).click()
   await addMenu(page).click()
   await page.getByRole('button', { name: 'Mira' }).click()
-  await expect(page.getByRole('button', { name: 'Mira Helper' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Mira Agent' })).toBeVisible()
   // A just-added helper refuses links until its details have loaded ("still loading"): retry.
   await expect(async () => {
     await page.getByLabel('Send to…').first().selectOption({ label: 'Mira' }) // Start → Mira
@@ -73,7 +74,7 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   await expect(live.getByRole('region', { name: 'Result' })).toContainText(
     'A canned helper answer.',
   )
-  await expect(live.getByText(/Finished in/)).toBeVisible()
+  await expect(live.getByText(/^Took /)).toBeVisible()
 
   // Run again follows the new run in place; the full page keeps the replay and the data between steps.
   await live.getByRole('button', { name: 'Run again' }).click()
@@ -116,15 +117,17 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
 
   // The job hunter installs in one click and is ready to run: a search sentence in, offers out.
   await page.goto('/automations')
-  await page.getByRole('button', { name: 'Use Job hunter' }).click()
+  await page.getByRole('button', { name: 'Use: Job hunter' }).click()
   await expect(page).toHaveURL(/\/automations\//, { timeout: 30_000 })
+  if (narrow(page)) await page.getByRole('button', { name: 'Canvas', exact: true }).click() // a phone opens on Steps
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect(page.locator('.react-flow__node', { hasText: 'Find new job offers' })).toBeVisible()
 
   // A ready-made automation creates its helpers and the flow in one click.
   await page.goto('/automations')
-  await page.getByRole('button', { name: 'Use Follow up after applying' }).click()
+  await page.getByRole('button', { name: 'Use: Follow up after applying' }).click()
   await expect(page).toHaveURL(/\/automations\//, { timeout: 30_000 })
+  if (narrow(page)) await page.getByRole('button', { name: 'Canvas', exact: true }).click()
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 
   // Action blocks: add "Search jobs"; it appears as a step that still needs its input wired.
@@ -142,8 +145,8 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
 
   // "Start an automation for each" needs its target: the checks say so until one is chosen.
   await addMenu(page).click()
-  await page.getByRole('button', { name: /Start an automation for each/ }).click()
-  await expect(page.getByText('Choose the automation to start.')).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: /Start a flow for each/ }).click()
+  await expect(page.getByText('Choose the flow to start.')).toBeVisible({ timeout: 15_000 })
 
   // Contacts: add someone to email; they stay "waiting for their OK" until they confirm.
   await page.goto('/automations?tab=contacts')
@@ -157,4 +160,5 @@ test('helpers: template → edit → try → two-step flow → run → inspect �
   })
 
   expect(problems).toEqual([])
+  await expectNoA11yViolations(page)
 })

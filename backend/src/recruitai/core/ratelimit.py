@@ -1,8 +1,8 @@
 """Per-user rate limits (handbook §7), keyed by the verified Firebase uid, never client input.
 
-A sliding window kept in memory, per instance: with N API instances a user gets up to N times
-the limit. That bounds a runaway client or script; the DB-backed daily AI quota
-(``ai/usage.py``) stays the real cost control. Unauthenticated floods are not limited here
+A fixed window counted in Postgres, so it holds across API instances (ADR 0041). That bounds a
+runaway client or script; the DB-backed daily AI quota (``ai/usage.py``) stays the real cost
+control. Unauthenticated floods are not limited here
 (no trusted client IP behind Hosting + Cloud Run); that belongs to Cloud Run's max instances.
 The window itself lives in ``core/throttle.py`` so the auth dependency can use it too.
 """
@@ -14,7 +14,7 @@ from fastapi import Depends
 
 from recruitai.core.auth import CurrentUser, get_current_user
 from recruitai.core.errors import RateLimited
-from recruitai.core.throttle import hit
+from recruitai.core.throttle import hit, hit_shared
 
 
 def rate_limit(
@@ -23,7 +23,9 @@ def rate_limit(
     async def dependency(
         user: Annotated[CurrentUser, Depends(get_current_user)],
     ) -> None:
-        retry_after = hit(name, user.firebase_uid, limit=limit, per_s=per_s)
+        retry_after = await hit_shared(
+            name, user.firebase_uid, limit=limit, per_s=per_s
+        )
         if retry_after is not None:
             raise RateLimited(headers={"Retry-After": str(retry_after)})
 

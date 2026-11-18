@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation } from 'react-router'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { useT } from '@/i18n'
-import { useConversations } from '@/features/coach/api'
+import { useChats } from '@/features/coach/api'
 import { useJobs } from '@/features/job-search/api'
 import { useLetters } from '@/features/letters/api'
 import { RadarBadge } from '@/features/radar/RadarBadge'
@@ -56,7 +56,7 @@ function bucket(at: number, now = new Date()) {
 
 function Recent() {
   const t = useT()
-  const chats = useConversations().data?.slice(0, 8)
+  const chats = useChats().data?.slice(0, 8)
   const letters = useLetters().data?.slice(0, 5)
   const jobs = useJobs().data
   // Company comes from the cached jobs list: no extra request per item.
@@ -111,7 +111,7 @@ function Recent() {
   )
 }
 
-/** The left column: the five places, Admin, recent items, account. Shared by desktop and the mobile drawer. */
+/** The left column: the places, Admin, recent items, account. Shared by desktop and the mobile drawer. */
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle?: () => void }) {
   const t = useT()
   const me = useMe().data

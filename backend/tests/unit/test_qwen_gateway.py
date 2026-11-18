@@ -372,3 +372,142 @@ def test_any_failure_reading_a_pdf_is_a_validation_error_not_a_500(monkeypatch):
     monkeypatch.setattr(qwen, "PdfReader", Weird)
     with pytest.raises(ValidationFailed):
         qwen._pdf_text(b"%PDF-1.4")
+
+
+async def test_converse_calls_a_tool_then_answers_over_the_openai_wire(db_session):
+    """A fake OpenAI-compatible server: the model asks for a tool, gets the result, answers."""
+    import json
+
+    import httpx
+    from openai import AsyncOpenAI
+
+    from recruitai.ai.gateway import (
+        ToolCalls,
+        ToolCallTurn,
+        ToolResult,
+        ToolResultTurn,
+        ToolSpec,
+        UserTurn,
+    )
+
+    def sse(*chunks: dict) -> bytes:
+        lines = [
+            f"data: {json.dumps({'id': 'c', 'object': 'chat.completion.chunk', 'created': 0, 'model': 'm', **c})}\n\n"
+            for c in chunks
+        ]
+        return ("".join(lines) + "data: [DONE]\n\n").encode()
+
+    def delta(**d: object) -> dict:
+        return {"choices": [{"index": 0, "delta": d, "finish_reason": None}]}
+
+    usage = {
+        "choices": [],
+        "usage": {"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6},
+    }
+    call = {
+        "index": 0,
+        "id": "call_1",
+        "type": "function",
+        "function": {"name": "get_job", "arguments": '{"job_'},
+    }
+    replies = [
+        sse(
+            delta(role="assistant", tool_calls=[call]),
+            delta(tool_calls=[{"index": 0, "function": {"arguments": 'id": "j1"}'}}]),
+            usage,
+        ),
+        sse(delta(role="assistant", content="Fits "), delta(content="well."), usage),
+    ]
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            content=replies[len(bodies) - 1],
+            headers={"content-type": "text/event-stream"},
+        )
+
+    client = AsyncOpenAI(
+        api_key="x",
+        base_url="http://fake.test/v1",
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    org_id, user_id = await _org_user(db_session)
+    gateway = QwenGateway(
+        client=client,
+        settings=_settings(qwen_tools=True),
+        db=db_session,
+        org_id=org_id,
+        user_id=user_id,
+    )
+    assert gateway.capabilities().function_calling
+    assert (
+        not QwenGateway(
+            client=client,
+            settings=_settings(),
+            db=db_session,
+            org_id=org_id,
+            user_id=user_id,
+        )
+        .capabilities()
+        .function_calling
+    )
+    spec = ToolSpec(
+        "get_job",
+        "Read a job",
+        {"type": "object", "properties": {"job_id": {"type": "string"}}},
+    )
+    turns = [UserTurn("Does j1 fit me?")]
+
+    first = [
+        e
+        async for e in gateway.converse(
+            system="s", turns=turns, tools=[spec], feature="coach@1"
+        )
+    ]
+    assert len(first) == 1 and isinstance(first[0], ToolCalls)
+    assert first[0].calls[0].name == "get_job" and first[0].calls[0].args == {
+        "job_id": "j1"
+    }
+
+    turns += [
+        ToolCallTurn(first[0].calls, first[0].raw),
+        ToolResultTurn([ToolResult("get_job", {"title": "Dev"})]),
+    ]
+    second = [
+        e
+        async for e in gateway.converse(
+            system="s",
+            turns=turns,
+            tools=[spec],
+            feature="coach@1",
+            allow_tools=False,
+            continuation=True,
+        )
+    ]
+    assert [e.text for e in second] == ["Fits ", "well."]
+
+    assert bodies[0]["tools"] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_job",
+                "description": "Read a job",
+                "parameters": spec.parameters,
+            },
+        }
+    ]
+    assert bodies[0]["tool_choice"] == "auto" and bodies[1]["tool_choice"] == "none"
+    assert bodies[1]["messages"][2]["tool_calls"][0]["id"] == "call_1"
+    assert bodies[1]["messages"][3] == {
+        "role": "tool",
+        "tool_call_id": "call_1",
+        "content": '{"title": "Dev"}',
+    }
+    rows = (
+        (await db_session.execute(select(AiCall).where(AiCall.user_id == user_id)))
+        .scalars()
+        .all()
+    )
+    assert [(r.status, r.input_tokens) for r in rows] == [("ok", 4), ("ok", 4)]

@@ -1,5 +1,5 @@
 import { FileUp, Pencil } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -13,17 +13,15 @@ import { Label } from '@/components/ui/label'
 import { useMe } from '@/features/settings/api'
 import { SignatureCard } from '@/features/signature/SignatureCard'
 import { useT } from '@/i18n'
-import { useExtractProfile, useProfile } from './api'
+import { useExtractProfile, useProfile, type Profile } from './api'
 import { ProfileForm } from './ProfileForm'
 import { ProfileView } from './ProfileView'
 
 export function ProfilePage() {
   const t = useT()
-  const steps = [t('candidate.p.step1'), t('candidate.p.step2'), t('candidate.p.step3')]
   const profile = useProfile()
   const extract = useExtractProfile()
   const cvReview = useMe().data?.cv_review_enabled
-  const file = useRef<HTMLInputElement>(null)
   const [editing, setEditing] = useState(false)
   const [replacing, setReplacing] = useState(false)
 
@@ -46,41 +44,15 @@ export function ProfilePage() {
     )
 
   const upload = (
-    <Card>
-      <CardHeader>
-        <CardTitle>{profile.data ? t('candidate.p.replace') : t('candidate.p.start')}</CardTitle>
-        <CardDescription>{t('candidate.p.upload_hint')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <Label htmlFor="cv">{t('candidate.p.cv_file')}</Label>
-        <Input
-          id="cv"
-          type="file"
-          accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
-          ref={file}
-          disabled={extract.isPending}
-        />
-        {extract.isError && <ErrorMessage error={extract.error} />}
-        {extract.isPending && <StepProgress steps={steps} />}
-        <Button
-          loading={extract.isPending}
-          onClick={() => {
-            const f = file.current?.files?.[0]
-            if (f)
-              extract.mutate(f, {
-                onSuccess: () => {
-                  // A fresh extraction is reviewed in the form before it is trusted.
-                  setReplacing(false)
-                  setEditing(true)
-                },
-              })
-          }}
-        >
-          {!extract.isPending && <FileUp />}
-          {extract.isPending ? t('candidate.p.extracting') : t('candidate.p.extract')}
-        </Button>
-      </CardContent>
-    </Card>
+    <UploadCard
+      hasProfile={!!profile.data}
+      extract={extract}
+      onExtracted={() => {
+        // A fresh extraction is reviewed in the form before it is trusted.
+        setReplacing(false)
+        setEditing(true)
+      }}
+    />
   )
 
   return (
@@ -105,39 +77,16 @@ export function ProfilePage() {
             />
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl space-y-4">
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button variant="outline" onClick={() => setReplacing((r) => !r)}>
-                <FileUp />
-                {t('candidate.p.update_cv')}
-              </Button>
-              <Button
-                onClick={() => {
-                  setReplacing(false)
-                  setEditing(true)
-                }}
-              >
-                <Pencil />
-                {t('candidate.p.edit')}
-              </Button>
-            </div>
-            {replacing && upload}
-            {cvReview && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('cvr.promo.title')}</CardTitle>
-                  <CardDescription>{t('cvr.promo.desc')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link to="/cv-review" className={buttonVariants()}>
-                    {t('cvr.promo.cta')}
-                  </Link>
-                </CardContent>
-              </Card>
-            )}
-            <ProfileView profile={profile.data} />
-            <SignatureCard name={profile.data.data.personal_info.name} />
-          </div>
+          <ProfileShown
+            profile={profile.data}
+            upload={replacing && upload}
+            cvReview={cvReview}
+            onReplace={() => setReplacing((r) => !r)}
+            onEdit={() => {
+              setReplacing(false)
+              setEditing(true)
+            }}
+          />
         )
       ) : (
         <div className="mx-auto max-w-xl space-y-6 pt-6">
@@ -150,5 +99,100 @@ export function ProfilePage() {
         </div>
       )}
     </Page>
+  )
+}
+
+function UploadCard({
+  hasProfile,
+  extract,
+  onExtracted,
+}: {
+  hasProfile: boolean
+  extract: ReturnType<typeof useExtractProfile>
+  onExtracted: () => void
+}) {
+  const t = useT()
+  const steps = [t('candidate.p.step1'), t('candidate.p.step2'), t('candidate.p.step3')]
+  const file = useRef<HTMLInputElement>(null)
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{hasProfile ? t('candidate.p.replace') : t('candidate.p.start')}</CardTitle>
+        <CardDescription>{t('candidate.p.upload_hint')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Label htmlFor="cv">{t('candidate.p.cv_file')}</Label>
+        <Input
+          id="cv"
+          type="file"
+          accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
+          ref={file}
+          disabled={extract.isPending}
+        />
+        {extract.isError && <ErrorMessage error={extract.error} />}
+        {extract.isPending && <StepProgress steps={steps} />}
+        <Button
+          loading={extract.isPending}
+          onClick={() => {
+            const f = file.current?.files?.[0]
+            if (f) extract.mutate(f, { onSuccess: onExtracted })
+          }}
+        >
+          {!extract.isPending && <FileUp />}
+          {extract.isPending ? t('candidate.p.extracting') : t('candidate.p.extract')}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function CvReviewPromo() {
+  const t = useT()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('cvr.promo.title')}</CardTitle>
+        <CardDescription>{t('cvr.promo.desc')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Link to="/cv-review" className={buttonVariants()}>
+          {t('cvr.promo.cta')}
+        </Link>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProfileShown({
+  profile,
+  upload,
+  cvReview,
+  onReplace,
+  onEdit,
+}: {
+  profile: Profile
+  upload: ReactNode
+  cvReview: boolean | undefined
+  onReplace: () => void
+  onEdit: () => void
+}) {
+  const t = useT()
+  return (
+    <div className="mx-auto max-w-3xl space-y-4">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={onReplace}>
+          <FileUp />
+          {t('candidate.p.update_cv')}
+        </Button>
+        <Button onClick={onEdit}>
+          <Pencil />
+          {t('candidate.p.edit')}
+        </Button>
+      </div>
+      {upload}
+      {cvReview && <CvReviewPromo />}
+      <ProfileView profile={profile} />
+      <SignatureCard name={profile.data.personal_info.name} />
+    </div>
   )
 }

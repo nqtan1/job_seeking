@@ -15,7 +15,8 @@ runs:
     - uses: actions/setup-node@v4
       with:
         node-version: 22
-        cache: pnpm
+        # no install = no pnpm store: caching it would fail the job when the lockfile changed
+        cache: ${{ inputs.install == 'true' && 'pnpm' || '' }}
         cache-dependency-path: web/pnpm-lock.yaml
     - if: inputs.install == 'true'
       shell: bash

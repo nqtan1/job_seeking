@@ -300,8 +300,9 @@ class FlowEffect(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    run_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("flow_runs.id", ondelete="CASCADE"), nullable=False
+    # None: a chat action the user confirmed (ADR 0042); node_id is then the action's id
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("flow_runs.id", ondelete="CASCADE")
     )
     node_id: Mapped[uuid.UUID] = mapped_column(nullable=False)
     kind: Mapped[str] = mapped_column(String(24), nullable=False)

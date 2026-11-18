@@ -26,6 +26,7 @@ dependencies = [
     "pillow>=13.0.0",
     "pypdfium2>=5.14.0",
     "tzdata>=2026.1",  # zoneinfo in the slim images (schedules use IANA time zones)
+    "sentry-sdk[fastapi]>=2.70.0",
 ]
 
 [build-system]
@@ -97,6 +98,12 @@ source_modules = ["recruitai.core.tools"]
 forbidden_modules = ["recruitai.modules"]
 
 [[tool.importlinter.contracts]]
+name = "core.inbox has no dependency on modules"
+type = "forbidden"
+source_modules = ["recruitai.core.inbox"]
+forbidden_modules = ["recruitai.modules"]
+
+[[tool.importlinter.contracts]]
 name = "config does not depend on main"
 type = "forbidden"
 source_modules = ["recruitai.config"]
@@ -125,8 +132,6 @@ name = "agents does not import the career modules (their tools register themselv
 type = "forbidden"
 source_modules = ["recruitai.modules.agents"]
 forbidden_modules = ["recruitai.modules.jobs", "recruitai.modules.matching", "recruitai.modules.applications", "recruitai.modules.cvreview", "recruitai.modules.letters", "recruitai.modules.candidates"]
-# a job's 404 check before a run, and the helper's job/profile/fit context (until AP-05)
-ignore_imports = ["recruitai.modules.agents.flows.runs -> recruitai.modules.jobs.service", "recruitai.modules.agents.helpers.service -> recruitai.modules.*.service"]
 # identity and the worker reach them in turn: only direct imports count
 allow_indirect_imports = true
 [[tool.importlinter.contracts]]

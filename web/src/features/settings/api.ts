@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
+import type { components } from '@/lib/api/schema'
 import { setLang, type Lang } from '@/i18n'
 import { unwrap } from '@/lib/api/unwrap'
 
@@ -60,5 +61,22 @@ export function useSetJobViews() {
     mutationFn: async (job_views: Record<string, string>[]) =>
       void unwrap(await api.PATCH('/api/v1/me/preferences', { body: { job_views } })),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+/** What the assistant remembers about the user (Settings › Memory). */
+export const useMemory = () =>
+  useQuery({
+    queryKey: ['memory'],
+    queryFn: async () => unwrap(await api.GET('/api/v1/profile/memory')),
+  })
+
+/** The server keeps the full list: every change sends all of it back (PUT replaces). */
+export function useSaveMemory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (facts: components['schemas']['FactIn'][]) =>
+      unwrap(await api.PUT('/api/v1/profile/memory', { body: { facts } })),
+    onSuccess: (data) => qc.setQueryData(['memory'], data),
   })
 }

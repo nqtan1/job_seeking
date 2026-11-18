@@ -22,8 +22,6 @@ export function SignInMethods() {
   const [, refresh] = useReducer((n: number) => n + 1, 0)
   const m = signInMethods()
   const email = m.email
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<Key>()
   const [done, setDone] = useState<Key>()
@@ -46,13 +44,6 @@ export function SignInMethods() {
       refresh()
     }
   }
-
-  const invalid =
-    password.length < MIN_PASSWORD
-      ? 'auth.password_min'
-      : password !== confirm
-        ? 'auth.password_match'
-        : undefined
 
   return (
     <Card>
@@ -88,77 +79,16 @@ export function SignInMethods() {
             </span>
           </p>
           {m.password ? (
-            <div className="flex flex-wrap gap-2">
-              {email && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => run(() => sendPasswordReset(email), 'auth.methods.reset_sent')}
-                >
-                  {t('auth.methods.change_password')}
-                </Button>
-              )}
-              {!m.verified && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => run(resendVerification, 'auth.methods.verify_sent')}
-                >
-                  {t('auth.methods.resend_verification')}
-                </Button>
-              )}
-            </div>
+            <PasswordActions email={email} verified={m.verified} busy={busy} run={run} />
           ) : (
-            <form
-              className="space-y-2"
-              noValidate
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (invalid) {
-                  setDone(undefined)
-                  return setError(invalid)
-                }
-                void run(async () => {
-                  await addPassword(password)
-                  setPassword('')
-                  setConfirm('')
-                }, 'auth.methods.password_added')
-              }}
-            >
-              <p className="text-sm text-muted-foreground">{t('auth.methods.add_hint')}</p>
-              <input type="email" autoComplete="username" value={email ?? ''} readOnly hidden />
-              <Label htmlFor="new-password">{t('auth.methods.new_password')}</Label>
-              <Input
-                id="new-password"
-                type="password"
-                aria-invalid={!!error}
-                aria-describedby="methods-status"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  setError(undefined)
-                }}
-              />
-              <Label htmlFor="new-password-confirm">{t('auth.password_confirm')}</Label>
-              <Input
-                id="new-password-confirm"
-                type="password"
-                aria-invalid={!!error}
-                aria-describedby="methods-status"
-                autoComplete="new-password"
-                value={confirm}
-                onChange={(e) => {
-                  setConfirm(e.target.value)
-                  setError(undefined)
-                }}
-              />
-              <Button type="submit" size="sm" disabled={busy}>
-                {t('auth.methods.add_password')}
-              </Button>
-            </form>
+            <AddPasswordForm
+              email={email}
+              busy={busy}
+              error={error}
+              setError={setError}
+              setDone={setDone}
+              run={run}
+            />
           )}
         </div>
 
@@ -170,5 +100,121 @@ export function SignInMethods() {
         </p>
       </CardContent>
     </Card>
+  )
+}
+
+function AddPasswordForm({
+  email,
+  busy,
+  error,
+  setError,
+  setDone,
+  run,
+}: {
+  email: string | null
+  busy: boolean
+  error: Key | undefined
+  setError: (key: Key | undefined) => void
+  setDone: (key: Key | undefined) => void
+  run: (fn: () => Promise<unknown>, ok: Key) => Promise<void>
+}) {
+  const t = useT()
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+
+  const invalid =
+    password.length < MIN_PASSWORD
+      ? 'auth.password_min'
+      : password !== confirm
+        ? 'auth.password_match'
+        : undefined
+
+  return (
+    <form
+      className="space-y-2"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (invalid) {
+          setDone(undefined)
+          return setError(invalid)
+        }
+        void run(async () => {
+          await addPassword(password)
+          setPassword('')
+          setConfirm('')
+        }, 'auth.methods.password_added')
+      }}
+    >
+      <p className="text-sm text-muted-foreground">{t('auth.methods.add_hint')}</p>
+      <input type="email" autoComplete="username" value={email ?? ''} readOnly hidden />
+      <Label htmlFor="new-password">{t('auth.methods.new_password')}</Label>
+      <Input
+        id="new-password"
+        type="password"
+        aria-invalid={!!error}
+        aria-describedby="methods-status"
+        autoComplete="new-password"
+        value={password}
+        onChange={(e) => {
+          setPassword(e.target.value)
+          setError(undefined)
+        }}
+      />
+      <Label htmlFor="new-password-confirm">{t('auth.password_confirm')}</Label>
+      <Input
+        id="new-password-confirm"
+        type="password"
+        aria-invalid={!!error}
+        aria-describedby="methods-status"
+        autoComplete="new-password"
+        value={confirm}
+        onChange={(e) => {
+          setConfirm(e.target.value)
+          setError(undefined)
+        }}
+      />
+      <Button type="submit" size="sm" disabled={busy}>
+        {t('auth.methods.add_password')}
+      </Button>
+    </form>
+  )
+}
+
+function PasswordActions({
+  email,
+  verified,
+  busy,
+  run,
+}: {
+  email: string | null
+  verified: boolean
+  busy: boolean
+  run: (fn: () => Promise<unknown>, ok: Key) => Promise<void>
+}) {
+  const t = useT()
+  return (
+    <div className="flex flex-wrap gap-2">
+      {email && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => run(() => sendPasswordReset(email), 'auth.methods.reset_sent')}
+        >
+          {t('auth.methods.change_password')}
+        </Button>
+      )}
+      {!verified && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => run(resendVerification, 'auth.methods.verify_sent')}
+        >
+          {t('auth.methods.resend_verification')}
+        </Button>
+      )}
+    </div>
   )
 }

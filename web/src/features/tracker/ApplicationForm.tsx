@@ -42,12 +42,7 @@ function Field({
   )
 }
 
-/**
- * One form for both flows. Create: company, role, source, status, date, notes.
- * Edit (`app` given): the same plus contact and interview date, sent as one PATCH.
- */
-export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: () => void }) {
-  const t = useT()
+function useApplicationForm(app: Application | undefined, onDone: (() => void) | undefined) {
   const create = useCreateApplication()
   const update = useUpdateApplication()
   const mutation = app ? update : create
@@ -65,8 +60,6 @@ export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: (
       location: app?.location ?? '',
     },
   })
-  const p = app ? `edit-${app.id}-` : 'new-'
-
   const submit = handleSubmit((v) => {
     if (app) {
       update.mutate(
@@ -106,6 +99,18 @@ export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: (
       )
     }
   })
+
+  return { register, submit, mutation }
+}
+
+/**
+ * One form for both flows. Create: company, role, source, status, date, notes.
+ * Edit (`app` given): the same plus contact and interview date, sent as one PATCH.
+ */
+export function ApplicationForm({ app, onDone }: { app?: Application; onDone?: () => void }) {
+  const t = useT()
+  const { register, submit, mutation } = useApplicationForm(app, onDone)
+  const p = app ? `edit-${app.id}-` : 'new-'
 
   return (
     <form className="grid gap-3 sm:grid-cols-2" onSubmit={submit} noValidate>

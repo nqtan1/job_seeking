@@ -28,9 +28,9 @@ test('New helper asks for the type first and creates a built-in helper from the 
   const user = userEvent.setup()
   renderWithApp(<HelpersPage />, { at: '/helpers', path: '/helpers' })
 
-  expect(await screen.findByText('No helper yet')).toBeInTheDocument()
+  expect(await screen.findByText('No agent yet')).toBeInTheDocument()
   expect(screen.getAllByRole('button', { name: /^Use:/ })).toHaveLength(5) // templates stay
-  await user.click(screen.getByRole('button', { name: 'New helper' }))
+  await user.click(screen.getByRole('button', { name: 'New agent' }))
   for (const n of ['Cover letter', 'Interview prep', 'CV advice', 'Write my own'])
     expect(screen.getByRole('button', { name: new RegExp(n) })).toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /Interview prep/ }))
@@ -46,27 +46,29 @@ test('agents are cards: the Coach first with its chat tools, then each agent wit
     data:
       url === '/api/v1/tools'
         ? [tool('web_search', true), tool('send_email', false), tool('save_note', true)]
-        : url === '/api/v1/agents/{agent_id}'
-          ? { spec: { tools: ['save_note'] } }
-          : [
-              {
-                id: 'a1',
-                name: 'Mira',
-                description: 'Follow-ups',
-                avatar: { seed: 'a1', body: 0, palette: 0, eyes: 0, accessory: 0 },
-                current_version: 2,
-                archived: false,
-                created_at: '',
-                updated_at: '',
-              },
-            ],
+        : [
+            {
+              id: 'a1',
+              name: 'Mira',
+              description: 'Follow-ups',
+              avatar: { seed: 'a1', body: 0, palette: 0, eyes: 0, accessory: 0 },
+              current_version: 2,
+              archived: false,
+              created_at: '',
+              updated_at: '',
+              tools: ['save_note'], // the list carries each agent's chat tools: one request
+            },
+          ],
   }))
   renderWithApp(<HelpersPage />, { at: '/helpers', path: '/helpers' })
 
   await screen.findByText('Mira')
   const [coach, mira] = [...screen.getByRole('list', { name: 'Agents' }).children] as HTMLElement[]
-  expect(within(coach).getByRole('link', { name: 'Chat: Coach' })).toHaveAttribute('href', '/chat')
-  // the coach's own tools; an agent's tools from its version, a new pack tool by its id
+  expect(within(coach).getByRole('link', { name: 'Chat: Assistant' })).toHaveAttribute(
+    'href',
+    '/chat',
+  )
+  // the coach's own tools; an agent's tools from the list, a new pack tool by its id
   await waitFor(() =>
     expect(within(coach).getByRole('list', { name: 'Tools' })).toHaveTextContent(
       /^Search the web$/,

@@ -103,7 +103,7 @@ export function DimensionRow({
   return (
     <li className="text-sm">
       <details>
-        <summary className={cn('cursor-pointer', FOCUS)}>
+        <summary className={cn('min-h-6 cursor-pointer py-0.5', FOCUS)}>
           <span className="inline-flex w-[calc(100%-1.25rem)] justify-between gap-2 align-top">
             <span>{t(`cvr.dim.${name}` as Key)}</span>
             <span className="text-muted-foreground">
@@ -146,8 +146,7 @@ export function CommentCard({
   signals: string[]
 }) {
   const t = useT()
-  const { texts, setText, lineOf, sel, select } = useContext(ViewCtx)
-  const [prev, setPrev] = useState<string>() // text before "Use rewrite"
+  const { texts, sel, select } = useContext(ViewCtx)
   const { block_id: id, rewrite } = c
   const r = RATING[c.rating]
   const Icon = r.icon
@@ -177,29 +176,7 @@ export function CommentCard({
       </button>
       {c.source === 'rule' && <StatusBadge tone="info">{t('cvr.rule')}</StatusBadge>}
       <CriterionPanel id={c.criterion} weight={weight} />
-      {c.citations.length > 0 ? (
-        <ol aria-label={t('cvr.evidence')} className="flex flex-wrap gap-1">
-          {c.citations.map((q, n) => (
-            <li key={n}>
-              <button
-                type="button"
-                className={cn(
-                  'max-w-full rounded-md border bg-background px-2 py-1 text-left text-xs',
-                  FOCUS,
-                )}
-                onClick={() => select(id, { b: q.block_id, q: q.quote }, true)}
-              >
-                [{n + 1}] <q>{q.quote.slice(0, 60)}</q> · {t('cvr.line', { n: lineOf(q.block_id) })}
-                {!texts[q.block_id]?.includes(q.quote) && (
-                  <span className="ml-1 font-medium">({t('cvr.outdated')})</span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-xs text-muted-foreground">{t('cvr.no_quote')}</p>
-      )}
+      <Citations id={id} citations={c.citations} />
       {signals.length > 0 && (
         <ul className="flex flex-wrap gap-1">
           {signals.map((s) => (
@@ -218,36 +195,71 @@ export function CommentCard({
             </p>
           ),
       )}
-      {rewrite && (
-        <div className="space-y-1 rounded bg-muted/60 p-2">
-          <p className="text-xs font-medium">{t('cvr.rewrite')}</p>
-          <p>{rewrite}</p>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              onClick={() => {
-                setPrev(texts[id])
-                setText(id, rewrite)
-              }}
-            >
-              {t('cvr.use_rewrite')}
-            </Button>
-            {prev !== undefined && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setText(id, prev)
-                  setPrev(undefined)
-                }}
-              >
-                <Undo2 /> {t('cvr.undo')}
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+      {rewrite && <RewriteBox id={id} rewrite={rewrite} />}
     </article>
+  )
+}
+
+function Citations({ id, citations }: { id: string; citations: Quote[] }) {
+  const t = useT()
+  const { texts, lineOf, select } = useContext(ViewCtx)
+  return citations.length > 0 ? (
+    <ol aria-label={t('cvr.evidence')} className="flex flex-wrap gap-1">
+      {citations.map((q, n) => (
+        <li key={n}>
+          <button
+            type="button"
+            className={cn(
+              'max-w-full rounded-md border bg-background px-2 py-1 text-left text-xs',
+              FOCUS,
+            )}
+            onClick={() => select(id, { b: q.block_id, q: q.quote }, true)}
+          >
+            [{n + 1}] <q>{q.quote.slice(0, 60)}</q> · {t('cvr.line', { n: lineOf(q.block_id) })}
+            {!texts[q.block_id]?.includes(q.quote) && (
+              <span className="ml-1 font-medium">({t('cvr.outdated')})</span>
+            )}
+          </button>
+        </li>
+      ))}
+    </ol>
+  ) : (
+    <p className="text-xs text-muted-foreground">{t('cvr.no_quote')}</p>
+  )
+}
+
+function RewriteBox({ id, rewrite }: { id: string; rewrite: string }) {
+  const t = useT()
+  const { texts, setText } = useContext(ViewCtx)
+  const [prev, setPrev] = useState<string>() // text before "Use rewrite"
+  return (
+    <div className="space-y-1 rounded bg-muted/60 p-2">
+      <p className="text-xs font-medium">{t('cvr.rewrite')}</p>
+      <p>{rewrite}</p>
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={() => {
+            setPrev(texts[id])
+            setText(id, rewrite)
+          }}
+        >
+          {t('cvr.use_rewrite')}
+        </Button>
+        {prev !== undefined && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setText(id, prev)
+              setPrev(undefined)
+            }}
+          >
+            <Undo2 /> {t('cvr.undo')}
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }
 

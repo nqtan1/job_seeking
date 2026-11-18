@@ -1,6 +1,7 @@
 """Career pack tools (ADR 0039) called as any agent or flow calls them: through the registry,
 with a ``Call``. Each reads only its own account."""
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -11,6 +12,8 @@ from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.ai.prompts.letters import PROMPT_VERSION
 from recruitai.core import tools
 from recruitai.core.errors import NotFound
+from recruitai.modules.agents.flows.models import Flow, FlowRun, FlowVersion
+from recruitai.modules.applications.models import Application, ApplicationEvent
 from recruitai.modules.cvreview import repository as cv_repo
 from recruitai.modules.cvreview.schemas import (
     BlockComment,
@@ -99,3 +102,84 @@ async def test_letter_draft_writes_a_letter_for_the_job_of_this_account_only(
     assert len(fake_llm.calls) == 2
     with pytest.raises(tools.NoJob):
         await run(db_session, fake_llm, "letter_draft", a.id, user_id=user.id)
+
+
+async def _situation(db, llm, org_id) -> dict | None:
+    return await tools.read("situation", tools.Call(db, llm, org_id, None, None, {}))
+
+
+async def test_situation_is_none_for_an_empty_account(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway
+):
+    a, _ = await _tenant(db_session, "sita", profile=False)
+    assert await _situation(db_session, fake_llm, a.id) is None
+
+
+async def test_situation_tells_stages_stale_cards_interviews_and_the_last_run(
+    db_session: AsyncSession, fake_llm: FakeLLMGateway
+):
+    a, _ = await _tenant(db_session, "sitb", profile=False)
+    b, _ = await _tenant(db_session, "sitc", profile=False)
+    now = datetime.now(UTC)
+
+    def card(org, company, title, status, moved, **kw):
+        app = Application(
+            org_id=org,
+            company_name=company,
+            job_title=title,
+            source="other",
+            status=status,
+            **kw,
+        )
+        db_session.add(app)
+        return app, moved
+
+    cards = [
+        card(a.id, "Acme", "ML Engineer", "applied", now - timedelta(days=9)),
+        card(a.id, "Fresh", "Dev", "applied", now - timedelta(days=1)),
+        card(a.id, "Saved1", None, "to_apply", now),
+        card(
+            a.id,
+            "Beta",
+            "Data Lead",
+            "interview",
+            now,
+            interview_at=now + timedelta(days=2),
+        ),
+        card(b.id, "OtherCo", "Secret Role", "applied", now - timedelta(days=30)),
+    ]
+    await db_session.flush()
+    for app, moved in cards:
+        db_session.add(
+            ApplicationEvent(
+                application_id=app.id, org_id=app.org_id, to_status=app.status, at=moved
+            )
+        )
+    for org, name in ((a.id, "Morning digest"), (b.id, "Other flow")):
+        flow = Flow(org_id=org, name=name, current_version=1)
+        db_session.add(flow)
+        await db_session.flush()
+        version = FlowVersion(
+            org_id=org, flow_id=flow.id, version=1, graph={}, schema_version=1
+        )
+        db_session.add(version)
+        await db_session.flush()
+        db_session.add(
+            FlowRun(
+                org_id=org,
+                flow_id=flow.id,
+                flow_version_id=version.id,
+                status="done",
+                inputs={},
+                finished_at=now - timedelta(days=2),
+            )
+        )
+    await db_session.commit()
+
+    text = (await _situation(db_session, fake_llm, a.id))["text"]
+    assert len(text) <= 600
+    assert "Tracker: 1 to apply, 2 applied, 1 interview" in text
+    assert "No reply 9 days: ML Engineer @ Acme" in text and "Fresh" not in text
+    assert f"Interview {(now + timedelta(days=2)).date()}: Data Lead @ Beta" in text
+    assert "Last automation: Morning digest (done, 2 days ago)" in text
+    assert "OtherCo" not in text and "Other flow" not in text  # another account's rows

@@ -18,7 +18,9 @@ from recruitai.ai.gateway import LLMGateway, Source, ToolSpec
 from recruitai.config import Settings
 from recruitai.core import tools as registry
 from recruitai.core.errors import NotFound
+from recruitai.core.language import Language
 from recruitai.modules.coach import context, guard
+from recruitai.modules.coach.schemas import ProposalMeta
 from recruitai.modules.jobs import service as jobs
 from recruitai.modules.matching import service as matching
 
@@ -81,19 +83,37 @@ _IDS = {spec.name: id for id, spec in _CHAT.items()}
 
 
 def tool_of(name: str) -> registry.Tool | None:
-    """The registry tool the model called by ``name``, if it is a chat tool."""
+    """The registry tool the model called by ``name``, if it is a chat tool. Nothing that leaves
+    the app (e-mail, messages) is ever one (ADR 0042)."""
     tool = registry.all().get(_IDS.get(name, name))
-    # a capped tool has no ledger in chat: never offered there
-    ok = tool is not None and tool.chat and tool.cap is None
+    ok = tool is not None and tool.chat and tool.effect != "outside"
     return tool if ok else None
 
 
+def proposed(tool: registry.Tool) -> bool:
+    """Never run in the turn: the user confirms a card first (ADR 0042). Writes, capped tools and
+    AI-spending tools (the coach's own web search has its per-turn budget instead)."""
+    return (
+        tool.effect != "read"
+        or tool.cap is not None
+        or (tool.ai_uses > 0 and tool.id not in _CHAT)
+    )
+
+
+def inputs(tool: registry.Tool) -> list[tuple[str, bool]]:
+    """What the model fills in ("start" only links flow steps)."""
+    return [(n, req) for n, req in tool.inputs if n != "start"]
+
+
 def _spec(t: registry.Tool) -> ToolSpec:
-    """A registry tool as the model sees it: its inputs as strings ("start" only links flow steps)."""
-    names = [(n, req) for n, req in t.inputs if n != "start"]
+    """A registry tool as the model sees it: its inputs as strings."""
+    names = inputs(t)
+    confirm = (
+        " It only proposes: the user confirms it in the app." if proposed(t) else ""
+    )
     return ToolSpec(
         t.id,
-        f"The {t.id} tool. Gives back: {', '.join(t.outputs)}.",
+        f"The {t.id} tool. Gives back: {', '.join(t.outputs)}.{confirm}",
         {
             "type": "object",
             "properties": {n: {"type": "string"} for n, _ in names},
@@ -135,6 +155,7 @@ class ToolRun:
     queries: list[str] = field(default_factory=list)
     suggestions_html: str | None = None
     degraded: str | None = None
+    proposal: ProposalMeta | None = None
 
 
 @dataclass
@@ -144,10 +165,12 @@ class ToolContext:
     org_id: UUID
     user_id: UUID | None
     job_id: UUID | None
-    profile: dict[
-        str, Any
-    ]  # the full stored profile (identity included, for the query guard)
+    # the full stored profile (identity included, for the query guard)
+    profile: dict[str, Any]
     feature: str
+    conversation_id: UUID
+    job_title: str | None  # of the job in focus, for a proposal's summary
+    language: Language
 
 
 _LABELS = {
@@ -160,6 +183,9 @@ _LABELS = {
 def label_for(name: str, args: dict[str, Any]) -> str:
     if name == "web_research":
         return f"Searching the web: {str(args.get('query', ''))[:80]}"
+    tool = tool_of(name)
+    if tool is not None and proposed(tool):
+        return "Preparing an action"
     return _LABELS.get(name, name)
 
 

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
+import { expectNoA11yViolations, places } from './support.ts'
 
 // Needs the isolated stack: backend/tests/e2e_stack.sh up. Session policy (ADR 0024).
 const SHOTS = process.env.E2E_SHOTS
@@ -18,7 +19,7 @@ async function signUp(page: Page, remember: boolean) {
   if (remember) await page.getByLabel('Keep me signed in').check()
   await shot(page, remember ? 'login-remember' : 'login-checkbox')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
+  await expect(places(page)).toBeVisible()
 }
 
 test('"keep me signed in": unchecked ends with the browser tab session, checked survives it', async ({
@@ -37,17 +38,17 @@ test('"keep me signed in": unchecked ends with the browser tab session, checked 
   await signUp(pb, true)
   const again = await b.newPage()
   await again.goto('/')
-  await expect(again.getByRole('navigation', { name: 'Main' })).toBeVisible()
+  await expect(places(again)).toBeVisible()
+  await expectNoA11yViolations(again)
   await b.close()
 })
 
 test('consent, withdrawal, step-up before export, and the idle sign-out', async ({ page }) => {
   await page.clock.install()
-  await page.setViewportSize({ width: 1280, height: 900 })
   await signUp(page, false)
 
   // Consent: unticked, disabled until ticked, then radars are on.
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tools' }).click()
+  await places(page).getByRole('link', { name: 'Job search' }).click()
   await page.getByRole('region', { name: 'Career' }).getByRole('link', { name: /^Jobs/ }).click()
   await page
     .getByRole('navigation', { name: 'Section' })
@@ -89,4 +90,5 @@ test('consent, withdrawal, step-up before export, and the idle sign-out', async 
   await expect(page).toHaveURL(/\/signin$/)
   await expect(page.getByText('You were signed out because of inactivity.')).toBeVisible()
   await shot(page, 'idle-signed-out')
+  await expectNoA11yViolations(page)
 })

@@ -1,12 +1,16 @@
 import { type RouteObject } from 'react-router'
+import { ErrorScreen } from '@/components/ErrorScreen'
 import { tNow } from '@/i18n'
 import { AppLayout } from './AppLayout'
 import { RequireAuth } from './RequireAuth'
-import { SignInRoute } from './SignInRoute'
 
-// Pages load on demand: only the sign-in, layout and auth guard are in the first bundle.
-export const routes: RouteObject[] = [
-  { path: '/signin', element: <SignInRoute /> },
+// Pages load on demand: only the layout and auth guard are in the first bundle (sign-in pulls zod
+// and react-hook-form, so it is lazy too).
+const pages: RouteObject[] = [
+  {
+    path: '/signin',
+    lazy: () => import('./SignInRoute').then((m) => ({ Component: m.SignInRoute })),
+  },
   {
     path: '/privacy',
     lazy: () =>
@@ -158,3 +162,6 @@ export const routes: RouteObject[] = [
     ],
   },
 ]
+
+// One error screen for every page (a render or chunk-load error would otherwise blank the app).
+export const routes: RouteObject[] = [{ errorElement: <ErrorScreen />, children: pages }]

@@ -1,6 +1,6 @@
 import { FileText } from 'lucide-react'
 import { jobLabel } from '@/features/job-search/label'
-import { useForm, useWatch } from 'react-hook-form'
+import { useForm, useWatch, type UseFormRegister, type UseFormSetValue } from 'react-hook-form'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorMessage } from '@/components/ErrorMessage'
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { LANG_NAMES, LANGS, useI18n, type Lang } from '@/i18n'
-import { useJobs } from '@/features/job-search/api'
+import { useJobs, type Job } from '@/features/job-search/api'
 import { DeleteLetterButton } from './DeleteLetterButton'
 import { MotivationBlock } from './MotivationBlock'
 import { useCreateLetter, useLetters, type LetterIn } from './api'
@@ -26,12 +26,114 @@ const OPTIONS = {
   template: ['classic', 'modern', 'compact', 'lettre_fr'],
 } as const
 
-function NewLetter() {
-  const { t, lang } = useI18n()
+function NoJobsHint() {
+  const { t } = useI18n()
+  return (
+    <p className="text-muted-foreground">
+      {t('letters.new.no_jobs').split('{link}')[0]}
+      <Link
+        to="/jobs"
+        className="underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+      >
+        {t('letters.new.jobs_link')}
+      </Link>
+      {t('letters.new.no_jobs').split('{link}')[1]}
+    </p>
+  )
+}
+
+function JobSelect({
+  jobs,
+  register,
+  setValue,
+}: {
+  jobs: Job[] | undefined
+  register: UseFormRegister<LetterIn>
+  setValue: UseFormSetValue<LetterIn>
+}) {
+  const { t } = useI18n()
+  return (
+    <div className="space-y-1 sm:col-span-3">
+      <Label htmlFor="job_id">{t('letters.new.job')}</Label>
+      <NativeSelect
+        id="job_id"
+        className="w-full"
+        {...register('job_id', {
+          required: true,
+          // The answers belong to one job: never carry them over to another.
+          onChange: () => {
+            setValue('answers', [])
+            setValue('highlights', [])
+          },
+        })}
+      >
+        <NativeSelectOption value="" disabled>
+          {t('letters.new.choose_job')}
+        </NativeSelectOption>
+        {jobs?.map((j) => (
+          <NativeSelectOption key={j.id} value={j.id}>
+            {jobLabel(j)}
+          </NativeSelectOption>
+        ))}
+      </NativeSelect>
+    </div>
+  )
+}
+
+function OptionSelects({ register }: { register: UseFormRegister<LetterIn> }) {
+  const { t } = useI18n()
   const optionLabel = (k: keyof typeof OPTIONS, o: string) =>
     k === 'language'
       ? LANG_NAMES[o as Lang]
       : t(`letters.${k === 'company_type' ? 'company' : k}.${o}` as never)
+  return (
+    <>
+      {(Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).map((k) => (
+        <div className="space-y-1" key={k}>
+          <Label htmlFor={k}>{t(`letters.new.${k}`)}</Label>
+          <NativeSelect id={k} className="w-full" {...register(k)}>
+            {OPTIONS[k].map((o) => (
+              <NativeSelectOption key={o} value={o}>
+                {optionLabel(k, o)}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </div>
+      ))}
+    </>
+  )
+}
+
+function ModeChoice({ register }: { register: UseFormRegister<LetterIn> }) {
+  const { t } = useI18n()
+  return (
+    <fieldset className="space-y-1 sm:col-span-3">
+      <legend className="text-sm font-medium">{t('letters.new.who')}</legend>
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ['ai', t('letters.new.mode_ai'), t('letters.new.mode_ai_hint')],
+            ['own_words', t('letters.new.mode_own'), t('letters.new.mode_own_hint')],
+          ] as const
+        ).map(([value, title, hint]) => (
+          <label
+            key={value}
+            className="flex min-w-48 flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+          >
+            <input type="radio" value={value} className="mt-1" {...register('mode')} />
+            <span>
+              <span className="block font-medium">{title}</span>
+              <span className="text-muted-foreground">{hint}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+function NewLetter() {
+  const { t, lang } = useI18n()
   const steps = [t('letters.new.step1'), t('letters.new.step2'), t('letters.new.step3')]
   const jobs = useJobs()
   const create = useCreateLetter()
@@ -62,16 +164,7 @@ function NewLetter() {
       </CardHeader>
       <CardContent>
         {jobs.data?.length === 0 ? (
-          <p className="text-muted-foreground">
-            {t('letters.new.no_jobs').split('{link}')[0]}
-            <Link
-              to="/jobs"
-              className="underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
-            >
-              {t('letters.new.jobs_link')}
-            </Link>
-            {t('letters.new.no_jobs').split('{link}')[1]}
-          </p>
+          <NoJobsHint />
         ) : (
           <form
             className="grid gap-3 sm:grid-cols-3"
@@ -82,64 +175,9 @@ function NewLetter() {
               ),
             )}
           >
-            <div className="space-y-1 sm:col-span-3">
-              <Label htmlFor="job_id">{t('letters.new.job')}</Label>
-              <NativeSelect
-                id="job_id"
-                className="w-full"
-                {...register('job_id', {
-                  required: true,
-                  // The answers belong to one job: never carry them over to another.
-                  onChange: () => {
-                    setValue('answers', [])
-                    setValue('highlights', [])
-                  },
-                })}
-              >
-                <NativeSelectOption value="" disabled>
-                  {t('letters.new.choose_job')}
-                </NativeSelectOption>
-                {jobs.data?.map((j) => (
-                  <NativeSelectOption key={j.id} value={j.id}>
-                    {jobLabel(j)}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-            {(Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).map((k) => (
-              <div className="space-y-1" key={k}>
-                <Label htmlFor={k}>{t(`letters.new.${k}`)}</Label>
-                <NativeSelect id={k} className="w-full" {...register(k)}>
-                  {OPTIONS[k].map((o) => (
-                    <NativeSelectOption key={o} value={o}>
-                      {optionLabel(k, o)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              </div>
-            ))}
-            <fieldset className="space-y-1 sm:col-span-3">
-              <legend className="text-sm font-medium">{t('letters.new.who')}</legend>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ['ai', t('letters.new.mode_ai'), t('letters.new.mode_ai_hint')],
-                    ['own_words', t('letters.new.mode_own'), t('letters.new.mode_own_hint')],
-                  ] as const
-                ).map(([value, title, hint]) => (
-                  <label
-                    key={value}
-                    className="flex min-w-48 flex-1 cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                  >
-                    <input type="radio" value={value} className="mt-1" {...register('mode')} />
-                    <span>
-                      <span className="block font-medium">{title}</span>
-                      <span className="text-muted-foreground">{hint}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <JobSelect jobs={jobs.data} register={register} setValue={setValue} />
+            <OptionSelects register={register} />
+            <ModeChoice register={register} />
             <MotivationBlock
               key={`${jobId}-${language}`}
               own={mode === 'own_words'}

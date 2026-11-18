@@ -105,3 +105,81 @@ async def test_extract_requires_app_check_when_enforced(
         json={"document_id": "00000000-0000-0000-0000-000000000000"},
     )
     assert resp.status_code == 401
+
+
+async def test_memory_round_trip_limits_and_tenant_isolation(
+    client: httpx.AsyncClient, ada, bob
+):
+    assert (await client.get("/api/v1/profile/memory", headers=ada)).json() == {
+        "facts": []
+    }  # no CV needed
+    put = await client.put(
+        "/api/v1/profile/memory",
+        headers=ada,
+        # NUL (JSONB refuses it) and hidden characters are stripped, never a 500
+        json={
+            "facts": [
+                {"text": "  Prefers\x00 remote\u200b work\u202e "},
+                {"text": "Speaks French"},
+            ]
+        },
+    )
+    assert put.status_code == 200
+    facts = put.json()["facts"]
+    assert [f["text"] for f in facts] == ["Prefers remote work", "Speaks French"]
+    kept = await client.put(
+        "/api/v1/profile/memory", headers=ada, json={"facts": facts[1:]}
+    )
+    assert kept.json()["facts"] == facts[1:]  # id and date survive a replace
+    assert (await client.get("/api/v1/profile/memory", headers=ada)).json() == {
+        "facts": facts[1:]
+    }
+
+    for bad in ([{"text": "x"}] * 31, [{"text": "x" * 201}], [{"text": "  "}]):
+        resp = await client.put(
+            "/api/v1/profile/memory", headers=ada, json={"facts": bad}
+        )
+        assert resp.status_code == 422
+        assert resp.headers["content-type"] == "application/problem+json"
+
+    assert (await client.get("/api/v1/profile/memory", headers=bob)).json() == {
+        "facts": []
+    }
+    await client.put("/api/v1/profile/memory", headers=bob, json={"facts": []})
+    assert (await client.get("/api/v1/profile/memory", headers=ada)).json() == {
+        "facts": facts[1:]
+    }
+
+
+async def test_remember_tool_and_memory_reader(db_session):
+    from recruitai.core import tools as registry
+    from recruitai.modules.candidates import service as candidates
+    from recruitai.modules.candidates import tools as _registers  # noqa: F401
+    from recruitai.modules.candidates.schemas import FactIn
+    from recruitai.modules.candidates.service import MemoryFull
+    from recruitai.modules.identity.models import Organization
+
+    org = Organization(name="mem", kind="personal")
+    db_session.add(org)
+    await db_session.flush()
+
+    def call(text: str = "") -> registry.Call:
+        return registry.Call(db_session, None, org.id, None, None, {"text": text})
+
+    async def said(text: str) -> dict[str, str]:
+        return await registry.handler("remember")(call(text))
+
+    assert await registry.read("memory", call()) is None
+    # Settings (PUT) and the chat get the same raw text: one rule, one stored fact
+    raw = " Wants a\u200b  Paris\x00 job\u202e "
+    await candidates.put_memory(db_session, org_id=org.id, facts=[FactIn(text=raw)])
+    assert await said(raw) == {"status": "already saved"}
+    assert await said("Wants a Paris job") == {"status": "already saved"}
+    for i in range(29):
+        await said(f"fact {i}")
+    with pytest.raises(MemoryFull):
+        await said("one too many")
+    memory = await registry.read("memory", call())
+    assert memory is not None
+    assert memory["text"].startswith("- Wants a Paris job\n- fact 0")
+    assert memory["text"].count("\n") == 29

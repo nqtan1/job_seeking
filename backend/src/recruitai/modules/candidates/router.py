@@ -24,6 +24,8 @@ from recruitai.modules.candidates.models import CandidateProfile
 from recruitai.modules.candidates.schemas import (
     CVInformation,
     ExtractRequest,
+    MemoryIn,
+    MemoryOut,
     ProfileOut,
     ProfileUpdate,
 )
@@ -84,3 +86,28 @@ async def update_profile(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProfileOut:
     return _out(await service.update_profile(db, org_id=ctx.org_id, changes=body))
+
+
+@router.get(
+    "/memory", response_model=MemoryOut, responses=problem_responses(Unauthorized)
+)
+async def read_memory(
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MemoryOut:
+    facts = await service.get_memory(db, org_id=ctx.org_id)
+    return MemoryOut.model_validate({"facts": facts})
+
+
+@router.put(
+    "/memory",
+    response_model=MemoryOut,
+    responses=problem_responses(Unauthorized, ValidationFailed),
+)
+async def replace_memory(
+    body: MemoryIn,
+    ctx: Annotated[OrgContext, Depends(get_org_context)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MemoryOut:
+    facts = await service.put_memory(db, org_id=ctx.org_id, facts=body.facts)
+    return MemoryOut.model_validate({"facts": facts})

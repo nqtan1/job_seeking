@@ -322,11 +322,8 @@ export function resultLast(g: Graph, ids: string[]): string[] {
   return [...ids.filter((id) => !isOut(id)), ...ids.filter(isOut)]
 }
 
-/** A step's own name: the transform is "Clean text" for people, whatever its stored type says. */
-export const typeKey = (type: GraphNode['type']) =>
-  type === 'transform'
-    ? ('helpers.node.transform_name' as const)
-    : (`helpers.node.${type}` as const)
+/** A step's own name. */
+export const typeKey = (type: GraphNode['type']) => `helpers.node.${type}` as const
 
 /** Limits the server enforces (backend/src/recruitai/modules/agents/helpers/schemas.py and flows/graph.py).
  *  The UI uses them only as hints; backend/tests/unit/test_flow_graph.py fails if they drift. */

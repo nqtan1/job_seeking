@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
+import { expectNoA11yViolations, places } from './support.ts'
 
 // Needs the isolated stack (backend/tests/e2e_stack.sh up). The scripted worker's "AI" is off while
 // backend/.e2e-run/fail-ai exists, which this test creates and removes.
@@ -8,10 +9,10 @@ const FIXTURES = path.resolve(import.meta.dirname, '../../backend/tests/fixtures
 const AI_OFF = path.resolve(import.meta.dirname, '../../backend/.e2e-run/fail-ai')
 const SHOTS = process.env.E2E_SHOTS
 
-/** Open a career screen through the menu: Tools, its card, then its tab when the page has several. */
+/** Open a career screen through the menu: Job search, its card, then its tab when the page has several. */
 const CARD: Record<string, string> = { Profile: 'CV', Radar: 'Jobs', Tracker: 'Applications' }
 const go = async (page: Page, name: string) => {
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tools' }).click()
+  await places(page).getByRole('link', { name: 'Job search' }).click()
   await page
     .getByRole('region', { name: 'Career' })
     .getByRole('link', { name: new RegExp(`^${CARD[name] ?? name}`) })
@@ -28,7 +29,6 @@ test.afterEach(() => fs.rmSync(AI_OFF, { force: true }))
 test('radar: a run interrupted by the AI is explained, loses nothing and is retried in one click', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/')
   await page.getByRole('button', { name: 'No account? Sign up' }).click()
   await page.getByLabel('Email').fill(`retry${Date.now()}@example.com`)
@@ -71,4 +71,5 @@ test('radar: a run interrupted by the AI is explained, loses nothing and is retr
     page.getByRole('region', { name: 'New matches' }).getByRole('button', { name: 'Keep' }),
   ).toHaveCount(2)
   if (SHOTS) await page.screenshot({ path: path.join(SHOTS, '7-retried.png'), fullPage: true })
+  await expectNoA11yViolations(page)
 })

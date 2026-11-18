@@ -343,6 +343,32 @@ GHOST_AFTER_DAYS = 21  # second nudge: the web offers "mark as ghosted"
 INTERVIEW_LEAD_DAYS = (3, 1)
 
 
+async def situation(db: AsyncSession, *, org_id: UUID) -> dict[str, Any] | None:
+    """Where the tracker stands: counts by status, the next 3 interviews, and up to 3 "applied"
+    cards with no status change for 7+ days. None: an empty tracker."""
+    counts: dict[str, int] = {}
+    for _, status, n in await repository.counts_by_source_status(db, org_id=org_id):
+        counts[status] = counts.get(status, 0) + n
+    if not counts:
+        return None
+    now = datetime.now(UTC)
+    return {
+        "counts": counts,
+        "upcoming": await repository.upcoming_interviews(
+            db, org_id=org_id, after=now, limit=3
+        ),
+        "stale": [
+            (company, title, (now - at).days)
+            for company, title, at in await repository.stale_applied(
+                db,
+                org_id=org_id,
+                before=now - timedelta(days=FOLLOW_UP_AFTER_DAYS),
+                limit=3,
+            )
+        ],
+    }
+
+
 @dataclass(frozen=True)
 class Reminder:
     org_id: UUID

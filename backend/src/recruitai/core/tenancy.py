@@ -22,6 +22,7 @@ from recruitai.core.db import get_db
 from recruitai.core.errors import Forbidden, NotFound
 from recruitai.core.ids import new_id
 from recruitai.core.language import Language
+from recruitai.core.logging import bind_context
 from recruitai.modules.identity.models import Membership, Organization, User
 
 LAST_ACTIVE_MIN_INTERVAL_S = 3600
@@ -208,6 +209,7 @@ async def get_org_context(
         else:
             org_id, role = await _member_org(db, user_id, x_org_id)
         await db.commit()
+        bind_context(org_id=org_id, user_id=user_id)  # logs; Sentry keeps org_id only
         return OrgContext(
             org_id=org_id,
             user_id=user_id,
@@ -232,6 +234,7 @@ async def get_org_context(
 
     await _touch_last_active(db, user_id)
     await db.commit()
+    bind_context(org_id=org_id, user_id=user_id)
     return OrgContext(org_id=org_id, user_id=user_id, role=role)
 
 

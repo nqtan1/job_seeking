@@ -47,6 +47,7 @@ register(
         effect="write",
         cap=Cap(100),  # a day; once: a resumed step does not save the note twice
         flag=FLAG,
+        chat=True,
     ),
     _save_note,
 )

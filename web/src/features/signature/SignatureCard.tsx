@@ -82,91 +82,130 @@ export function SignatureCard({ name }: { name?: string | null }) {
         {pick}
         <ErrorMessage error={sig.error} />
         {!s ? (
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              void send(e.dataTransfer.files[0])
-            }}
-            className="space-y-2 rounded-lg border-2 border-dashed p-6 text-center"
-          >
-            <p className="text-sm">{t('signature.drop')}</p>
-            <p className="text-xs text-muted-foreground">{t('signature.hint')}</p>
-            <Button loading={busy} onClick={() => input.current?.click()}>
-              {!busy && <Upload />}
-              {t('signature.choose')}
-            </Button>
-          </div>
+          <DropZone busy={busy} send={send} onPick={() => input.current?.click()} />
         ) : (
-          <>
-            <SigBlock sig={s} widthMm={s.recommended_width_mm} name={name} />
-            <p className="text-xs text-muted-foreground">
-              {t('signature.caption')} {t('signature.size', { w: s.recommended_width_mm })}
-            </p>
-            <ul className="space-y-1">
-              {s.issues.map((i) => (
-                <li key={i} role="alert" className="text-sm">
-                  <strong>{t(`signature.issue.${i}`)}</strong> {t(`signature.issue.${i}_fix`)}
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap items-center gap-2">
-              {s.issues.includes('sideways') && (
-                <Button size="sm" disabled={busy} onClick={() => rotate.mutate(90)}>
-                  <Wand2 />
-                  {t('signature.auto_fix')}
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => rotate.mutate(-90)}
-              >
-                <RotateCcw />
-                {t('signature.rotate_left')}
-              </Button>
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => rotate.mutate(90)}>
-                <RotateCw />
-                {t('signature.rotate_right')}
-              </Button>
-            </div>
-            <label className="flex flex-wrap items-center gap-2 text-sm">
-              {t('signature.fine', { deg: fine })}
-              <input
-                type="range"
-                min={-10}
-                max={10}
-                step={1}
-                value={fine}
-                disabled={busy}
-                onChange={(e) => setFine(Number(e.target.value))}
-                onPointerUp={() => fine && rotate.mutate(fine, { onSettled: () => setFine(0) })}
-                onKeyUp={() => fine && rotate.mutate(fine, { onSettled: () => setFine(0) })}
-              />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => input.current?.click()}
-              >
-                {t('signature.replace')}
-              </Button>
-              <ConfirmButton
-                label={t('signature.remove')}
-                confirmLabel={t('signature.remove_confirm')}
-                pending={del.isPending}
-                disabled={busy}
-                onConfirm={(reset) => del.mutate(undefined, { onSettled: reset })}
-              />
-            </div>
-          </>
+          <SignatureTools
+            s={s}
+            name={name}
+            busy={busy}
+            rotate={rotate}
+            del={del}
+            fine={fine}
+            setFine={setFine}
+            onPick={() => input.current?.click()}
+          />
         )}
         {spin}
         {error}
       </CardContent>
     </Card>
+  )
+}
+
+function SignatureTools({
+  s,
+  name,
+  busy,
+  rotate,
+  del,
+  fine,
+  setFine,
+  onPick,
+}: {
+  s: Signature
+  name?: string | null
+  busy: boolean
+  rotate: ReturnType<typeof useRotateSignature>
+  del: ReturnType<typeof useDeleteSignature>
+  fine: number
+  setFine: (deg: number) => void
+  onPick: () => void
+}) {
+  const t = useT()
+  return (
+    <>
+      <SigBlock sig={s} widthMm={s.recommended_width_mm} name={name} />
+      <p className="text-xs text-muted-foreground">
+        {t('signature.caption')} {t('signature.size', { w: s.recommended_width_mm })}
+      </p>
+      <ul className="space-y-1">
+        {s.issues.map((i) => (
+          <li key={i} role="alert" className="text-sm">
+            <strong>{t(`signature.issue.${i}`)}</strong> {t(`signature.issue.${i}_fix`)}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        {s.issues.includes('sideways') && (
+          <Button size="sm" disabled={busy} onClick={() => rotate.mutate(90)}>
+            <Wand2 />
+            {t('signature.auto_fix')}
+          </Button>
+        )}
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => rotate.mutate(-90)}>
+          <RotateCcw />
+          {t('signature.rotate_left')}
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => rotate.mutate(90)}>
+          <RotateCw />
+          {t('signature.rotate_right')}
+        </Button>
+      </div>
+      <label className="flex flex-wrap items-center gap-2 text-sm">
+        {t('signature.fine', { deg: fine })}
+        <input
+          type="range"
+          min={-10}
+          max={10}
+          step={1}
+          value={fine}
+          disabled={busy}
+          onChange={(e) => setFine(Number(e.target.value))}
+          onPointerUp={() => fine && rotate.mutate(fine, { onSettled: () => setFine(0) })}
+          onKeyUp={() => fine && rotate.mutate(fine, { onSettled: () => setFine(0) })}
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={busy} onClick={onPick}>
+          {t('signature.replace')}
+        </Button>
+        <ConfirmButton
+          label={t('signature.remove')}
+          confirmLabel={t('signature.remove_confirm')}
+          pending={del.isPending}
+          disabled={busy}
+          onConfirm={(reset) => del.mutate(undefined, { onSettled: reset })}
+        />
+      </div>
+    </>
+  )
+}
+
+function DropZone({
+  busy,
+  send,
+  onPick,
+}: {
+  busy: boolean
+  send: (file: File | undefined) => Promise<void>
+  onPick: () => void
+}) {
+  const t = useT()
+  return (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault()
+        void send(e.dataTransfer.files[0])
+      }}
+      className="space-y-2 rounded-lg border-2 border-dashed p-6 text-center"
+    >
+      <p className="text-sm">{t('signature.drop')}</p>
+      <p className="text-xs text-muted-foreground">{t('signature.hint')}</p>
+      <Button loading={busy} onClick={onPick}>
+        {!busy && <Upload />}
+        {t('signature.choose')}
+      </Button>
+    </div>
   )
 }

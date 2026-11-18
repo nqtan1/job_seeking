@@ -4,6 +4,7 @@
 from recruitai.ai import overrides as _overrides
 from recruitai.ai import usage as _usage
 from recruitai.core import tasks as _tasks
+from recruitai.core import throttle as _throttle
 from recruitai.modules.agents import models as _agents
 from recruitai.modules.applications import models as _applications
 from recruitai.modules.candidates import models as _candidates
@@ -32,5 +33,6 @@ __all__ = [
     "_overrides",
     "_radar",
     "_tasks",
+    "_throttle",
     "_usage",
 ]

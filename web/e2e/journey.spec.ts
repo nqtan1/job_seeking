@@ -1,16 +1,16 @@
 import { expect, test, type Page } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
+import { expectNoA11yViolations, narrow, places } from './support.ts'
 
 // Synthetic fixtures only.
 const FIXTURES = path.resolve(import.meta.dirname, '../../backend/tests/fixtures')
 const JD = fs.readFileSync(path.join(FIXTURES, 'live/jd_python_paris.txt'), 'utf8')
 
-const nav = (page: Page, name: string) =>
-  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name, exact: true })
-/** A career page: Tools in the menu, then its card. */
+const nav = (page: Page, name: string) => places(page).getByRole('link', { name, exact: true })
+/** A career page: Job search in the menu, then its card. */
 const tool = async (page: Page, name: string) => {
-  await nav(page, 'Tools').click()
+  await nav(page, 'Job search').click()
   await page
     .getByRole('region', { name: 'Career' })
     .getByRole('link', { name: new RegExp(`^${name}`) })
@@ -35,7 +35,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page.getByText('The two passwords are not the same.')).toBeVisible() // nothing created
   await page.getByLabel('Confirm password').fill('password123')
   await page.getByRole('button', { name: 'Sign up', exact: true }).click()
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
+  await expect(places(page)).toBeVisible()
   await expect(page).toHaveURL(/\/jobs/) // back to the page that was asked for
 
   // Profile: upload a CV, review, save.
@@ -52,11 +52,21 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText('Review your CV')
   if (process.env.E2E_SHOTS) await page.screenshot({ path: `${process.env.E2E_SHOTS}/home.png` })
 
+  // Home is also the assistant: its ask box opens a chat and sends the question at once.
+  await page.getByRole('textbox', { name: 'Ask your assistant' }).fill('What should I do next?')
+  await page.getByRole('button', { name: 'Ask', exact: true }).click()
+  await expect(page.getByRole('main').getByText('What should I do next?')).toBeVisible()
+  await expect(page.getByText('Votre profil est solide.')).toBeVisible({ timeout: 60_000 })
+  await expect(page).not.toHaveURL(/ask=/) // a reload does not send it again
+
   // Coach: the chat streams a reply and shows up in the sidebar's Recent list.
-  await page.goto('/chat') // the Agents page gets its Coach card in AP-06
+  await page.goto('/chat')
   await page.getByRole('button', { name: 'Review my CV' }).click()
   await expect(page.getByText('Votre profil est solide.')).toBeVisible({ timeout: 60_000 })
-  await expect(page.getByRole('navigation', { name: 'Recent' })).toContainText('Review my CV')
+  if (narrow(page)) await page.getByRole('button', { name: 'Open menu' }).click() // the sidebar is a drawer
+  const recent = page.getByRole('navigation', { name: 'Recent' })
+  await expect(recent).toContainText('Review my CV')
+  if (narrow(page)) await recent.getByRole('link').first().click() // a link closes the drawer
 
   // Jobs: paste a description.
   await tool(page, 'Jobs')
@@ -90,8 +100,8 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   }
 
   // Helpers: an Interview prep helper tried on this job. Run says what is missing, then works.
-  await nav(page, 'Agents').click()
-  await page.getByRole('button', { name: 'New helper' }).click()
+  await nav(page, 'Studio').click() // opens on its Agents tab
+  await page.getByRole('button', { name: 'New agent' }).click()
   await page
     .getByRole('button', { name: /Interview prep/ })
     .first()
@@ -111,6 +121,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await page.getByLabel('Status').selectOption('applied')
   await page.getByRole('button', { name: 'Add application' }).click()
   await page.getByLabel('Move Fictiva Logiciels').selectOption('interview')
+  if (narrow(page)) await page.getByRole('tab', { name: /^Interview/ }).click() // one column at a time
   await expect(
     page.getByRole('region', { name: /Interview/ }).getByText('Fictiva Logiciels'),
   ).toBeVisible()
@@ -125,6 +136,7 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await page.keyboard.press('Escape') // close the drawer
 
   // Settings: export (worker task), then delete the account.
+  if (narrow(page)) await page.getByRole('button', { name: 'Open menu' }).click()
   await page.getByRole('button', { name: 'Account menu' }).click()
   await page.getByRole('menuitem', { name: 'Settings' }).click()
   await expect(page.getByText('How you sign in')).toBeVisible()
@@ -138,4 +150,5 @@ test('v1 journey: sign up → profile → job → fit → letter → tracker →
   await expect(page).toHaveURL(/\/signin/)
 
   expect(problems).toEqual([])
+  await expectNoA11yViolations(page)
 })

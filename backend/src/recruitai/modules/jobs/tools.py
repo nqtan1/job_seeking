@@ -4,9 +4,18 @@ The job board is the one France Travail provider of ``providers.factory``, looke
 so tests and the e2e worker replace it there. Failures are fixed codes, never exception text."""
 
 import json
+from typing import Any
 
 from recruitai.ai.gateway import QuotaExceeded
-from recruitai.core.tools import Call, Cap, NoJob, Tool, one_line, register
+from recruitai.core.tools import (
+    Call,
+    Cap,
+    NoJob,
+    Tool,
+    one_line,
+    register,
+    register_reader,
+)
 from recruitai.modules.jobs import service as jobs
 from recruitai.modules.jobs.providers import factory
 
@@ -136,6 +145,7 @@ register(
         ("items", "text", "count", "remaining"),
         cap=Cap(30, once=False),  # searches a day: each fetches up to 5 full offers
         ai_uses=1,  # reads the search sentence
+        chat=True,
     ),
     _find_offers,
 )
@@ -152,3 +162,13 @@ register(
     ),
     _job_lookup,
 )
+
+
+async def _job(c: Call) -> dict[str, Any]:
+    """A helper's "job" source, and the 404 check before a run: NotFound across orgs."""
+    if c.job_id is None:
+        raise NoJob()
+    return (await jobs.get_job(c.db, org_id=c.org_id, job_id=c.job_id)).data
+
+
+register_reader("job", _job)

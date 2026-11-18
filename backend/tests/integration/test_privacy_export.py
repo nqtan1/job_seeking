@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from recruitai.ai.gateway import FakeLLMGateway
 from recruitai.core.storage import LocalStorage
+from recruitai.modules.candidates import service as candidates
 from recruitai.modules.documents.models import Document
 from recruitai.modules.privacy import service
 from recruitai.modules.privacy import (
@@ -43,6 +44,7 @@ async def test_the_zip_has_every_module_and_the_original_files(
     db_session: AsyncSession, fake_llm: FakeLLMGateway, fake_storage: LocalStorage
 ):
     a = await seed_org(db_session, "alpha", llm=fake_llm, storage=fake_storage)
+    await candidates.add_fact(db_session, org_id=a.org_id, text="memory-alpha")
 
     archive = await _export_zip(db_session, fake_storage, a)
 
@@ -62,6 +64,7 @@ async def test_the_zip_has_every_module_and_the_original_files(
         == "cv-alpha"
     )
     assert read("notes.json")[0]["title"] == "note-alpha"
+    assert read("memory.json")[0]["facts"][0]["text"] == "memory-alpha"
     assert len(read("letter_versions.json")) == 2  # generated + the edit
     assert read("letters.json")[0]["content"]["opening"] == "edited-alpha"
     assert read("applications.json")[0]["notes"] == "notes-alpha"

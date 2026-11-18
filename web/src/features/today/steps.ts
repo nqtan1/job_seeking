@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useProfile } from '@/features/candidate/api'
-import { useConversations } from '@/features/coach/api'
+import { useChats } from '@/features/coach/api'
 import { useReviews } from '@/features/cv-review/api'
 import { useJobs } from '@/features/job-search/api'
 import { useLetters } from '@/features/letters/api'
@@ -11,23 +11,24 @@ import { useMe } from '@/features/settings/api'
 import { useApplications } from '@/features/tracker/api'
 import type { Key } from '@/i18n'
 import { api } from '@/lib/api/client'
+import type { components } from '@/lib/api/schema'
 import { unwrap } from '@/lib/api/unwrap'
 
 export type Step = { label: Key; to: string; done: boolean }
 type Reminder = { key: string; label: Key; to: string; count: number }
 const WEEK = 7 * 864e5
 
-/** What needs the user today, most urgent first; a zero count is no reminder. Pure. */
-export function reminders(c: { failed: number; followUps: number; matches: number }): Reminder[] {
+/** What needs the user today, most urgent first; a zero count is no reminder. Pure. Finished and
+ *  failed runs are not here: the inbox reports them. */
+export function reminders(c: { followUps: number; matches: number }): Reminder[] {
   const all: Reminder[] = [
-    { key: 'failed', label: 'today.failed', to: '/activity', count: c.failed },
     { key: 'follow_up', label: 'today.follow_up', to: '/tracker', count: c.followUps },
     { key: 'matches', label: 'today.matches', to: '/radar', count: c.matches },
   ]
   return all.filter((r) => r.count > 0)
 }
 
-/** Everything the dashboard shows, from lists the app already loads (plus the last flow runs). */
+/** Everything the dashboard shows, from lists the app already loads. */
 export function useToday() {
   const me = useMe()
   const profile = useProfile() // not `me.onboarding`: that one is stale right after the first save
@@ -36,15 +37,9 @@ export function useToday() {
   const letters = useLetters()
   const apps = useApplications()
   const radars = useSearches()
-  const chats = useConversations()
+  const chats = useChats()
   const review = !!me.data?.cv_review_enabled
   const reviews = useReviews(review)
-  const runs = useQuery({
-    queryKey: ['helper-runs', 'home'], // under the runs key: refreshed with them
-    enabled: !!me.data?.helpers_enabled,
-    queryFn: async () =>
-      unwrap(await api.GET('/api/v1/flow-runs', { params: { query: { limit: 5 } } })),
-  })
   const matches = useRadarStatus().data?.new_matches ?? 0
   const [now] = useState(Date.now) // once per visit: render stays pure
   const has = (q: { data?: unknown[] }) => (q.data?.length ?? 0) > 0
@@ -82,10 +77,8 @@ export function useToday() {
     loading: [me, profile, jobs, fits, letters, apps, radars].some((q) => q.isPending),
     steps,
     todo: steps.find((s) => !s.done),
+    profile: !!profile.data,
     reminders: reminders({
-      failed: (runs.data ?? []).filter(
-        (r) => r.status === 'failed' && now - Date.parse(r.created_at) < 864e5,
-      ).length,
       followUps: list.filter(
         (a) => a.status === 'applied' && a.applied_at && now - Date.parse(a.applied_at) > WEEK,
       ).length,
@@ -96,7 +89,46 @@ export function useToday() {
       { label: 'today.applied' as Key, to: '/tracker', value: list.length - count('to_apply') },
       { label: 'today.interviews' as Key, to: '/tracker', value: count('interview', 'offer') },
     ],
-    runs: runs.data ?? [],
     recent,
   }
+}
+
+type InboxItem = Pick<components['schemas']['InboxMeta'], 'kind' | 'link'> & {
+  id: string
+  text: string
+  at: string
+}
+
+/** The newest inbox messages of the user's Assistant conversation (created on first call). */
+export function useInbox() {
+  const assistant = useQuery({
+    queryKey: ['assistant'],
+    retry: false, // 422 until the user has a CV: the inbox then stays empty, not an error
+    queryFn: async () => unwrap(await api.GET('/api/v1/coach/assistant')),
+  })
+  const id = assistant.data?.id
+  const latest = useQuery({
+    queryKey: ['messages', id, 'latest'],
+    enabled: !!id,
+    queryFn: async () =>
+      unwrap(
+        await api.GET('/api/v1/coach/conversations/{conversation_id}/messages', {
+          params: { path: { conversation_id: id ?? '' }, query: { limit: 30, latest: true } },
+        }),
+      ),
+  })
+  const items: InboxItem[] = (latest.data ?? []).flatMap((m) =>
+    m.meta?.inbox
+      ? [
+          {
+            id: m.id,
+            kind: m.meta.inbox.kind,
+            text: m.content,
+            link: m.meta.inbox.link,
+            at: m.created_at,
+          },
+        ]
+      : [],
+  )
+  return { id, items: items.slice(-5).reverse() }
 }

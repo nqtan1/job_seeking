@@ -7,7 +7,6 @@ const text: VersionSpec['output'] = { kind: 'text', fields: [] }
 export type Starter = {
   id: string
   name: Key
-  goal: Key
   /** Label of each declared input, in order, in the user's language. */
   inputLabels: Key[]
   spec: VersionSpec
@@ -18,7 +17,6 @@ export const STARTERS: Starter[] = [
   {
     id: 'followup',
     name: 'helpers.st.followup.name',
-    goal: 'helpers.st.followup.goal',
     inputLabels: ['helpers.st.followup.input'],
     spec: {
       role: 'custom',
@@ -32,7 +30,6 @@ export const STARTERS: Starter[] = [
   {
     id: 'redflags',
     name: 'helpers.st.redflags.name',
-    goal: 'helpers.st.redflags.goal',
     inputLabels: [],
     spec: {
       role: 'custom',
@@ -52,7 +49,6 @@ export const STARTERS: Starter[] = [
   {
     id: 'interview',
     name: 'helpers.st.interview.name',
-    goal: 'helpers.st.interview.goal',
     inputLabels: [],
     spec: {
       role: 'custom',
@@ -66,7 +62,6 @@ export const STARTERS: Starter[] = [
   {
     id: 'pitch',
     name: 'helpers.st.pitch.name',
-    goal: 'helpers.st.pitch.goal',
     inputLabels: [],
     spec: {
       role: 'custom',
@@ -80,7 +75,6 @@ export const STARTERS: Starter[] = [
   {
     id: 'reply',
     name: 'helpers.st.reply.name',
-    goal: 'helpers.st.reply.goal',
     inputLabels: ['helpers.st.reply.input'],
     spec: {
       role: 'custom',
@@ -139,23 +133,21 @@ export function localized(spec: VersionSpec, labels: Key[], t: Translate): Versi
 export type Template = {
   id: string
   name: Key
-  hint: Key
   helpers: string[]
   start: { name: string; label: Key; required: boolean }[]
   result: { name: string; label: Key }[]
   links: [number, number, [string, string][]][]
 }
 
-const OPTIONAL_NOTES = { name: 'notes', label: 'helpers.pages.tpl.extra', required: false } as const
+const OPTIONAL_NOTES = { name: 'notes', label: 'helpers.fixed.notes', required: false } as const
 
 export const TEMPLATES: Template[] = [
   {
     id: 'followup',
     name: 'helpers.pages.tpl.followup.name',
-    hint: 'helpers.pages.tpl.followup.hint',
     helpers: ['followup'],
     start: [{ name: 'notes', label: 'helpers.st.followup.input', required: true }],
-    result: [{ name: 'message', label: 'helpers.pages.tpl.message' }],
+    result: [{ name: 'message', label: 'helpers.fixed.body' }],
     links: [
       [0, 1, [['notes', '{{notes}}']]],
       [1, 2, [['message', '{{text}}']]],
@@ -164,7 +156,6 @@ export const TEMPLATES: Template[] = [
   {
     id: 'redflags',
     name: 'helpers.pages.tpl.redflags.name',
-    hint: 'helpers.pages.tpl.redflags.hint',
     helpers: ['redflags'],
     start: [OPTIONAL_NOTES],
     result: [
@@ -186,12 +177,11 @@ export const TEMPLATES: Template[] = [
   {
     id: 'interview',
     name: 'helpers.pages.tpl.interview.name',
-    hint: 'helpers.pages.tpl.interview.hint',
     helpers: ['interview', 'pitch'],
     start: [OPTIONAL_NOTES],
     result: [
       { name: 'question', label: 'helpers.pages.tpl.question' },
-      { name: 'pitch', label: 'helpers.pages.tpl.pitch' },
+      { name: 'pitch', label: 'helpers.st.pitch.name' },
     ],
     links: [
       [0, 1, []],

@@ -3,7 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { renderWithApp } from './utils'
 
-const mocks = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn(), signOut: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  GET: vi.fn(),
+  POST: vi.fn(),
+  PUT: vi.fn(),
+  DELETE: vi.fn(),
+  signOut: vi.fn(),
+}))
 vi.mock('@/lib/api/client', () => ({ api: mocks }))
 vi.mock('@/lib/auth', () => ({
   signOut: mocks.signOut,
@@ -22,6 +28,8 @@ beforeEach(() => {
     if (url === '/api/v1/radar/consent')
       return { data: { state: 'none', policy_version: 'v1', history: [] } }
     if (url === '/api/v1/me/ai-calls') return { data: [] }
+    if (url === '/api/v1/profile/memory')
+      return { data: { facts: [{ id: 'f1', text: 'Lives in Lyon', created_at: '2026-11-01' }] } }
     return { data: { status: 'done', download_url: '/dl/export.zip' } }
   })
 })
@@ -59,4 +67,22 @@ test('a failed deletion shows the error and does not sign out', async () => {
   await user.click(screen.getByRole('button', { name: 'Delete my account' }))
   expect(await screen.findByText(/sign in again\. \(request id: rq3\)/)).toBeInTheDocument()
   expect(mocks.signOut).not.toHaveBeenCalled()
+})
+
+test('memory: editing a fact saves the full list with PUT', async () => {
+  const user = userEvent.setup()
+  mocks.PUT.mockImplementation(async (_url: string, init: { body: unknown }) => ({
+    data: init.body,
+  }))
+  renderPage()
+  expect(await screen.findByText('Lives in Lyon')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Edit “Lives in Lyon”' }))
+  const input = screen.getByRole('textbox', { name: 'Edit “Lives in Lyon”' })
+  await user.clear(input)
+  await user.type(input, 'Lives in Paris{Enter}')
+  expect(mocks.PUT).toHaveBeenCalledWith('/api/v1/profile/memory', {
+    body: { facts: [{ id: 'f1', text: 'Lives in Paris', created_at: '2026-11-01' }] },
+  })
+  expect(await screen.findByText('Lives in Paris')).toBeInTheDocument()
+  expect(screen.getByText('1/30')).toBeInTheDocument()
 })

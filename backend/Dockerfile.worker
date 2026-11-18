@@ -46,4 +46,7 @@ RUN mkdir -p /tmp/tectonic-warmup \
     && tectonic -X compile --untrusted --outdir /tmp/tectonic-warmup /tmp/tectonic-warmup/sample.tex \
     && rm -rf /tmp/tectonic-warmup
 
+# the git sha, set by CD; last so a new sha rebuilds only this layer (Sentry release, ADR 0040)
+ARG RELEASE=""
+ENV RELEASE=$RELEASE
 CMD ["procrastinate", "--app=recruitai.worker.app", "worker", "--concurrency=6"]

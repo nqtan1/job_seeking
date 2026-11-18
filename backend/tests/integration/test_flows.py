@@ -3,6 +3,7 @@
 from uuid import UUID, uuid4
 
 import httpx
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1757,3 +1758,121 @@ async def test_the_job_hunter_installs_in_one_click_and_only_once(client, ada):
     assert again.json()["id"] == hunter["id"]  # the same one, nothing duplicated
     assert len((await client.get(f"{BASE}/flows", headers=ada)).json()) == 2
     assert len((await client.get("/api/v1/agents", headers=ada)).json()) == 3
+
+
+async def _me(client, who) -> tuple[UUID, UUID]:
+    me = (await client.get(f"{BASE}/me", headers=who)).json()
+    return UUID(me["active_org_id"]), UUID(me["user"]["id"])
+
+
+async def test_set_up_job_hunter_from_chat_fills_the_starter_and_one_daily_schedule(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada
+):
+    from recruitai.core import tools
+    from recruitai.modules.agents.flows import repository as repo
+
+    org, user = await _me(client, ada)
+
+    async def confirm(**args: str) -> dict[str, str]:
+        call = tools.Call(db_session, fake_llm, org, user, None, args)
+        return await tools.handler("set_up_job_hunter")(call)
+
+    async def threshold() -> set[str]:
+        proc = next(f for f in flows_ if f["name"] == "Offer processor")
+        detail = (await client.get(f"{BASE}/flows/{proc['id']}", headers=ada)).json()
+        return {n.get("value") for n in detail["graph"]["nodes"]}
+
+    first = await confirm(query="AI engineer in Paris", min_fit="150", hour="7")
+    assert set(first) == {"flow_id", "schedule_id"}  # ids only: the card says the rest
+    flows_ = (await client.get(f"{BASE}/flows", headers=ada)).json()
+    assert {f["name"] for f in flows_} == {"Job hunter", "Offer processor"}
+    assert "100" in await threshold()  # clamped
+    [s] = await repo.list_schedules(
+        db_session, org_id=org, flow_id=UUID(first["flow_id"])
+    )
+    assert (s.cadence, s.at_time, s.inputs) == (
+        "daily",
+        "07:00",
+        {"query": "AI engineer in Paris"},
+    )
+
+    again = await confirm(query="data engineer", min_fit="70")
+    assert again["flow_id"] == first["flow_id"]  # reused, nothing duplicated
+    assert len((await client.get(f"{BASE}/flows", headers=ada)).json()) == 2
+    [s] = await repo.list_schedules(
+        db_session, org_id=org, flow_id=UUID(first["flow_id"])
+    )
+    await db_session.refresh(s)
+    assert (s.at_time, s.inputs) == ("08:00", {"query": "data engineer"})
+    assert "70" in await threshold()
+
+    # chat only: never offered as a flow step, refused if one is sent anyway
+    listed = {t["id"] for t in (await client.get(f"{BASE}/tools", headers=ada)).json()}
+    assert not {"set_up_job_hunter", "run_routine", "remember"} & listed
+    for chat_only in ("run_routine", "remember"):  # remember: no page text into memory
+        step = {"type": "tool", "id": str(uuid4()), "tool": chat_only}
+        r = await client.post(
+            f"{BASE}/flows",
+            headers=ada,
+            json={"name": "X", "graph": {"nodes": [step], "edges": []}},
+        )
+        assert r.status_code == 422 and "switched off" in r.json()["detail"]
+
+
+async def test_run_routine_starts_one_run_by_name_within_the_tenant(
+    client, db_session, fake_llm: FakeLLMGateway, task_app, ada, bob
+):
+    from recruitai.core import tools
+    from recruitai.core.errors import AppError
+
+    i, o = input_node("n"), output_node("r")
+    i["fields"][0]["required"] = False  # run_routine passes no inputs of its own
+    graph = {"nodes": [i, o], "edges": [edge(i, o, {"r": "{{n}}"})]}
+    for name in ("Morning digest", "Morning news"):
+        r = await client.post(
+            f"{BASE}/flows", headers=ada, json={"name": name, "graph": graph}
+        )
+        assert r.status_code == 201, r.text
+    flows_ = (await client.get(f"{BASE}/flows", headers=ada)).json()
+    digest = next(f for f in flows_ if f["name"] == "Morning digest")
+
+    async def run(who, name: str, **more: str) -> dict[str, str]:
+        org, user = await _me(client, who)
+        call = tools.Call(db_session, fake_llm, org, user, None, {"name": name, **more})
+        return await tools.handler("run_routine")(call)
+
+    from recruitai.modules.agents.flows import chat_tools
+
+    org, _ = await _me(client, ada)
+    # the card stores the resolved flow (its id, its real name); confirm runs by that id
+    card = await chat_tools.routine_args(db_session, org, {"name": "morning DIGEST"})
+    assert card == {"name": "Morning digest", "flow_id": digest["id"]}
+    out = await run(ada, "", flow_id=card["flow_id"])
+    runs = (await client.get(f"{BASE}/flows/{digest['id']}/runs", headers=ada)).json()
+    assert [r["id"] for r in runs] == [out["run_id"]] and runs[0]["status"] == "queued"
+    for who, name, code in (
+        (ada, "morning", "routine_ambiguous"),
+        (ada, "evening", "routine_not_found"),
+        (
+            bob,
+            "Morning digest",
+            "routine_not_found",
+        ),  # another org's flow does not exist
+    ):
+        with pytest.raises(AppError) as refused:
+            await run(who, name)
+        assert refused.value.code == code
+    assert (
+        len((await client.get(f"{BASE}/flows/{digest['id']}/runs", headers=ada)).json())
+        == 1
+    )
+    # a flow that sends e-mail stays out of chat (ADR 0042): no card, and no run at confirm
+    send = tool_node("send_email")
+    mail = edge(i, send, {"to": "{{n}}", "subject": "s", "body": "b"})
+    mailer = await make_flow(client, ada, [i, send], [mail])
+    with pytest.raises(AppError) as refused:
+        await chat_tools.routine_args(db_session, org, {"name": mailer["name"]})
+    assert refused.value.code == "routine_has_outside_steps"
+    with pytest.raises(AppError) as refused:
+        await run(ada, "", flow_id=mailer["id"])
+    assert refused.value.code == "routine_has_outside_steps"

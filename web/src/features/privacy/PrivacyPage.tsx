@@ -11,6 +11,10 @@ const ROWS: [Key, Key][] = [
   ['privacy.r7', 'privacy.d7'],
   ['privacy.r8', 'privacy.d8'],
   ['privacy.r9', 'privacy.d9'],
+  ['privacy.r10', 'privacy.d10'],
+  ['privacy.r11', 'privacy.d11'],
+  ['privacy.r12', 'privacy.d12'],
+  ['privacy.r13', 'privacy.d13'],
 ]
 
 export function PrivacyPage() {
@@ -42,6 +46,12 @@ export function PrivacyPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-medium">{t('privacy.h_services')}</h2>
+        <p>{t('privacy.sentry')}</p>
+        <p>{t('privacy.posthog')}</p>
       </section>
 
       <section className="space-y-2">

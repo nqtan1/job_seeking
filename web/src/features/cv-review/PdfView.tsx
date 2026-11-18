@@ -60,15 +60,18 @@ export function PdfView({
                 return from < to ? [[(from - l.s) / (l.e - l.s), (to - l.s) / (l.e - l.s)]] : []
               })
               return [
-                <button
+                // A mouse shortcut only: printed lines are smaller than a 24 px target (WCAG 2.5.8),
+                // and the comment cards and the text view do the same from the keyboard.
+                <span
                   key={`${b.id}-${i}`}
-                  type="button"
+                  aria-hidden
+                  data-cvr-block={b.id}
                   data-cvr-focus={sel === b.id && !hits.length ? '' : undefined}
-                  aria-label={t('cvr.block', { n: lineOf(b.id) })}
+                  title={t('cvr.block', { n: lineOf(b.id) })}
                   onClick={() => select(b.id)}
                   style={pos(l.x, l.y, l.w, l.h)}
                   className={cn(
-                    'absolute rounded-sm',
+                    'absolute cursor-pointer rounded-sm',
                     c ? TINT[c.rating] : 'hover:bg-muted/40',
                     sel === b.id && 'ring-2 ring-ring',
                   )}

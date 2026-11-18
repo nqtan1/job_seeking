@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { routes } from '@/app/routes'
+import { AnalyticsBanner } from '@/features/settings/Analytics'
 
 // 30 s of freshness: moving between tabs shows cached data at once instead of refetching (each
 // refetch costs a token check and a DB read). Mutations still invalidate what they change.
@@ -11,6 +12,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <AnalyticsBanner />
     </QueryClientProvider>
   )
 }

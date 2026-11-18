@@ -279,6 +279,36 @@ def validate(graph: Graph, agents: dict[UUID, AgentInfo]) -> list[Issue]:
         n.id for n in graph.nodes if isinstance(n, AgentNode) and not _owns(agents, n)
     }
     fed: dict[UUID, set[str]] = defaultdict(set)
+    edge_issues, ends_ok = _edge_issues(graph, nodes, agents, blind, fed)
+    issues += edge_issues
+    issues += _shared_inputs(graph, nodes)
+    for step in graph.nodes:
+        if isinstance(step, ToolNode):  # text typed on a step feeds its input too
+            fed[step.id] |= set(step.fixed)
+    for n in graph.nodes:
+        for name, required in input_names(n, agents):
+            if required and name not in fed[n.id] and n.id not in blind:
+                issues.append(
+                    Issue("unmapped_input", f"Input “{name}” is not connected.", n.id)
+                )
+
+    if ends_ok and not any(i.code in ("input_count", "output_count") for i in issues):
+        if topological(graph) is None:
+            issues.append(Issue("cycle", "The flow loops back on itself."))
+        else:
+            issues += _reachability(graph, nodes)
+    return issues
+
+
+def _edge_issues(
+    graph: Graph,
+    nodes: dict[UUID, Any],
+    agents: dict[UUID, AgentInfo],
+    blind: set[UUID],
+    fed: dict[UUID, set[str]],
+) -> tuple[list[Issue], bool]:
+    """Each connection's problems, in graph order, and whether every connection has two ends."""
+    issues: list[Issue] = []
     ends_ok = True
     for e in graph.edges:
         src, dst = nodes.get(e.from_.node), nodes.get(e.to)
@@ -310,78 +340,74 @@ def validate(graph: Graph, agents: dict[UUID, AgentInfo]) -> list[Issue]:
                     e.id,
                 )
             )
-        sources = set(output_names(src, agents))
-        targets = {name for name, _ in input_names(dst, agents)}
-        seen: set[str] = set()
-        for m in e.map:
-            if m.input not in targets and dst.id not in blind:
-                issues.append(
-                    Issue(
-                        "unknown_input",
-                        f"“{m.input}” is not an input there.",
-                        dst.id,
-                        e.id,
-                    )
-                )
-            if m.input in seen:
-                issues.append(
-                    Issue(
-                        "duplicate_input", f"“{m.input}” is mapped twice.", dst.id, e.id
-                    )
-                )
-            seen.add(m.input)
-            fed[dst.id].add(m.input)
-            leftovers = TOKEN.sub("", m.value)
-            if ANY_BRACES.search(leftovers):
-                issues.append(
-                    Issue("bad_template", "Malformed {{ }} in a value.", dst.id, e.id)
-                )
-            if (
-                m.input == "url"
-                and isinstance(dst, ToolNode)
-                and dst.tool == "read_page"
-                and TOKEN.search(m.value)
-                and (
-                    isinstance(src, AgentNode)
-                    or (isinstance(src, ToolNode) and registry.get(src.tool).untrusted)
-                )
-            ):  # a warning only: injected text could aim the fetch at a hostile address
-                issues.append(
-                    Issue(
-                        "untrusted_url",
-                        "This address comes from text written by an AI or a web page; it could "
-                        "point anywhere. Only keep it if you trust that text.",
-                        dst.id,
-                        e.id,
-                        "warning",
-                    )
-                )
-            for field in TOKEN.findall(m.value):
-                if field not in sources and src.id not in blind:
-                    issues.append(
-                        Issue(
-                            "unknown_field",
-                            f"“{field}” is not an output of the previous step.",
-                            dst.id,
-                            e.id,
-                        )
-                    )
-    issues += _shared_inputs(graph, nodes)
-    for step in graph.nodes:
-        if isinstance(step, ToolNode):  # text typed on a step feeds its input too
-            fed[step.id] |= set(step.fixed)
-    for n in graph.nodes:
-        for name, required in input_names(n, agents):
-            if required and name not in fed[n.id] and n.id not in blind:
-                issues.append(
-                    Issue("unmapped_input", f"Input “{name}” is not connected.", n.id)
-                )
+        issues += _map_issues(e, src, dst, agents, blind, fed)
+    return issues, ends_ok
 
-    if ends_ok and not any(i.code in ("input_count", "output_count") for i in issues):
-        if topological(graph) is None:
-            issues.append(Issue("cycle", "The flow loops back on itself."))
-        else:
-            issues += _reachability(graph, nodes)
+
+def _map_issues(
+    e: Edge,
+    src: Any,
+    dst: Any,
+    agents: dict[UUID, AgentInfo],
+    blind: set[UUID],
+    fed: dict[UUID, set[str]],
+) -> list[Issue]:
+    """The problems of one connection's mappings (``fed`` records which inputs they feed)."""
+    issues: list[Issue] = []
+    sources = set(output_names(src, agents))
+    targets = {name for name, _ in input_names(dst, agents)}
+    seen: set[str] = set()
+    for m in e.map:
+        if m.input not in targets and dst.id not in blind:
+            issues.append(
+                Issue(
+                    "unknown_input",
+                    f"“{m.input}” is not an input there.",
+                    dst.id,
+                    e.id,
+                )
+            )
+        if m.input in seen:
+            issues.append(
+                Issue("duplicate_input", f"“{m.input}” is mapped twice.", dst.id, e.id)
+            )
+        seen.add(m.input)
+        fed[dst.id].add(m.input)
+        leftovers = TOKEN.sub("", m.value)
+        if ANY_BRACES.search(leftovers):
+            issues.append(
+                Issue("bad_template", "Malformed {{ }} in a value.", dst.id, e.id)
+            )
+        if (
+            m.input == "url"
+            and isinstance(dst, ToolNode)
+            and dst.tool == "read_page"
+            and TOKEN.search(m.value)
+            and (
+                isinstance(src, AgentNode)
+                or (isinstance(src, ToolNode) and registry.get(src.tool).untrusted)
+            )
+        ):  # a warning only: injected text could aim the fetch at a hostile address
+            issues.append(
+                Issue(
+                    "untrusted_url",
+                    "This address comes from text written by an AI or a web page; it could "
+                    "point anywhere. Only keep it if you trust that text.",
+                    dst.id,
+                    e.id,
+                    "warning",
+                )
+            )
+        for field in TOKEN.findall(m.value):
+            if field not in sources and src.id not in blind:
+                issues.append(
+                    Issue(
+                        "unknown_field",
+                        f"“{field}” is not an output of the previous step.",
+                        dst.id,
+                        e.id,
+                    )
+                )
     return issues
 
 

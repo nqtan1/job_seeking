@@ -181,6 +181,7 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "application_events",
         "applications",
         "candidate_profiles",
+        "coach_actions",
         "conversations",
         "consents",
         "documents",
@@ -208,7 +209,9 @@ def test_registry_alone_registers_every_table_in_a_fresh_interpreter():
         "radar_results",
         "radar_runs",
         "radar_searches",
+        "rate_hits",
         "task_runs",
+        "user_memory",
         "users",
     }
 
@@ -486,7 +489,7 @@ def test_coach_tables_constraints_and_downgrade(scratch_migration_db):
     try:
         insp = inspect(engine)
         assert {c["name"] for c in insp.get_columns("conversations")} == {
-            "id", "org_id", "candidate_id", "job_id", "agent_id", "started_at",
+            "id", "org_id", "candidate_id", "job_id", "agent_id", "kind", "started_at",
         }  # fmt: skip
         assert {c["name"] for c in insp.get_columns("messages")} == {
             "id", "conversation_id", "org_id", "role", "content", "created_at", "meta",
@@ -542,6 +545,20 @@ def test_coach_tables_constraints_and_downgrade(scratch_migration_db):
         add_message("assistant")
         with pytest.raises(IntegrityError):
             add_message("system")  # only user and assistant turns are stored
+
+        def add_assistant_conversation() -> None:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO conversations (id, org_id, candidate_id, kind)"
+                        " VALUES (:i, :o, :c, 'assistant')"
+                    ),
+                    {"i": uuid.uuid4(), "o": org, "c": cand},
+                )
+
+        add_assistant_conversation()
+        with pytest.raises(IntegrityError):
+            add_assistant_conversation()  # one Assistant conversation per org
         with engine.begin() as conn:  # messages die with their conversation
             conn.execute(text("DELETE FROM conversations WHERE id = :i"), {"i": conv})
             assert conn.execute(text("SELECT count(*) FROM messages")).scalar() == 0

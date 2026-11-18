@@ -14,6 +14,7 @@ locals {
     GOOGLE_CLOUD_PROJECT      = var.project_id
     GOOGLE_CLOUD_LOCATION     = var.llm_location
     EMAIL_BACKEND             = "brevo"
+    SENTRY_DSN                = var.sentry_dsn # ADR 0040; empty = error tracking off
   }
   # env var -> Secret Manager id (all containers created in main.tf)
   secret_env = {

@@ -1,6 +1,14 @@
 import '@/features/helpers/lib'
 import { Ban, ChevronRight, Pause, Play, RotateCcw } from 'lucide-react'
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import {
+  type Dispatch,
+  type SetStateAction,
+  Suspense,
+  lazy,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { useParams } from 'react-router'
 import { cn } from 'cn'
 import { useI18n, useT } from '@/i18n'
@@ -23,7 +31,8 @@ import {
 } from './api'
 import { DataFlowTable, EdgeInspector } from './FlowPanels'
 import { type Graph, orderOf } from './graph'
-import { useLabels, when } from './lib'
+import { when } from '@/lib/time'
+import { useLabels } from './lib'
 import { ResultHero, RunSummary, StepTimeline } from './RunParts'
 import { StepsList } from './StepsList'
 import { Details } from './ui'
@@ -49,29 +58,15 @@ export function RunPage() {
   )
 }
 
-function View({ run }: { run: Run }) {
-  const { t, locale } = useI18n()
-  const versions = useFlowVersions(run.flow_id)
-  const found = versions.data?.find((v) => v.id === run.flow_version_id)?.graph
-  const graph: Graph | undefined = found
-  const agents = useAgents()
-  const { specs } = useSpecs(graph)
-  const { titles, avatars } = useLabels(graph, agents.data)
-  const resume = useResumeRun()
-  const cancel = useCancelRun()
-  const live = isLive(run.status)
-  const { moods, packets } = usePlayback(run.steps, run.handoffs)
-  const [selection, setSelection] = useState<Selection>(null)
-  const desktop = window.matchMedia?.('(min-width: 1024px)').matches === true
-  const [mapOpen, setMapOpen] = useState(desktop)
-  const [view, setView] = useState<'canvas' | 'steps'>(() =>
-    window.matchMedia?.('(min-width: 1024px)').matches ? 'canvas' : 'steps',
-  )
+type Labels = ReturnType<typeof useLabels>
+type Moods = ReturnType<typeof usePlayback>['moods']
+type Packets = ReturnType<typeof usePlayback>['packets']
+type ReplayState = { i: number; playing: boolean; status: string }
+
+function useReplay(run: Run, graph: Graph | undefined, moods: Moods) {
   // Replay position. It belongs to one run status: when the run changes under it (a resume, say)
   // the replay is dropped instead of pointing at frames that no longer exist.
-  const [replayState, setReplay] = useState<{ i: number; playing: boolean; status: string } | null>(
-    null,
-  )
+  const [replayState, setReplay] = useState<ReplayState | null>(null)
   const replay = replayState?.status === run.status ? replayState : null
   const frame = replay?.i ?? null
   const frames = useMemo(() => replayFrames(run.steps), [run.steps])
@@ -87,14 +82,7 @@ function View({ run }: { run: Run }) {
     return () => clearInterval(id)
   }, [playing, frames.length, calm])
 
-  const errText = useErrText()
-
   const shown = frame === null ? moods : frames[frame]
-  const stepOf = useMemo(() => new Map(run.steps.map((s) => [s.node_id, s])), [run.steps])
-  const statusLabels = useMemo(
-    () => new Map(run.steps.map((s) => [s.node_id, t(`helpers.step.${s.status}`)])),
-    [run.steps, t],
-  )
   const replayPackets = useMemo(() => {
     if (frame === null || !graph || calm) return undefined
     const node = [...run.steps].sort((a, b) => a.position - b.position)[frame]?.node_id
@@ -102,8 +90,25 @@ function View({ run }: { run: Run }) {
       run.handoffs.filter((h) => h.to_node === node).map((h) => [h.edge_id, frame + 1]),
     )
   }, [frame, graph, calm, run.steps, run.handoffs])
+  return { replay, setReplay, frame, frames, playing, shown, replayPackets }
+}
 
-  const stepFailed = run.steps.some((s) => s.status === 'failed')
+function RunHeader({
+  run,
+  live,
+  stepFailed,
+  resume,
+  cancel,
+  errText,
+}: {
+  run: Run
+  live: boolean
+  stepFailed: boolean
+  resume: ReturnType<typeof useResumeRun>
+  cancel: ReturnType<typeof useCancelRun>
+  errText: ReturnType<typeof useErrText>
+}) {
+  const { t, locale } = useI18n()
   const actions = (
     <>
       {live && (
@@ -125,9 +130,8 @@ function View({ run }: { run: Run }) {
       )}
     </>
   )
-
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <>
       <RunSummary run={run} live={live} actions={actions} />
       <ErrorMessage error={resume.error ?? cancel.error} />
       {run.status === 'failed' && run.error_code && !stepFailed && (
@@ -147,54 +151,226 @@ function View({ run }: { run: Run }) {
       {live && !run.result && (
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />
-          {t('helpers.ui.working')}
+          {t('helpers.running')}
         </p>
       )}
+    </>
+  )
+}
+
+function ReplayControls({
+  run,
+  live,
+  replay,
+  setReplay,
+  frame,
+  frameCount,
+  playing,
+}: {
+  run: Run
+  live: boolean
+  replay: ReplayState | null
+  setReplay: (r: ReplayState) => void
+  frame: number | null
+  frameCount: number
+  playing: boolean
+}) {
+  const t = useT()
+  return (
+    <>
+      {!live && run.steps.length > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setReplay(
+              playing && replay
+                ? { ...replay, playing: false }
+                : { i: 0, playing: true, status: run.status },
+            )
+          }
+          aria-pressed={playing}
+        >
+          {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
+          {t('helpers.replay')}
+        </Button>
+      )}
+      {frame !== null && (
+        <input
+          type="range"
+          min={0}
+          max={Math.max(frameCount - 1, 0)}
+          value={frame}
+          aria-label={t('helpers.replay')}
+          onChange={(e) =>
+            setReplay({ i: Number(e.target.value), playing: false, status: run.status })
+          }
+          className="w-full"
+        />
+      )}
+    </>
+  )
+}
+
+function MapToolbar({
+  mapOpen,
+  setMapOpen,
+  view,
+  setView,
+}: {
+  mapOpen: boolean
+  setMapOpen: Dispatch<SetStateAction<boolean>>
+  view: 'canvas' | 'steps'
+  setView: (v: 'canvas' | 'steps') => void
+}) {
+  const t = useT()
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={mapOpen}
+        onClick={() => setMapOpen((o) => !o)}
+        className="-ml-1 text-base font-semibold"
+      >
+        <ChevronRight
+          data-icon="inline-start"
+          className={cn('transition-transform duration-200', mapOpen && 'rotate-90')}
+        />
+        {t('helpers.ui.map')}
+      </Button>
+      <span className="flex-1" />
+      <div role="group" aria-label={t('helpers.view')} className="flex gap-1">
+        {(['canvas', 'steps'] as const).map((v) => (
+          <Button
+            key={v}
+            size="sm"
+            variant={view === v ? 'default' : 'outline'}
+            aria-pressed={view === v}
+            onClick={() => {
+              setView(v)
+              setMapOpen(true)
+            }}
+          >
+            {t(`helpers.view.${v}`)}
+          </Button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MapSection({
+  run,
+  graph,
+  specs,
+  titles,
+  avatars,
+  moods,
+  packets,
+  selection,
+  onSelect,
+}: {
+  run: Run
+  graph: Graph
+  specs: ReturnType<typeof useSpecs>['specs']
+  titles: Labels['titles']
+  avatars: Labels['avatars']
+  moods: Moods
+  packets: Packets
+  selection: Selection
+  onSelect: (s: Selection) => void
+}) {
+  const t = useT()
+  const desktop = window.matchMedia?.('(min-width: 1024px)').matches === true
+  const [mapOpen, setMapOpen] = useState(desktop)
+  const [view, setView] = useState<'canvas' | 'steps'>(() =>
+    window.matchMedia?.('(min-width: 1024px)').matches ? 'canvas' : 'steps',
+  )
+  const statusLabels = useMemo(
+    () => new Map(run.steps.map((s) => [s.node_id, t(`helpers.run.status.${s.status}`)])),
+    [run.steps, t],
+  )
+  const common = { graph, specs, titles, avatars, moods, selection, readOnly: true, onSelect }
+  return (
+    <section className="space-y-3">
+      <MapToolbar mapOpen={mapOpen} setMapOpen={setMapOpen} view={view} setView={setView} />
+      {mapOpen &&
+        (view === 'steps' ? (
+          <StepsList {...common} />
+        ) : (
+          <Suspense fallback={<ListSkeleton rows={4} />}>
+            <Canvas {...common} packets={packets} statusLabels={statusLabels} />
+          </Suspense>
+        ))}
+      {selection?.kind === 'edge' && (
+        <EdgeInspector
+          key={selection.id}
+          graph={graph}
+          specs={specs}
+          edgeId={selection.id}
+          titles={titles}
+          avatars={avatars}
+          readOnly
+          actual={run.handoffs.find((h) => h.edge_id === selection.id)}
+        />
+      )}
+    </section>
+  )
+}
+
+function View({ run }: { run: Run }) {
+  const t = useT()
+  const versions = useFlowVersions(run.flow_id)
+  const found = versions.data?.find((v) => v.id === run.flow_version_id)?.graph
+  const graph: Graph | undefined = found
+  const agents = useAgents()
+  const { specs } = useSpecs(graph)
+  const { titles, avatars } = useLabels(graph, agents.data)
+  const resume = useResumeRun()
+  const cancel = useCancelRun()
+  const live = isLive(run.status)
+  const { moods, packets } = usePlayback(run.steps, run.handoffs)
+  const [selection, setSelection] = useState<Selection>(null)
+  const r = useReplay(run, graph, moods)
+  const errText = useErrText()
+  const stepOf = useMemo(() => new Map(run.steps.map((s) => [s.node_id, s])), [run.steps])
+  const stepFailed = run.steps.some((s) => s.status === 'failed')
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-5">
+      <RunHeader
+        run={run}
+        live={live}
+        stepFailed={stepFailed}
+        resume={resume}
+        cancel={cancel}
+        errText={errText}
+      />
 
       {!graph ? (
         <ListSkeleton rows={3} />
       ) : (
         <Details defaultOpen={run.status === 'failed'}>
-          {!live && run.steps.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                setReplay(
-                  playing && replay
-                    ? { ...replay, playing: false }
-                    : { i: 0, playing: true, status: run.status },
-                )
-              }
-              aria-pressed={playing}
-            >
-              {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
-              {t('helpers.replay')}
-            </Button>
-          )}
-          {frame !== null && (
-            <input
-              type="range"
-              min={0}
-              max={Math.max(frames.length - 1, 0)}
-              value={frame}
-              aria-label={t('helpers.replay')}
-              onChange={(e) =>
-                setReplay({ i: Number(e.target.value), playing: false, status: run.status })
-              }
-              className="w-full"
-            />
-          )}
+          <ReplayControls
+            run={run}
+            live={live}
+            replay={r.replay}
+            setReplay={r.setReplay}
+            frame={r.frame}
+            frameCount={r.frames.length}
+            playing={r.playing}
+          />
 
           <section className="space-y-3">
-            <h2 className="text-base font-semibold tracking-tight">{t('helpers.ui.timeline')}</h2>
+            <h2 className="text-base font-semibold tracking-tight">{t('helpers.view.steps')}</h2>
             <StepTimeline
               order={orderOf(graph)}
               steps={stepOf}
               graph={graph}
               titles={titles}
               avatars={avatars}
-              moods={shown}
+              moods={r.shown}
               handoffs={run.handoffs}
               errText={errText}
               canResume={run.status === 'failed'}
@@ -203,80 +379,17 @@ function View({ run }: { run: Run }) {
             />
           </section>
 
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-expanded={mapOpen}
-                onClick={() => setMapOpen((o) => !o)}
-                className="-ml-1 text-base font-semibold"
-              >
-                <ChevronRight
-                  data-icon="inline-start"
-                  className={cn('transition-transform duration-200', mapOpen && 'rotate-90')}
-                />
-                {t('helpers.ui.map')}
-              </Button>
-              <span className="flex-1" />
-              <div role="group" aria-label={t('helpers.view')} className="flex gap-1">
-                {(['canvas', 'steps'] as const).map((v) => (
-                  <Button
-                    key={v}
-                    size="sm"
-                    variant={view === v ? 'default' : 'outline'}
-                    aria-pressed={view === v}
-                    onClick={() => {
-                      setView(v)
-                      setMapOpen(true)
-                    }}
-                  >
-                    {t(`helpers.view.${v}`)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            {mapOpen &&
-              (view === 'steps' ? (
-                <StepsList
-                  graph={graph}
-                  specs={specs}
-                  titles={titles}
-                  avatars={avatars}
-                  moods={shown}
-                  selection={selection}
-                  readOnly
-                  onSelect={setSelection}
-                />
-              ) : (
-                <Suspense fallback={<ListSkeleton rows={4} />}>
-                  <Canvas
-                    graph={graph}
-                    specs={specs}
-                    titles={titles}
-                    avatars={avatars}
-                    moods={shown}
-                    packets={replayPackets ?? packets}
-                    statusLabels={statusLabels}
-                    selection={selection}
-                    readOnly
-                    onSelect={setSelection}
-                  />
-                </Suspense>
-              ))}
-            {selection?.kind === 'edge' && (
-              <EdgeInspector
-                key={selection.id}
-                graph={graph}
-                specs={specs}
-                edgeId={selection.id}
-                titles={titles}
-                avatars={avatars}
-                readOnly
-                actual={run.handoffs.find((h) => h.edge_id === selection.id)}
-              />
-            )}
-          </section>
+          <MapSection
+            run={run}
+            graph={graph}
+            specs={specs}
+            titles={titles}
+            avatars={avatars}
+            moods={r.shown}
+            packets={r.replayPackets ?? packets}
+            selection={selection}
+            onSelect={setSelection}
+          />
           <DataFlowTable
             graph={graph}
             titles={titles}

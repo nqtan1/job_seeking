@@ -2,10 +2,10 @@ import type { components } from '@/lib/api/schema'
 
 export type AvatarSpec = components['schemas']['Avatar']
 
-export const BODIES = 8
-export const PALETTES_COUNT = 12
-export const EYES = 6
-export const ACCESSORIES = 8
+const BODIES = 8
+const PALETTES_COUNT = 12
+const EYES = 6
+const ACCESSORIES = 8
 
 /** Fill, accent, ink. Each pair keeps ≥ 4.5:1 between ink and fill (face on body) in both themes. */
 export const PALETTES: { fill: string; accent: string; ink: string }[] = [
@@ -36,18 +36,6 @@ export function avatarFromSeed(text: string): AvatarSpec {
     palette: next() % PALETTES_COUNT,
     eyes: next() % EYES,
     accessory: next() % ACCESSORIES,
-  }
-}
-
-export function shuffled(): AvatarSpec {
-  const r = new Uint8Array(4)
-  crypto.getRandomValues(r)
-  return {
-    seed: crypto.randomUUID(),
-    body: r[0] % BODIES,
-    palette: r[1] % PALETTES_COUNT,
-    eyes: r[2] % EYES,
-    accessory: r[3] % ACCESSORIES,
   }
 }
 

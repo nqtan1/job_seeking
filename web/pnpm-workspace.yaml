@@ -1,6 +1,7 @@
 allowBuilds:
   '@firebase/util': false
   protobufjs: false
+  core-js: false # posthog-js; its postinstall only prints a banner
 overrides:
   # firebase pulls grpc-js 1.9.x (GHSA-m9gg-hp2v-232j, GHSA-f596-whhp-79r4); firestore is unused here
   '@grpc/grpc-js': '>=1.13.6'

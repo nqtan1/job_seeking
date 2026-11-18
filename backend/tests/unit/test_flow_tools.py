@@ -64,3 +64,11 @@ def test_every_tool_has_a_handler_unless_the_engine_owns_it():
     for t in registry.all().values():
         engine_owned = t.starts_runs or t.pauses
         assert (t.id in registry._HANDLERS) != engine_owned, t.id
+
+
+def test_every_pack_flag_is_a_setting():
+    """A misspelled flag would turn a flow save or a run into a 500 (getattr on Settings)."""
+    from recruitai.config import Settings
+
+    for t in registry.all().values():
+        assert t.flag is None or t.flag in Settings.model_fields, t.id

@@ -26,6 +26,7 @@ from recruitai.modules.agents.helpers.models import Agent, AgentVersion
 from recruitai.modules.agents.helpers.schemas import (
     AgentCreate,
     AgentDetail,
+    AgentListItem,
     AgentOut,
     AgentPatch,
     AgentVersionOut,
@@ -85,13 +86,16 @@ async def create_agent(
 
 
 @router.get(
-    "", response_model=list[AgentOut], responses=problem_responses(Unauthorized)
+    "", response_model=list[AgentListItem], responses=problem_responses(Unauthorized)
 )
 async def list_agents(
     ctx: Annotated[OrgContext, Depends(get_org_context)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[AgentOut]:
-    return [_agent_out(a) for a in await service.list_agents(db, org_id=ctx.org_id)]
+) -> list[AgentListItem]:
+    return [
+        AgentListItem(**_agent_out(a).model_dump(), tools=tools)
+        for a, tools in await service.list_agents(db, org_id=ctx.org_id)
+    ]
 
 
 @router.get(

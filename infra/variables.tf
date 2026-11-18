@@ -78,3 +78,19 @@ variable "api_max_instances" {
   default     = 3
   description = "Upper bound on API instances: also the cost ceiling under an unauthenticated flood. Each instance opens up to 10 DB connections (db_pool_size + db_max_overflow), so instances x 10 + the worker's 10 must stay under the Cloud SQL max_connections of the chosen sql_tier."
 }
+
+variable "sentry_dsn" {
+  description = "Sentry DSN of the backend project (ADR 0040). Not a secret: it only allows sending events. Empty = off."
+  type        = string
+  default     = ""
+}
+
+variable "sql_availability" {
+  description = "ZONAL (dev) or REGIONAL: a standby in a second zone with automatic failover (prod, ADR 0041)."
+  type        = string
+  default     = "ZONAL"
+  validation {
+    condition     = contains(["ZONAL", "REGIONAL"], var.sql_availability)
+    error_message = "sql_availability must be ZONAL or REGIONAL."
+  }
+}

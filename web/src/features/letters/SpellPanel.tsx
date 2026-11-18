@@ -76,56 +76,21 @@ export function SpellPanel({
               </p>
               <ul className="space-y-3">
                 {issues.map((issue, i) => (
-                  <li key={`${issue.start}-${issue.wrong}`} className="space-y-1">
-                    <p>
-                      <span className="rounded bg-destructive/10 px-1 line-through">
-                        {issue.wrong}
-                      </span>{' '}
-                      →{' '}
-                      <span className="rounded bg-success/15 px-1 font-medium">{issue.right}</span>
-                      {issue.reason && (
-                        <span className="text-muted-foreground"> · {issue.reason}</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      …{value.slice(Math.max(0, issue.start - CONTEXT), issue.start)}
-                      <b className="text-foreground">{issue.wrong}</b>
-                      {value.slice(issue.end, issue.end + CONTEXT)}…
-                    </p>
-                    <div className="flex gap-3">
-                      <Button
-                        size="sm"
-                        data-apply
-                        aria-label={t('letters.spell.apply_aria', {
-                          i: i + 1,
-                          total: issues.length,
-                          wrong: issue.wrong,
-                          right: issue.right,
-                        })}
-                        onClick={() => {
-                          onApplyIssue(i)
-                          afterChange(issue.start + issue.right.length)
-                        }}
-                      >
-                        {t('letters.spell.apply')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        aria-label={t('letters.spell.ignore_aria', {
-                          i: i + 1,
-                          total: issues.length,
-                          wrong: issue.wrong,
-                        })}
-                        onClick={() => {
-                          onIgnoreIssue(i)
-                          afterChange()
-                        }}
-                      >
-                        {t('letters.spell.ignore')}
-                      </Button>
-                    </div>
-                  </li>
+                  <IssueItem
+                    key={`${issue.start}-${issue.wrong}`}
+                    issue={issue}
+                    i={i}
+                    total={issues.length}
+                    value={value}
+                    onApply={() => {
+                      onApplyIssue(i)
+                      afterChange(issue.start + issue.right.length)
+                    }}
+                    onIgnore={() => {
+                      onIgnoreIssue(i)
+                      afterChange()
+                    }}
+                  />
                 ))}
               </ul>
               {issues.length > 1 && (
@@ -146,5 +111,64 @@ export function SpellPanel({
         </div>
       )}
     </div>
+  )
+}
+
+function IssueItem({
+  issue,
+  i,
+  total,
+  value,
+  onApply,
+  onIgnore,
+}: {
+  issue: SpellIssue
+  i: number
+  total: number
+  value: string
+  onApply: () => void
+  onIgnore: () => void
+}) {
+  const t = useT()
+  return (
+    <li className="space-y-1">
+      <p>
+        <span className="rounded bg-destructive/10 px-1 line-through">{issue.wrong}</span> →{' '}
+        <span className="rounded bg-success/15 px-1 font-medium">{issue.right}</span>
+        {issue.reason && <span className="text-muted-foreground"> · {issue.reason}</span>}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        …{value.slice(Math.max(0, issue.start - CONTEXT), issue.start)}
+        <b className="text-foreground">{issue.wrong}</b>
+        {value.slice(issue.end, issue.end + CONTEXT)}…
+      </p>
+      <div className="flex gap-3">
+        <Button
+          size="sm"
+          data-apply
+          aria-label={t('letters.spell.apply_aria', {
+            i: i + 1,
+            total,
+            wrong: issue.wrong,
+            right: issue.right,
+          })}
+          onClick={onApply}
+        >
+          {t('letters.spell.apply')}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label={t('letters.spell.ignore_aria', {
+            i: i + 1,
+            total,
+            wrong: issue.wrong,
+          })}
+          onClick={onIgnore}
+        >
+          {t('letters.spell.ignore')}
+        </Button>
+      </div>
+    </li>
   )
 }

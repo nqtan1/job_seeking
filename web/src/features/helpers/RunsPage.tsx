@@ -10,7 +10,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { cn } from 'cn'
 import { type RunListItem, type RunSummary, isLive, useAllRuns, useFlows, useRerun } from './api'
-import { relTime, when } from './lib'
+import { relTime, when } from '@/lib/time'
 import { RunStatusBadge } from './ui'
 
 const FILTERS = ['all', 'running', 'waiting', 'done', 'failed'] as const
@@ -20,11 +20,11 @@ type Filter = (typeof FILTERS)[number]
 function useOutcome() {
   const { t, locale } = useI18n()
   return (r: RunListItem) => {
-    if (r.status === 'queued') return t('helpers.pages.runs.waiting')
+    if (r.status === 'queued') return t('helpers.run.status.queued')
     if (r.status === 'waiting')
       return t('helpers.run.waiting_until', { time: when(r.wake_at, locale) })
-    if (r.status === 'running') return t('helpers.ui.working')
-    if (r.status === 'done') return t('helpers.pages.runs.done')
+    if (r.status === 'running') return t('helpers.run.status.running')
+    if (r.status === 'done') return t('helpers.run.status.done')
     const key = `helpers.rerr.${r.status === 'cancelled' ? 'cancelled' : r.error_code}`
     return t((key in catalogs.en ? key : 'helpers.rerr.generic') as Key)
   }
@@ -81,7 +81,7 @@ function RunRow({ run }: { run: RunListItem }) {
         variant="ghost"
         size="sm"
         disabled={again.isPending || isLive(run.status)}
-        aria-label={t('helpers.pages.runs.again_label', { name: run.flow_name })}
+        aria-label={`${t('helpers.live.again')}: ${run.flow_name}`}
         onClick={() =>
           again.mutate(run.id, { onSuccess: (r) => navigate(`/automations/runs/${r.id}`) })
         }
@@ -129,7 +129,7 @@ export function RunsTab() {
             {t('helpers.pages.runs.flow')}
           </Label>
           <NativeSelect id="runs-flow" value={flowId} onChange={(e) => setFlowId(e.target.value)}>
-            <option value="">{t('helpers.pages.runs.flow_all')}</option>
+            <option value="">{t('helpers.pages.runs.all')}</option>
             {(flows.data ?? []).map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}

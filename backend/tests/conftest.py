@@ -15,6 +15,7 @@ os.environ.setdefault(
     ),
 )
 os.environ["APP_CHECK_ENFORCED"] = "true"  # a dev .env must not weaken the 401 tests
+os.environ["SENTRY_DSN"] = ""  # a dev .env must never send test errors to Sentry
 os.environ.setdefault("FIREBASE_PROJECT_ID", "demo-recruitai")
 os.environ.setdefault("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
 

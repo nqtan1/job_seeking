@@ -4,10 +4,12 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.modules.coach.models import Conversation, Message
+from recruitai.core.ids import new_id
+from recruitai.modules.coach.models import CoachAction, Conversation, Message
 
 
 async def create_conversation(
@@ -25,6 +27,56 @@ async def create_conversation(
     await session.flush()
     await session.refresh(conversation)  # server-side started_at
     return conversation
+
+
+async def assistant_conversation(
+    session: AsyncSession, *, org_id: UUID, candidate_id: UUID
+) -> Conversation:
+    """The org's one Assistant conversation, created on first use. Two first uses at once both
+    insert; the partial unique index keeps one and the other reads it."""
+    await session.execute(
+        insert(Conversation)
+        .values(id=new_id(), org_id=org_id, candidate_id=candidate_id, kind="assistant")
+        .on_conflict_do_nothing(
+            index_elements=["org_id"], index_where=text("kind = 'assistant'")
+        )
+    )
+    return (
+        await session.execute(
+            select(Conversation).where(
+                Conversation.org_id == org_id, Conversation.kind == "assistant"
+            )
+        )
+    ).scalar_one()
+
+
+async def inbox_posted_since(
+    session: AsyncSession,
+    *,
+    org_id: UUID,
+    conversation_id: UUID,
+    kind: str,
+    since: datetime,
+) -> bool:
+    found = await session.scalar(
+        select(Message.id)
+        .where(
+            Message.org_id == org_id,
+            Message.conversation_id == conversation_id,
+            Message.created_at >= since,
+            Message.meta["inbox"]["kind"].astext == kind,
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def get_message(
+    session: AsyncSession, *, org_id: UUID, message_id: UUID
+) -> Message | None:
+    return await session.scalar(
+        select(Message).where(Message.org_id == org_id, Message.id == message_id)
+    )
 
 
 async def get_conversation(
@@ -78,21 +130,7 @@ async def add_turn(
     """The two messages of one turn, in the caller's transaction. Timestamps are explicit and
     1 ms apart, and always after the conversation's latest message: with ``now()`` both rows
     would tie, and turns stored within a millisecond of each other could interleave."""
-    # Serialize turns of one conversation while storing: two simultaneous messages would
-    # otherwise compute the same "latest" and could interleave their rows.
-    await session.execute(
-        select(Conversation.id)
-        .where(Conversation.org_id == org_id, Conversation.id == conversation_id)
-        .with_for_update()
-    )
-    now = datetime.now(UTC)
-    latest = await session.scalar(
-        select(func.max(Message.created_at)).where(
-            Message.org_id == org_id, Message.conversation_id == conversation_id
-        )
-    )
-    if latest is not None:
-        now = max(now, latest + timedelta(milliseconds=1))
+    now = await _next_at(session, org_id=org_id, conversation_id=conversation_id)
     rows = [
         Message(
             conversation_id=conversation_id,
@@ -110,6 +148,121 @@ async def add_turn(
     session.add_all(rows)
     await session.flush()
     return rows
+
+
+async def _next_at(
+    session: AsyncSession, *, org_id: UUID, conversation_id: UUID
+) -> datetime:
+    """Now, or 1 ms after the conversation's latest message. Locks the conversation row: two
+    simultaneous writes would otherwise compute the same "latest" and could interleave."""
+    await session.execute(
+        select(Conversation.id)
+        .where(Conversation.org_id == org_id, Conversation.id == conversation_id)
+        .with_for_update()
+    )
+    now = datetime.now(UTC)
+    latest = await session.scalar(
+        select(func.max(Message.created_at)).where(
+            Message.org_id == org_id, Message.conversation_id == conversation_id
+        )
+    )
+    return now if latest is None else max(now, latest + timedelta(milliseconds=1))
+
+
+async def add_assistant_message(
+    session: AsyncSession,
+    *,
+    org_id: UUID,
+    conversation_id: UUID,
+    content: str,
+    meta: dict[str, Any] | None = None,
+) -> Message:
+    """A server-built line in the chat (a confirmed action's outcome, an inbox item), in the
+    caller's transaction."""
+    at = await _next_at(session, org_id=org_id, conversation_id=conversation_id)
+    message = Message(
+        conversation_id=conversation_id,
+        org_id=org_id,
+        role="assistant",
+        content=content,
+        created_at=at,
+        meta=meta,
+    )
+    session.add(message)
+    await session.flush()
+    return message
+
+
+async def add_action(session: AsyncSession, **values: Any) -> CoachAction:
+    action = CoachAction(**values)
+    session.add(action)
+    await session.flush()
+    return action
+
+
+async def lock_action(
+    session: AsyncSession, *, org_id: UUID, conversation_id: UUID, action_id: UUID
+) -> CoachAction | None:
+    """The action, locked until the caller's commit (a double click waits here)."""
+    return (
+        await session.execute(
+            select(CoachAction)
+            .where(
+                CoachAction.org_id == org_id,
+                CoachAction.conversation_id == conversation_id,
+                CoachAction.id == action_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)  # the row as locked
+        )
+    ).scalar_one_or_none()
+
+
+async def decide_action(
+    session: AsyncSession,
+    *,
+    org_id: UUID,
+    action_ids: list[UUID],
+    status: str,
+    code: str | None = None,
+    result: dict[str, str] | None = None,
+    only_pending: bool = False,
+) -> None:
+    query = update(CoachAction).where(
+        CoachAction.org_id == org_id, CoachAction.id.in_(action_ids)
+    )
+    if only_pending:
+        query = query.where(CoachAction.status == "pending")
+    await session.execute(
+        query.values(status=status, code=code, result=result, decided_at=func.now())
+    )
+
+
+async def action_states(
+    session: AsyncSession, *, org_id: UUID, conversation_id: UUID
+) -> list[tuple[UUID, str, str | None, datetime, dict[str, Any] | None]]:
+    """(id, status, code, created_at, result) of the conversation's actions."""
+    rows = await session.execute(
+        select(
+            CoachAction.id,
+            CoachAction.status,
+            CoachAction.code,
+            CoachAction.created_at,
+            CoachAction.result,
+        ).where(
+            CoachAction.org_id == org_id, CoachAction.conversation_id == conversation_id
+        )
+    )
+    return [(i, s, c, at, r) for i, s, c, at, r in rows.all()]
+
+
+async def all_actions(session: AsyncSession, *, org_id: UUID) -> list[CoachAction]:
+    rows = await session.execute(
+        select(CoachAction)
+        .where(CoachAction.org_id == org_id)
+        .order_by(CoachAction.conversation_id, CoachAction.created_at)
+    )
+    return list(rows.scalars())
 
 
 async def recent_messages(
@@ -132,15 +285,23 @@ async def list_messages(
     conversation_id: UUID,
     limit: int,
     offset: int,
+    latest: bool = False,
 ) -> list[Message]:
+    """Oldest first; ``latest``: the newest ``limit`` (still oldest first in the list)."""
+    order = (
+        (Message.created_at.desc(), Message.id.desc())
+        if latest
+        else (Message.created_at, Message.id)
+    )
     rows = await session.execute(
         select(Message)
         .where(Message.org_id == org_id, Message.conversation_id == conversation_id)
-        .order_by(Message.created_at, Message.id)
+        .order_by(*order)
         .limit(limit)
         .offset(offset)
     )
-    return list(rows.scalars())
+    out = list(rows.scalars())
+    return out[::-1] if latest else out
 
 
 async def all_conversations(

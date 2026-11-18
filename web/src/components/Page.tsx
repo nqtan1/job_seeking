@@ -23,7 +23,7 @@ export function Page({ title, description, back, actions, wide, children }: Prop
           {back && (
             <Link
               to={back.to}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              className="flex min-h-6 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-3" />
               {back.label}
