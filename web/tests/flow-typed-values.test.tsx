@@ -38,7 +38,7 @@ beforeAll(async () => {
       ),
       tool('read_page', [['url', true]], ['text']),
       tool('for_each', [['items', true]], ['started']),
-      tool('save_note', [['text', true]], ['note_id']), // a pack tool the editor has no sample for
+      tool('new_pack_tool', [['text', true]], ['new_field']), // a pack tool the editor has no sample for
     ],
   })
   const { result } = renderHook(() => useToolTable(), {
@@ -76,10 +76,10 @@ it('lets the keywords of a search be typed on the step itself', async () => {
 })
 
 it('takes the ports of every step from GET /tools, with a generic example for a new tool', () => {
-  const note = { ...(node as object), tool: 'save_note' } as never
+  const note = { ...(node as object), tool: 'new_pack_tool' } as never
   expect(inputsOf(note, new Map())).toEqual([{ name: 'text', required: true }])
-  expect(outputsOf(note, new Map())).toEqual(['note_id'])
-  expect(outputFields(note, new Map())).toEqual([{ name: 'note_id', example: '…' }])
+  expect(outputsOf(note, new Map())).toEqual(['new_field'])
+  expect(outputFields(note, new Map())).toEqual([{ name: 'new_field', example: '…' }])
   expect(inputsOf({ ...(node as object), tool: 'gone' } as never, new Map())).toEqual([])
 })
 

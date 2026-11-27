@@ -61,6 +61,7 @@ register(
         effect="write",
         cap=Cap(50),
         chat=True,
+        mcp=True,
     ),
     _add_to_tracker,
 )

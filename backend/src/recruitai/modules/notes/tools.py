@@ -48,6 +48,7 @@ register(
         cap=Cap(100),  # a day; once: a resumed step does not save the note twice
         flag=FLAG,
         chat=True,
+        mcp=True,
     ),
     _save_note,
 )
@@ -59,6 +60,7 @@ register(
         ("summary", "quotes"),
         ai_uses=1,
         flag=FLAG,
+        mcp=True,
     ),
     _summarise,
 )

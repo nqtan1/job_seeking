@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import LLMGateway, Source, ToolSpec
 from recruitai.config import Settings
+from recruitai.core import tool_calls
 from recruitai.core import tools as registry
 from recruitai.core.errors import NotFound
 from recruitai.core.language import Language
@@ -243,7 +244,8 @@ async def run(name: str, args: dict[str, Any], ctx: ToolContext) -> ToolRun:
     tool = tool_of(name)
     if tool is None:
         return ToolRun({"error": "unknown_tool"}, label, ok=False)
-    out = await registry.handler(tool.id)(
+    out = await tool_calls.invoke(
+        tool,
         registry.Call(
             ctx.db,
             ctx.llm,
@@ -251,7 +253,7 @@ async def run(name: str, args: dict[str, Any], ctx: ToolContext) -> ToolRun:
             ctx.user_id,
             ctx.job_id,
             {k: str(v) for k, v in args.items()},
-        )
+        ),
     )
     # fenced like every other text the model is handed; the cap keeps one tool from flooding it
     result: dict[str, Any] = {

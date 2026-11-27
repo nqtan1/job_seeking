@@ -20,6 +20,7 @@ _ROWS = (
         ai_uses=1,
         chat=True,
         untrusted=True,
+        mcp=True,
     ),
     # starts one run of another automation per item (ADR 0034); the items' keys fill its Start step.
     # Repeatable: a resumed step starts the runs still missing (idempotency keys stop duplicates).

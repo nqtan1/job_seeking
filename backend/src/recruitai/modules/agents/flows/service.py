@@ -1,16 +1,20 @@
 """Flows: CRUD with immutable versions, validation, and the data export (ADR 0031). Starting,
 resuming and cancelling runs lives in ``runs.py``."""
 
+import time
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from recruitai.config import get_settings
+from recruitai.ai.gateway import LLMGateway
+from recruitai.config import Settings, get_settings
+from recruitai.core import tool_calls
 from recruitai.core import tools as registry
 from recruitai.core.errors import Conflict, NotFound, ValidationFailed
 from recruitai.core.export import rows_as_dicts
 from recruitai.modules.agents import versioning
+from recruitai.modules.agents.blocks.errors import DailyLimit
 from recruitai.modules.agents.connections import repository as connections_repo
 from recruitai.modules.agents.contacts import repository as recipients_repo
 from recruitai.modules.agents.flows import engine
@@ -24,6 +28,58 @@ from recruitai.modules.agents.flows.schemas import FlowCreate, FlowVersionCreate
 
 # the daily-cap ledger of outside effects, shared with chat actions (ADR 0042): one budget
 claim_effect = repo.claim_effect
+
+
+async def try_tool(
+    db: AsyncSession,
+    llm: LLMGateway,
+    settings: Settings,
+    *,
+    org_id: UUID,
+    user_id: UUID,
+    tool_id: str,
+    inputs: dict[str, str],
+    job_id: UUID | None,
+) -> tuple[dict[str, str], int]:
+    """The Tools page's "Try it" (ADR 0043): one real call through the path agents use, so a
+    write really happens and a capped tool spends one of today's uses."""
+    tool = registry.all().get(tool_id)
+    if (
+        tool is None
+        or not tool.mcp
+        or (tool.flag is not None and not getattr(settings, tool.flag))
+    ):
+        raise NotFound("Tool not found.")
+    names = {n for n, _ in tool.inputs}
+    if unknown := set(inputs) - names:
+        raise ValidationFailed(f"Unknown input: {min(unknown)}.")
+    if missing := [
+        n for n, req in tool.inputs if req and not inputs.get(n, "").strip()
+    ]:
+        raise ValidationFailed(f"“{missing[0]}” is required.")
+    if tool.needs_job and job_id is None:
+        raise ValidationFailed("Pick a job: this tool reads one.")
+    if tool.cap is not None:
+        verdict = await claim_effect(
+            db,
+            org_id=org_id,
+            user_id=user_id,
+            run_id=None,
+            node_id=uuid4(),
+            kind=tool.id,
+            daily_cap=tool.cap.user,
+            global_cap=tool.cap.everyone,
+            once=tool.cap.once,
+        )
+        if verdict == "capped":
+            raise DailyLimit()
+    began = time.monotonic()
+    out = await tool_calls.invoke(
+        tool, registry.Call(db, llm, org_id, user_id, job_id, inputs)
+    )
+    await db.commit()
+    return out, int((time.monotonic() - began) * 1000)
+
 
 MAX_FLOWS_PER_ORG = 20
 MAX_FLOWS_EVER = 100  # archived ones count too: archiving is not a way around the cap

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import LLMGateway, ToolCall
 from recruitai.config import Settings
+from recruitai.core import tool_calls
 from recruitai.core import tools as registry
 from recruitai.core.errors import AppError, Conflict, NotFound
 from recruitai.core.language import Language
@@ -375,7 +376,7 @@ async def _run(
     The chat then says what was done, in a message the server wrote."""
     db, org_id = call.db, call.org_id
     try:
-        out = await registry.handler(tool.id)(call)
+        out = await tool_calls.invoke(tool, call)
     except Exception as exc:  # noqa: BLE001  (a fixed code, never exception text)
         code = exc.code if isinstance(exc, AppError) else "tool_failed"
         logger.warning(

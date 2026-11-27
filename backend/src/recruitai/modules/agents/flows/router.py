@@ -6,7 +6,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from recruitai.ai.dependencies import get_llm_gateway
+from recruitai.ai.gateway import LLMGateway
 from recruitai.config import Settings, get_settings
+from recruitai.core import tool_calls
 from recruitai.core import tools as registry
 from recruitai.core.app_check import verify_app_check
 from recruitai.core.db import get_db
@@ -19,7 +22,12 @@ from recruitai.core.errors import (
 )
 from recruitai.core.ratelimit import limit_ai, rate_limit
 from recruitai.core.tenancy import OrgContext, get_org_context
-from recruitai.modules.agents.blocks.schemas import ToolOut
+from recruitai.modules.agents.blocks.schemas import (
+    ToolOut,
+    ToolsStatusOut,
+    ToolTryIn,
+    ToolTryOut,
+)
 from recruitai.modules.agents.deps import require_enabled
 from recruitai.modules.agents.flows import graph as g
 from recruitai.modules.agents.flows import runs as flow_runs
@@ -147,6 +155,49 @@ async def list_tools(
         for t in registry.all().values()
         if (t.flag is None or getattr(settings, t.flag)) and not t.chat_only
     ]
+
+
+@router.get(
+    "/tools/status",
+    response_model=ToolsStatusOut,
+    dependencies=[Depends(rate_limit("tools_status", limit=20))],
+    responses=problem_responses(Unauthorized),
+)
+async def tools_status(ctx: Ctx) -> ToolsStatusOut:
+    """Is the tools service alive, and which tools does it serve (ADR 0043)? Checked on demand only."""
+    return ToolsStatusOut.model_validate(await tool_calls.status())
+
+
+@router.post(
+    "/tools/{tool_id}/try",
+    response_model=ToolTryOut,
+    dependencies=[Depends(verify_app_check), Depends(limit_ai)],
+    responses=problem_responses(Unauthorized, NotFound, ValidationFailed),
+)
+async def try_tool(
+    tool_id: str,
+    body: ToolTryIn,
+    ctx: Ctx,
+    db: Db,
+    settings: Annotated[Settings, Depends(get_settings)],
+    llm: Annotated[LLMGateway, Depends(get_llm_gateway)],
+) -> ToolTryOut:
+    """Runs one tool for real, as an agent would (writes happen, caps and AI uses count)."""
+    outputs, latency_ms = await flows.try_tool(
+        db,
+        llm,
+        settings,
+        org_id=ctx.org_id,
+        user_id=ctx.user_id,
+        tool_id=tool_id,
+        inputs=body.inputs,
+        job_id=body.job_id,
+    )
+    return ToolTryOut(
+        outputs=outputs,
+        latency_ms=latency_ms,
+        remote=tool_calls.remote(registry.get(tool_id)),
+    )
 
 
 @router.post(

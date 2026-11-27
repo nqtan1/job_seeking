@@ -222,11 +222,11 @@ class AgentDetail(AgentOut):
     spec: VersionSpec
 
 
-class TrialIn(Strict):
-    """Runs a draft (unsaved) spec: the editor's Try-it panel. Nothing is stored."""
+class RunInputs(Strict):
+    """What one trial run is handed: named texts (within the hand-off cap) and the job it is about.
+    Shared by the agent editor's Try-it and the Tools page's "Try" (ADR 0043)."""
 
-    spec: VersionSpec
-    inputs: dict[FieldName, str] = Field(default_factory=dict)
+    inputs: dict[FieldName, str] = Field(default_factory=dict, max_length=12)
     job_id: UUID | None = None
 
     @model_validator(mode="after")
@@ -234,6 +234,12 @@ class TrialIn(Strict):
         if sum(len(v) for v in self.inputs.values()) > MAX_INPUT_CHARS:
             raise ValueError(f"inputs are limited to {MAX_INPUT_CHARS} characters")
         return self
+
+
+class TrialIn(RunInputs):
+    """Runs a draft (unsaved) spec: the editor's Try-it panel. Nothing is stored."""
+
+    spec: VersionSpec
 
 
 class TrialOut(BaseModel):

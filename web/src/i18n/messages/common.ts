@@ -5,6 +5,7 @@ export const common = defineMessages({
     'lang.label': 'Language',
     'lang.hint': 'Used for the app, the AI answers, your letters and the e-mails we send.',
     'err.generic': 'Something went wrong. Please try again.',
+    'err.tools_unavailable': 'The tools service did not answer. Try again in a minute.',
     'err.request_id': 'request id: {id}',
     'err.crash': 'Something went wrong',
     'err.reload': 'Reload',
@@ -215,6 +216,7 @@ export const common = defineMessages({
     'lang.hint':
       'Utilisée pour l’application, les réponses de l’IA, vos lettres et les e-mails que nous envoyons.',
     'err.generic': 'Une erreur est survenue. Veuillez réessayer.',
+    'err.tools_unavailable': 'Le service d’outils n’a pas répondu. Réessayez dans une minute.',
     'err.request_id': 'identifiant de requête : {id}',
     'err.crash': 'Un problème est survenu',
     'err.reload': 'Recharger',
@@ -437,6 +439,7 @@ export const common = defineMessages({
     'lang.label': 'Ngôn ngữ',
     'lang.hint': 'Dùng cho ứng dụng, câu trả lời của AI, thư xin việc và các email chúng tôi gửi.',
     'err.generic': 'Đã xảy ra lỗi. Vui lòng thử lại.',
+    'err.tools_unavailable': 'Dịch vụ công cụ không phản hồi. Hãy thử lại sau một phút.',
     'err.request_id': 'mã yêu cầu: {id}',
     'err.crash': 'Đã xảy ra sự cố',
     'err.reload': 'Tải lại',

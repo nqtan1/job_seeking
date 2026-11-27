@@ -72,3 +72,40 @@ def test_every_pack_flag_is_a_setting():
 
     for t in registry.all().values():
         assert t.flag is None or t.flag in Settings.model_fields, t.id
+
+
+async def test_a_remote_step_that_failed_frees_its_run_once_slot_but_not_when_the_line_dropped(
+    monkeypatch,
+):
+    """ADR 0043: the claim is committed before the call, so a "failed" answer (the service rolled
+    back) frees it for a Resume; an unknown outcome keeps it (never twice)."""
+    from types import SimpleNamespace
+
+    from recruitai.core import tool_calls
+    from recruitai.modules.agents.blocks import tools as blocks
+
+    released: list[str] = []
+
+    async def release(db, *, run, node):
+        released.append(node.id)
+
+    monkeypatch.setattr(blocks, "release_effect", release)
+    monkeypatch.setattr(tool_calls, "remote", lambda tool: True)
+    run = SimpleNamespace(org_id=None, user_id=None, job_id=None)
+    for error, freed in (
+        (ToolFailed(code="not_found"), ["n1"]),
+        (tool_calls.ToolsUnavailable(), []),
+    ):
+
+        async def fail(tool, call, error=error):
+            raise error
+
+        monkeypatch.setattr(tool_calls, "invoke", fail)
+        released.clear()
+        for tool, node_id in (
+            ("save_note", "n1"),
+            ("job_lookup", "n2"),
+        ):  # capped once / no cap
+            with pytest.raises(ToolFailed):
+                await blocks.run_tool(None, None, None, run, SimpleNamespace(id=node_id, tool=tool), {})  # fmt: skip
+        assert released == freed

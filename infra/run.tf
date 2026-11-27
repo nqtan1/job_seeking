@@ -14,8 +14,12 @@ locals {
     GOOGLE_CLOUD_PROJECT      = var.project_id
     GOOGLE_CLOUD_LOCATION     = var.llm_location
     EMAIL_BACKEND             = "brevo"
-    SENTRY_DSN                = var.sentry_dsn # ADR 0040; empty = error tracking off
+    SENTRY_DSN                = var.sentry_dsn            # ADR 0040; empty = error tracking off
+    TOOLS_URL                 = "${local.tools_base}/mcp" # ADR 0043; the tools service drops it
   }
+  # Deterministic Cloud Run URL (name + project number + region): known before the service exists,
+  # unchanged by deploys. Never rename recruitai-tools.
+  tools_base = "https://recruitai-tools-${data.google_project.this.number}.${var.region}.run.app"
   # env var -> Secret Manager id (all containers created in main.tf)
   secret_env = {
     DATABASE_URL                 = "recruitai-database-url"
@@ -200,6 +204,102 @@ resource "google_cloud_run_v2_service_iam_member" "api_public" {
   location = var.region
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# Agent tools over MCP (ADR 0043): the api image started on recruitai.tools_server, private by IAM
+# (only the api and worker accounts invoke it; the server checks their ID token again). Scales to
+# zero: nothing polls it. Runs as the api account (same DB IAM user and secrets as the api).
+resource "google_cloud_run_v2_service" "tools" {
+  count               = var.deploy_run ? 1 : 0
+  name                = "recruitai-tools"
+  location            = var.region
+  ingress             = "INGRESS_TRAFFIC_ALL" # reached via run.app; the invoker role is the gate
+  deletion_protection = false
+  labels              = local.labels
+  custom_audiences    = [local.tools_base] # the ID tokens' audience, checked by IAM and the app
+
+  template {
+    service_account = google_service_account.run["api"].email
+    timeout         = "120s"
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+    vpc_access {
+      egress = "PRIVATE_RANGES_ONLY"
+      network_interfaces {
+        network    = google_compute_network.main.id
+        subnetwork = google_compute_subnetwork.run.id
+      }
+    }
+    containers {
+      image = "${local.image}/api:latest"
+      args  = ["uvicorn", "--factory", "recruitai.tools_server:create", "--host", "0.0.0.0", "--port", "8000"]
+      ports {
+        container_port = 8000
+      }
+      resources {
+        limits            = { cpu = "1", memory = "512Mi" }
+        cpu_idle          = true
+        startup_cpu_boost = true
+      }
+      startup_probe {
+        period_seconds    = 1
+        timeout_seconds   = 1
+        failure_threshold = 60
+        http_get {
+          path = "/health"
+        }
+      }
+      dynamic "env" {
+        for_each = { for k, v in local.plain_env : k => v if k != "TOOLS_URL" } # never calls itself
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.secret_env
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
+            }
+          }
+        }
+      }
+      env {
+        name  = "TOOLS_AUDIENCE"
+        value = local.tools_base
+      }
+      env {
+        name  = "TOOLS_CALLERS"
+        value = join(",", [for k in local.runners : google_service_account.run[k].email])
+      }
+      env {
+        name  = "DB_IAM_AUTH"
+        value = "true"
+      }
+      env {
+        name  = "DB_IAM_USER"
+        value = local.db_user["api"]
+      }
+    }
+  }
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image, client, client_version]
+  }
+  depends_on = [google_secret_manager_secret_iam_member.read]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "tools_invoker" {
+  for_each = var.deploy_run ? local.runners : toset([])
+  name     = google_cloud_run_v2_service.tools[0].name
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = google_service_account.run[each.key].member
 }
 
 # Procrastinate worker: no HTTP port, so a worker pool (ADR 0005), 1 instance, runs the periodic sweeps too.

@@ -39,6 +39,7 @@ register(
         needs_job=True,
         page="/letters",
         chat=True,
+        mcp=True,
     ),
     _letter_draft,
 )

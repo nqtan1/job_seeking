@@ -68,6 +68,7 @@ register(
         ai_uses=1,
         needs_job=True,
         chat=True,
+        mcp=True,
     ),
     _fit_check,
 )
@@ -80,6 +81,7 @@ register(
         FIT_OUTPUTS,
         needs_job=True,
         chat=True,
+        mcp=True,
     ),
     _fit_read,
 )

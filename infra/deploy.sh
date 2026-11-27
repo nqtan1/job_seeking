@@ -8,7 +8,7 @@ V=envs/$ENV.tfvars
 [ -f "$V" ] || { echo "missing $V"; exit 1; }
 tfv() { sed -n "s/^$1 *= *\"\{0,1\}\([^\"# ]*\).*/\1/p" "$V"; }
 P=$(tfv project_id); R=$(tfv region); R=${R:-europe-west9}
-API=recruitai-api; WORKER=recruitai-worker; MIGRATE=recruitai-migrate # = run.tf names
+API=recruitai-api; TOOLS=recruitai-tools; WORKER=recruitai-worker; MIGRATE=recruitai-migrate # = run.tf names
 IMG=$R-docker.pkg.dev/$P/recruitai
 guard() { if [ "$ENV" = prod ]; then echo "prod is plan-only: run terraform by hand"; exit 1; fi; }
 tf() { c=$1; shift; terraform init -input=false -backend-config=envs/$ENV.backend.hcl >/dev/null; terraform "$c" -var-file=$V "$@"; }
@@ -27,6 +27,8 @@ case $CMD in
     TAG=$("$0" build "$ENV" | tail -1)
     gcloud run jobs update $MIGRATE --project "$P" --region "$R" --image "$IMG/api:$TAG"
     gcloud run jobs execute $MIGRATE --project "$P" --region "$R" --wait # schema first, then code
+    # tools first (ADR 0043); skipped until terraform has created the service
+    if gcloud run services describe $TOOLS --project "$P" --region "$R" >/dev/null 2>&1; then run $TOOLS --image "$IMG/api:$TAG"; fi
     run $API --image "$IMG/api:$TAG"; worker --image "$IMG/worker:$TAG" ;;
   web)    guard # build the SPA (needs web/.env.production.local) and publish it to Firebase Hosting
     (cd ../web && pnpm install --frozen-lockfile && pnpm build) && (cd .. && npx --yes firebase-tools deploy --only hosting --project "$P") ;;

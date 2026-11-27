@@ -273,12 +273,12 @@ function CannotSee() {
 
 /** What a step gives back: each field with what it means and an example, so a link can be wired by
  *  looking at it. */
-export function OutputList({ fields }: { fields: OutField[] }) {
+export function OutputList({ fields, bare }: { fields: OutField[]; bare?: boolean }) {
   const t = useT()
   if (!fields.length) return null
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-medium">{t('helpers.gives_back')}</p>
+      {!bare && <p className="text-xs font-medium">{t('helpers.gives_back')}</p>}
       <ul className="space-y-1.5">
         {fields.map((f) => {
           const key = `helpers.field.${f.name}`

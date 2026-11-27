@@ -155,21 +155,31 @@ const LIST_ITEMS = 5
 /** `job_title` → "Job title": field names read as labels, not code. */
 const label = (k: string) => (k.charAt(0).toUpperCase() + k.slice(1)).replaceAll('_', ' ')
 
+/** A value short enough for a tile (one line, no list): the rest gets the full width. */
+const isShort = (v: unknown) =>
+  typeof v === 'number' ||
+  typeof v === 'boolean' ||
+  (typeof v === 'string' && v.length <= 80 && !v.includes('\n'))
+
 /**
- * A step's data as blocks, one per field (like a trace viewer's Input / Output panes): long text
- * folds, lists show their first items, nested records read as label/value pairs. Copy and a raw
- * JSON view stay one click away.
+ * A step's data as blocks, one per field (like a trace viewer's Input / Output panes): short values
+ * sit side by side as tiles, long text folds, lists show their first items, nested records read as
+ * label/value pairs. Copy and a raw JSON view stay one click away. With `title`, the blocks come in
+ * a card with a header band (the answer of a run).
  */
 export function Result({
   value,
   bare,
   large,
+  title,
 }: {
   value: Record<string, unknown> | null | undefined
   /** No Copy/JSON toolbar (a quiet read-only view, e.g. inside a trace panel). */
   bare?: boolean
   /** Reading size, for the answer the person came for. */
   large?: boolean
+  /** A header band above the blocks: the title on the left, Copy/JSON on the right. */
+  title?: ReactNode
 }) {
   const t = useT()
   const [raw, setRaw] = useState(false)
@@ -188,39 +198,63 @@ export function Result({
       /* clipboard may be blocked: the text stays selectable */
     }
   }
+  const tools = !bare && (
+    <div className={cn('flex justify-end gap-1', large && !title && '-mt-9')}>
+      {!onlyText && (
+        <Button variant="ghost" size="xs" onClick={() => setRaw((r) => !r)} aria-pressed={raw}>
+          JSON
+        </Button>
+      )}
+      <Button variant="ghost" size="xs" onClick={copy}>
+        {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
+        {copied ? t('helpers.copied') : t('helpers.copy')}
+      </Button>
+    </div>
+  )
+  const body = raw ? (
+    <pre className="max-h-96 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs">{json}</pre>
+  ) : onlyText ? (
+    <Folded text={value[keys[0]] as string} large={large} />
+  ) : (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {keys.map((k) => (
+        <Field key={k} name={k} v={value[k]} large={large} />
+      ))}
+    </div>
+  )
+  if (title)
+    return (
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <div className="flex items-center gap-3 border-b bg-linear-to-r from-primary/10 via-accent/50 to-transparent px-4 py-3 sm:px-5">
+          <div className="min-w-0 flex-1">{title}</div>
+          {tools}
+        </div>
+        <div className="p-4 sm:p-5">{body}</div>
+      </div>
+    )
   return (
     <div className="space-y-2">
-      {!bare && (
-        <div className={cn('flex justify-end gap-1', large && '-mt-9')}>
-          {!onlyText && (
-            <Button variant="ghost" size="xs" onClick={() => setRaw((r) => !r)} aria-pressed={raw}>
-              JSON
-            </Button>
-          )}
-          <Button variant="ghost" size="xs" onClick={copy}>
-            {copied ? <Check data-icon="inline-start" /> : <Copy data-icon="inline-start" />}
-            {copied ? t('helpers.copied') : t('helpers.copy')}
-          </Button>
-        </div>
+      {tools}
+      {body}
+    </div>
+  )
+}
+
+function Field({ name, v, large }: { name: string; v: unknown; large?: boolean }) {
+  const short = isShort(v)
+  return (
+    <div
+      className={cn(
+        'min-w-0 rounded-xl border bg-background/70 px-3 py-2.5',
+        !short && 'sm:col-span-2',
       )}
-      {raw ? (
-        <pre className="max-h-72 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs">
-          {json}
-        </pre>
-      ) : onlyText ? (
-        <Folded text={value[keys[0]] as string} large={large} />
-      ) : (
-        keys.map((k) => (
-          <div key={k} className="overflow-hidden rounded-lg border bg-background/60">
-            <p className="border-b bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-              {label(k)}
-            </p>
-            <div className="px-3 py-2 text-sm">
-              <Value v={value[k]} />
-            </div>
-          </div>
-        ))
-      )}
+    >
+      <p className="mb-1 text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">
+        {label(name)}
+      </p>
+      <div className={cn('text-sm', short && large && 'text-base font-medium')}>
+        <Value v={v} />
+      </div>
     </div>
   )
 }
@@ -228,7 +262,19 @@ export function Result({
 function Value({ v }: { v: unknown }) {
   if (Array.isArray(v)) return <List items={v} />
   if (v !== null && typeof v === 'object') return <Pairs record={v as Record<string, unknown>} />
-  return <Folded text={short(v)} />
+  const text = short(v)
+  if (/^https?:\/\/\S+$/.test(text))
+    return (
+      <a
+        href={text}
+        target="_blank"
+        rel="noreferrer"
+        className="break-all text-primary underline-offset-2 hover:underline"
+      >
+        {text}
+      </a>
+    )
+  return <Folded text={text} />
 }
 
 /** Text that folds after a few lines, so a long page or letter never floods the view. */
@@ -264,17 +310,25 @@ function List({ items }: { items: unknown[] }) {
   const shown = all ? items : items.slice(0, LIST_ITEMS)
   return (
     <div className="space-y-1.5">
-      <ul className="space-y-1.5">
+      <ol className="space-y-1.5">
         {shown.map((x, i) => (
-          <li key={i} className="rounded-md bg-muted/50 px-2.5 py-1.5">
-            {x !== null && typeof x === 'object' && !Array.isArray(x) ? (
-              <Pairs record={x as Record<string, unknown>} />
-            ) : (
-              <span className="line-clamp-3 break-words">{short(x)}</span>
-            )}
+          <li key={i} className="flex gap-2.5 rounded-lg bg-muted/50 px-2.5 py-2">
+            <span
+              aria-hidden
+              className="grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[0.7rem] font-semibold text-primary tabular-nums"
+            >
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              {x !== null && typeof x === 'object' && !Array.isArray(x) ? (
+                <Pairs record={x as Record<string, unknown>} />
+              ) : (
+                <span className="line-clamp-3 break-words">{short(x)}</span>
+              )}
+            </div>
           </li>
         ))}
-      </ul>
+      </ol>
       {items.length > LIST_ITEMS && (
         <Button variant="link" size="xs" className="px-0" onClick={() => setAll((a) => !a)}>
           {all ? t('helpers.ui.less') : t('helpers.ui.show_all', { count: items.length })}

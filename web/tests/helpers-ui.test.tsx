@@ -314,7 +314,9 @@ test('a finished run leads with its summary and the result, then the steps', asy
   expect(screen.getByRole('region', { name: 'Result' })).toHaveTextContent(
     'A canned helper answer.',
   )
-  expect(screen.getByText(/· m1/)).toBeInTheDocument() // the trace opens on the agent step, not start/result
+  // the trace opens on the answer; picking a step shows what it did
+  await userEvent.click(screen.getByRole('button', { name: /Mira/ }))
+  expect(screen.getByText(/· m1/)).toBeInTheDocument()
 })
 
 test('recent runs link back to their run page, newest first', async () => {

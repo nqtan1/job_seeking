@@ -25,6 +25,13 @@ const EXAMPLE: Record<string, string> = {
   url: 'https://acme.example/jobs/42',
   status: 'sent',
   value: '(what the step received, passed on)',
+  summary: 'Data analyst with 3 years of Python and SQL…',
+  skills: 'Python, SQL, Power BI',
+  top_fixes: '- Add a number to your last role\n- Shorten the summary',
+  letter_id: '(the id of the letter, open it in Letters)',
+  subject: 'Application: Data analyst',
+  note_id: '(the id of the note, open it in Notes)',
+  quotes: '- “Remote two days a week”',
 }
 
 const BY_TYPE: Record<string, string> = {
@@ -33,6 +40,10 @@ const BY_TYPE: Record<string, string> = {
   boolean: 'yes',
   list: '• …\n• …',
 }
+
+/** A tool's outputs with their examples (flow steps and the Tools page). */
+export const toolFields = (outputs: readonly string[]): OutField[] =>
+  outputs.map((name) => ({ name, example: EXAMPLE[name] ?? '…' }))
 
 export function outputFields(node: GraphNode, specs: Specs): OutField[] {
   switch (node.type) {
@@ -52,7 +63,7 @@ export function outputFields(node: GraphNode, specs: Specs): OutField[] {
     case 'transform':
       return [{ name: 'text', example: '(the text, tidied)' }]
     case 'tool':
-      return outputsOf(node, specs).map((name) => ({ name, example: EXAMPLE[name] ?? '…' }))
+      return toolFields(outputsOf(node, specs))
     default:
       return []
   }

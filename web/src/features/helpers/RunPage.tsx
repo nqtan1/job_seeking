@@ -33,7 +33,7 @@ import { DataFlowTable, EdgeInspector } from './FlowPanels'
 import { type Graph, orderOf } from './graph'
 import { when } from '@/lib/time'
 import { useLabels } from './lib'
-import { ResultHero, RunSummary, Trace } from './RunParts'
+import { RunSummary, Trace } from './RunParts'
 import { StepsList } from './StepsList'
 import { Details } from './ui'
 import type { Selection } from './Canvas'
@@ -147,7 +147,6 @@ function RunHeader({
           {t('helpers.run.waiting_until', { time: when(run.wake_at, locale) })}
         </p>
       )}
-      <ResultHero run={run} />
       {live && !run.result && (
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner />
@@ -338,7 +337,7 @@ function View({ run }: { run: Run }) {
   const stepFailed = run.steps.some((s) => s.status === 'failed')
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-6xl space-y-5">
       <RunHeader
         run={run}
         live={live}
@@ -355,6 +354,7 @@ function View({ run }: { run: Run }) {
           <section className="space-y-3">
             <h2 className="text-base font-semibold tracking-tight">{t('helpers.view.trace')}</h2>
             <Trace
+              run={run}
               order={orderOf(graph)}
               steps={stepOf}
               graph={graph}
