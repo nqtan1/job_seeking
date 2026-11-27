@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from recruitai.ai.gateway import LLMGateway
 from recruitai.config import get_settings
+from recruitai.core import tool_calls
 from recruitai.core import tools as registry
 from recruitai.core.email import EmailSender, get_email_sender
 from recruitai.core.errors import ValidationFailed
@@ -95,7 +96,7 @@ class Ctx(Call):
 Handler = Callable[[Ctx], Awaitable[dict[str, str]]]
 
 
-async def _web_search(c: Ctx) -> dict[str, str]:
+async def _web_search(c: Call) -> dict[str, str]:
     if not c.llm.capabilities("flow_web_search").web_grounding:
         raise SearchUnavailable()
     await c.db.commit()  # nothing held open across the model call
@@ -216,9 +217,18 @@ async def run_tool(
     values: dict[str, str],
 ) -> dict[str, str]:
     try:
-        handler = registry.handler(node.tool)
+        tool = registry.get(node.tool)
+        registry.handler(node.tool)  # KeyError: a step the engine runs itself
     except KeyError:
         raise ToolFailed() from None
-    return await handler(
-        Ctx(db, llm, run.org_id, run.user_id, run.job_id, values, kit, run, node)
-    )
+    ctx = Ctx(db, llm, run.org_id, run.user_id, run.job_id, values, kit, run, node)
+    try:
+        return await tool_calls.invoke(tool, ctx)
+    except tool_calls.ToolsUnavailable:
+        raise  # it may have run before the line dropped: keep the slot, never twice
+    except ToolFailed:
+        # the tools service answered "failed" and rolled back, but our claim was committed
+        # before the call (ADR 0043): free it, or a Resume would skip a step that never happened
+        if tool_calls.remote(tool) and tool.cap is not None and tool.cap.once:
+            await release_effect(db, run=run, node=node)
+        raise

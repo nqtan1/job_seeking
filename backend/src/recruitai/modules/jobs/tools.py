@@ -132,6 +132,7 @@ register(
         "career",
         (("query", True), ("department", False)),
         ("text", "count"),
+        mcp=True,
     ),
     _job_search,
 )
@@ -146,6 +147,7 @@ register(
         cap=Cap(30, once=False),  # searches a day: each fetches up to 5 full offers
         ai_uses=1,  # reads the search sentence
         chat=True,
+        mcp=True,
     ),
     _find_offers,
 )
@@ -159,6 +161,7 @@ register(
         needs_job=True,
         chat=True,
         untrusted=True,  # a job ad is written by the employer
+        mcp=True,
     ),
     _job_lookup,
 )

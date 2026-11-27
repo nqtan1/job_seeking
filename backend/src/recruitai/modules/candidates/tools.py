@@ -23,6 +23,7 @@ register(
         ("summary", "skills"),
         chat=True,
         page="/profile",
+        mcp=True,
     ),
     _profile_read,
 )

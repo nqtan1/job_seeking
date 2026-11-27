@@ -22,6 +22,7 @@ const STUDIO: Place = {
   tabs: [
     { to: '/helpers', label: 'nav.agents' },
     { to: '/automations', label: 'nav.flows' },
+    { to: '/agent-tools', label: 'nav.tools' },
   ],
 }
 const ACTIVITY: Place = { to: '/activity', label: 'nav.activity', icon: History }

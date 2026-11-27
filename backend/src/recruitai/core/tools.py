@@ -93,6 +93,8 @@ class Tool:
     untrusted: bool = False
     # name of the Settings bool that switches its pack on; None: always on
     flag: str | None = None
+    # served by the tools service over MCP (ADR 0043); its handler needs only a plain Call
+    mcp: bool = False
 
 
 _TOOLS: dict[str, Tool] = {}

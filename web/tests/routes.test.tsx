@@ -70,7 +70,7 @@ test('signed in: index is Home, the menu switches places, career pages sit in Jo
   expect(await screen.findByRole('heading', { name: 'Next step' })).toBeInTheDocument()
 })
 
-test('with helpers on: Activity and Studio join the menu, the coach chat sits in Home, Studio holds Agents and Flows', async () => {
+test('with helpers on: Activity and Studio join the menu, the coach chat sits in Home, Studio holds Agents, Flows and Tools', async () => {
   state.user = { email: 'a@b.co' }
   state.me = { is_admin: false, helpers_enabled: true }
   const { unmount } = open('/chat')
@@ -87,7 +87,7 @@ test('with helpers on: Activity and Studio join the menu, the coach chat sits in
 
   open('/automations')
   const tabs = within(await screen.findByRole('navigation', { name: 'Section' }))
-  expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Agents', 'Flows'])
+  expect(tabs.getAllByRole('link').map((a) => a.textContent)).toEqual(['Agents', 'Flows', 'Tools'])
   expect(
     within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Studio' }),
   ).toHaveAttribute('aria-current', 'page')

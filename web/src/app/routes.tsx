@@ -74,6 +74,13 @@ const pages: RouteObject[] = [
             lazy: () => import('./ActivityPage').then((m) => ({ Component: m.ActivityPage })),
           },
           {
+            path: '/agent-tools',
+            lazy: () =>
+              import('@/features/helpers/AgentToolsPage').then((m) => ({
+                Component: m.AgentToolsPage,
+              })),
+          },
+          {
             path: '/automations',
             lazy: () =>
               import('@/features/helpers/AutomationsPage').then((m) => ({

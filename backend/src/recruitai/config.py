@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     # RELEASE is the deployed git sha, set by CD next to the image tag.
     sentry_dsn: str = ""
     release: str = ""
+    # Agent tools service (ADR 0043). Caller side: the server's MCP endpoint; None = run the tools
+    # in-process (local, tests). Server side: the audience its Google ID tokens must carry and the
+    # service accounts allowed to call it (comma-separated); the server refuses to start outside
+    # ENV=local without an audience.
+    tools_url: str | None = None
+    tools_audience: str | None = None
+    tools_callers: str = ""
 
     database_url: str
     # Cloud SQL IAM database authentication (ADR 0028): the runtime service account's short-lived

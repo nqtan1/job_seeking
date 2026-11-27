@@ -1299,6 +1299,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tools/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tools Status
+         * @description Is the tools service alive, and which tools does it serve (ADR 0043)? Checked on demand only.
+         */
+        get: operations["tools_status_api_v1_tools_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tools/{tool_id}/try": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try Tool
+         * @description Runs one tool for real, as an agent would (writes happen, caps and AI uses count).
+         */
+        post: operations["try_tool_api_v1_tools__tool_id__try_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/flows/validate": {
         parameters: {
             query?: never;
@@ -5577,6 +5617,45 @@ export interface components {
             chat: boolean;
             /** Page */
             page: string | null;
+            /** Mcp */
+            mcp: boolean;
+        };
+        /**
+         * ToolTryIn
+         * @description One real run of a tool from the Tools page: what an agent would get back.
+         */
+        ToolTryIn: {
+            /** Inputs */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** Job Id */
+            job_id?: string | null;
+        };
+        /** ToolTryOut */
+        ToolTryOut: {
+            /** Outputs */
+            outputs: {
+                [key: string]: string;
+            };
+            /** Latency Ms */
+            latency_ms: number;
+            /** Remote */
+            remote: boolean;
+        };
+        /**
+         * ToolsStatusOut
+         * @description ``served`` None: tools run in-process (no service configured).
+         */
+        ToolsStatusOut: {
+            /** Remote */
+            remote: boolean;
+            /** Ok */
+            ok: boolean;
+            /** Served */
+            served: string[] | null;
+            /** Latency Ms */
+            latency_ms: number;
         };
         /** TransformNode */
         TransformNode: {
@@ -5610,13 +5689,13 @@ export interface components {
          * @description Runs a draft (unsaved) spec: the editor's Try-it panel. Nothing is stored.
          */
         TrialIn: {
-            spec: components["schemas"]["VersionSpec"];
             /** Inputs */
             inputs?: {
                 [key: string]: string;
             };
             /** Job Id */
             job_id?: string | null;
+            spec: components["schemas"]["VersionSpec"];
         };
         /** TrialOut */
         TrialOut: {
@@ -11047,6 +11126,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tools_status_api_v1_tools_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolsStatusOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    try_tool_api_v1_tools__tool_id__try_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Firebase-AppCheck"?: string | null;
+                authorization?: string | null;
+                "X-Org-Id"?: string | null;
+            };
+            path: {
+                tool_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolTryIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolTryOut"];
+                };
+            };
+            /** @description Authentication is required or the provided credentials are invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The requested resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                };
+            };
+            /** @description The request could not be processed because some values are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
                 };
             };
         };

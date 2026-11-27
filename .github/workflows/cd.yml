@@ -168,8 +168,13 @@ jobs:
           gcloud run jobs update recruitai-migrate --project "$PROJECT" --region "$REGION" --image "$IMG/api:$GITHUB_SHA"
           gcloud run jobs execute recruitai-migrate --project "$PROJECT" --region "$REGION" --wait
 
-      - name: Roll api and worker
+      - name: Roll tools, api and worker
         run: |
+          # tools first: a new api may call a tool the old tools service does not serve (ADR 0043).
+          # Skipped until Terraform has created it (CD swaps images only, it never creates services).
+          if gcloud run services describe recruitai-tools --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
+            gcloud run services update recruitai-tools --project "$PROJECT" --region "$REGION" --image "$IMG/api:$GITHUB_SHA"
+          fi
           gcloud run services update recruitai-api --project "$PROJECT" --region "$REGION" --image "$IMG/api:$GITHUB_SHA"
           gcloud beta run worker-pools update recruitai-worker --quiet --project "$PROJECT" --region "$REGION" --image "$IMG/worker:$GITHUB_SHA"
 

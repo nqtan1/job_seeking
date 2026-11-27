@@ -76,8 +76,11 @@ jobs:
           echo "FULL_SHA=$full" >> "$GITHUB_ENV"
           echo "Rolling back to $full"
 
-      - name: Roll api and worker back
+      - name: Roll tools, api and worker back
         run: |
+          if gcloud run services describe recruitai-tools --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" >/dev/null 2>&1; then
+            gcloud run services update recruitai-tools --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$FULL_SHA"
+          fi
           gcloud run services update recruitai-api --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/api:$FULL_SHA"
           gcloud beta run worker-pools update recruitai-worker --quiet --project "${{ vars.GCP_PROJECT }}" --region "${{ vars.GCP_REGION }}" --image "$IMG/worker:$FULL_SHA"
 

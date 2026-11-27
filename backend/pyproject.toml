@@ -27,6 +27,7 @@ dependencies = [
     "pypdfium2>=5.14.0",
     "tzdata>=2026.1",  # zoneinfo in the slim images (schedules use IANA time zones)
     "sentry-sdk[fastapi]>=2.70.0",
+    "mcp>=1.20",
 ]
 
 [build-system]
@@ -42,6 +43,8 @@ target-version = "py313"
 [tool.mypy]
 files = ["src"]
 strict = true
+# google-auth ships no annotations for its ID-token helpers (ADR 0043 tools service)
+untyped_calls_exclude = ["google.oauth2.id_token"]
 
 [[tool.mypy.overrides]]
 module = "firebase_admin.*"

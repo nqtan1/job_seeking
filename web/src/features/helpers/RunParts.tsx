@@ -7,6 +7,7 @@ import {
   Minus,
   Play,
   RotateCcw,
+  Sparkles,
   Timer,
   X,
 } from 'lucide-react'
@@ -25,7 +26,7 @@ import {
 } from './api'
 import { relTime, when } from '@/lib/time'
 import { seconds } from './lib'
-import { Details, Result, RunStatusBadge } from './ui'
+import { Result, RunStatusBadge } from './ui'
 import { Link } from 'react-router'
 import { ErrorMessage } from '@/components/ErrorMessage'
 import { cn } from 'cn'
@@ -89,8 +90,8 @@ export function RunSummary({
   )
 }
 
-/** The answer the person came for, first and in reading size. */
-export function ResultHero({ run }: { run: Run }) {
+/** The answer the person came for: a card with a header band, its fields as tiles and blocks. */
+function ResultHero({ run }: { run: Run }) {
   const { t } = useI18n()
   if (run.status !== 'done') return null
   const has = Object.keys(run.result ?? {}).length > 0
@@ -100,13 +101,29 @@ export function ResultHero({ run }: { run: Run }) {
         {t('helpers.run.no_result')}
       </p>
     )
+  const took = durationMs(run)
+  const done = run.steps.filter((s) => s.status === 'done').length
   return (
-    <section
-      aria-label={t('helpers.node.output')}
-      className="space-y-3 rounded-2xl border bg-card p-6 shadow-sm"
-    >
-      <h2 className="text-xl font-semibold tracking-tight">{t('helpers.node.output')}</h2>
-      <Result value={run.result} large />
+    <section aria-label={t('helpers.node.output')} className="min-w-0">
+      <Result
+        value={run.result}
+        large
+        title={
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <Sparkles className="size-4.5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold tracking-tight">{t('helpers.node.output')}</h2>
+              <p className="text-xs text-muted-foreground">
+                {t('helpers.ui.steps_done', { count: done })}
+                {took !== null &&
+                  ` · ${t('helpers.ui.took', { time: seconds(Math.max(took, 0)) })}`}
+              </p>
+            </div>
+          </div>
+        }
+      />
     </section>
   )
 }
@@ -123,6 +140,7 @@ const RAIL: Record<Status, { icon: ReactNode; ring: string }> = {
 }
 
 type TraceProps = {
+  run: Run
   order: string[]
   steps: Map<string, Step>
   graph: Graph
@@ -159,35 +177,40 @@ function useBars(steps: Step[]): Map<string, { left: number; width: number }> {
   }, [steps])
 }
 
-/** The step to open first: the failed one, else the last real step that finished. */
-function firstPick(rows: string[], steps: Map<string, Step>, graph: Graph): string | undefined {
-  const work = (id: string) => {
-    const type = graph.nodes.find((n) => n.id === id)?.type
-    return type !== 'input' && type !== 'output'
-  }
+/** What to open first: the failed step, else the result of a finished run, else the last real step. */
+function firstPick(rows: string[], steps: Map<string, Step>, graph: Graph, run: Run) {
+  const typeOf = (id: string) => graph.nodes.find((n) => n.id === id)?.type
+  const work = (id: string) => typeOf(id) !== 'input' && typeOf(id) !== 'output'
   return (
     rows.find((id) => steps.get(id)?.status === 'failed') ??
+    (run.status === 'done' ? rows.find((id) => typeOf(id) === 'output') : undefined) ??
     [...rows].reverse().find((id) => work(id) && steps.get(id)?.status === 'done') ??
     rows.at(-1)
   )
 }
 
 /**
- * The run as a trace: a compact list of steps (status, name, time, a waterfall bar) and one panel
- * with the selected step's input and output. Side by side when there is room, stacked otherwise.
+ * The run as a trace: the flow top to bottom on the left (status, name, time, a waterfall bar per
+ * step, joined by a line) and, beside it with the room it needs, the selected step's input and
+ * output, or the result card. Stacked on a narrow screen or panel.
  */
 export function Trace(p: TraceProps) {
   const t = useT()
   const rows = p.order.filter((id) => p.steps.has(id))
   const bars = useBars([...p.steps.values()])
   const [chosen, setChosen] = useState<string | null>(null)
-  const selected = chosen && p.steps.has(chosen) ? chosen : firstPick(rows, p.steps, p.graph)
+  const selected = chosen && p.steps.has(chosen) ? chosen : firstPick(rows, p.steps, p.graph, p.run)
   const step = selected ? p.steps.get(selected) : undefined
+  const node = p.graph.nodes.find((n) => n.id === selected)
+  // a finished run opens on its answer, even before its Result step is listed
   return (
     <div className="@container">
-      <div className="grid gap-3 @2xl:grid-cols-[minmax(13rem,17rem)_minmax(0,1fr)]">
-        <ol aria-label={t('helpers.view.steps')} className="space-y-1">
-          {rows.map((id) => (
+      <div className="grid items-start gap-5 @3xl:grid-cols-[minmax(15rem,19rem)_minmax(0,1fr)]">
+        <ol
+          aria-label={t('helpers.view.steps')}
+          className="rounded-2xl border bg-muted/30 p-2 @3xl:sticky @3xl:top-4"
+        >
+          {rows.map((id, i) => (
             <TraceRow
               key={id}
               step={p.steps.get(id)!}
@@ -195,23 +218,29 @@ export function Trace(p: TraceProps) {
               avatar={p.avatars.get(id)}
               mood={p.moods.get(id)}
               bar={bars.get(id)}
+              last={i === rows.length - 1}
               selected={id === selected}
               onSelect={() => setChosen(id)}
             />
           ))}
         </ol>
-        {selected && step && (
-          <StepPanel
-            key={selected}
-            step={step}
-            node={p.graph.nodes.find((n) => n.id === selected)}
-            title={p.titles.get(selected) ?? ''}
-            received={p.handoffs.filter((h) => h.to_node === selected)}
-            errText={p.errText}
-            canResume={p.canResume}
-            resuming={p.resuming}
-            onResume={p.onResume}
-          />
+        {p.run.status === 'done' && (chosen === null || node?.type === 'output') ? (
+          <ResultHero run={p.run} />
+        ) : (
+          selected &&
+          step && (
+            <StepPanel
+              key={selected}
+              step={step}
+              node={node}
+              title={p.titles.get(selected) ?? ''}
+              received={p.handoffs.filter((h) => h.to_node === selected)}
+              errText={p.errText}
+              canResume={p.canResume}
+              resuming={p.resuming}
+              onResume={p.onResume}
+            />
+          )
         )}
       </div>
     </div>
@@ -224,6 +253,7 @@ function TraceRow({
   avatar,
   mood,
   bar,
+  last,
   selected,
   onSelect,
 }: {
@@ -232,46 +262,57 @@ function TraceRow({
   avatar: AvatarSpec | undefined
   mood: Mood | undefined
   bar: { left: number; width: number } | undefined
+  last: boolean
   selected: boolean
   onSelect: () => void
 }) {
   const t = useT()
   const rail = RAIL[s.status]
   return (
-    <li>
+    <li className="relative">
+      {!last && (
+        <span aria-hidden className="absolute top-9 -bottom-1 left-[1.4rem] w-px bg-border" />
+      )}
       <button
         type="button"
         aria-pressed={selected}
         onClick={onSelect}
         className={cn(
-          'w-full space-y-1.5 rounded-lg border px-2.5 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
-          selected ? 'border-primary/40 bg-accent/60' : 'border-transparent hover:bg-muted/60',
+          'relative flex w-full gap-3 rounded-xl px-2.5 py-2.5 text-left text-sm outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
+          selected ? 'bg-background shadow-sm ring-1 ring-primary/30' : 'hover:bg-background/70',
         )}
       >
-        <span className="flex items-center gap-2">
-          <span className={cn('grid size-5 shrink-0 place-items-center rounded-full', rail.ring)}>
-            {rail.icon}
-            <span className="sr-only">{t(`helpers.run.status.${s.status}`)}</span>
+        <span
+          className={cn(
+            'grid size-6 shrink-0 place-items-center rounded-full ring-4 ring-muted/30',
+            rail.ring,
+          )}
+        >
+          {rail.icon}
+          <span className="sr-only">{t(`helpers.run.status.${s.status}`)}</span>
+        </span>
+        <span className="min-w-0 flex-1 space-y-1.5">
+          <span className="flex items-center gap-2">
+            {avatar && <Avatar spec={avatar} mood={mood} size={20} />}
+            <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+            {s.latency_ms != null && (
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                {seconds(s.latency_ms)}
+              </span>
+            )}
           </span>
-          {avatar && <Avatar spec={avatar} mood={mood} size={20} />}
-          <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
-          {s.latency_ms != null && (
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {seconds(s.latency_ms)}
+          {bar && (
+            <span aria-hidden className="relative block h-1 rounded-full bg-muted">
+              <span
+                className={cn(
+                  'absolute inset-y-0 rounded-full',
+                  s.status === 'failed' ? 'bg-destructive/70' : 'bg-primary/60',
+                )}
+                style={{ left: `${bar.left * 100}%`, width: `${bar.width * 100}%` }}
+              />
             </span>
           )}
         </span>
-        {bar && (
-          <span aria-hidden className="relative block h-1 rounded-full bg-muted">
-            <span
-              className={cn(
-                'absolute inset-y-0 rounded-full',
-                s.status === 'failed' ? 'bg-destructive/70' : 'bg-primary/60',
-              )}
-              style={{ left: `${bar.left * 100}%`, width: `${bar.width * 100}%` }}
-            />
-          </span>
-        )}
       </button>
     </li>
   )
@@ -339,7 +380,7 @@ function StepPanel({
   const t = useT()
   const input = Object.assign({}, ...received.map((h) => h.payload)) as Record<string, unknown>
   return (
-    <section aria-label={title} className="min-w-0 space-y-3 rounded-xl border bg-card p-3 sm:p-4">
+    <section aria-label={title} className="min-w-0 space-y-3">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h3 className="font-semibold">{title}</h3>
         <span className="text-xs text-muted-foreground">
@@ -361,29 +402,24 @@ function StepPanel({
         />
       )}
       {received.length > 0 && (
-        <Pane title={t('helpers.ui.received')}>
-          <Result value={input} bare />
-        </Pane>
+        <Result value={input} bare title={<PaneTitle>{t('helpers.ui.received')}</PaneTitle>} />
       )}
-      <Pane title={t('helpers.ui.produced')}>
-        {s.output ? (
-          <Result value={s.output} />
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('helpers.ui.nothing')}</p>
-        )}
-      </Pane>
+      {s.output ? (
+        <Result value={s.output} title={<PaneTitle>{t('helpers.ui.produced')}</PaneTitle>} />
+      ) : (
+        <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+          {t('helpers.ui.nothing')}
+        </p>
+      )}
     </section>
   )
 }
 
-function Pane({ title, children }: { title: string; children: ReactNode }) {
+function PaneTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title}
-      </h4>
+    <h4 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
       {children}
-    </div>
+    </h4>
   )
 }
 
@@ -576,22 +612,20 @@ export function LiveRunPanel({
           {t('helpers.run.status.queued')}
         </p>
       )}
-      <ResultHero run={run} />
-      <Details defaultOpen={live || run.status === 'failed'}>
-        <Trace
-          order={orderOf(graph)}
-          steps={started}
-          graph={graph}
-          titles={titles}
-          avatars={avatars}
-          moods={moods}
-          handoffs={run.handoffs}
-          errText={errText}
-          canResume={run.status === 'failed'}
-          resuming={resume.isPending}
-          onResume={() => resume.mutate(run.id)}
-        />
-      </Details>
+      <Trace
+        run={run}
+        order={orderOf(graph)}
+        steps={started}
+        graph={graph}
+        titles={titles}
+        avatars={avatars}
+        moods={moods}
+        handoffs={run.handoffs}
+        errText={errText}
+        canResume={run.status === 'failed'}
+        resuming={resume.isPending}
+        onResume={() => resume.mutate(run.id)}
+      />
     </section>
   )
 }

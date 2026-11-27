@@ -29,6 +29,7 @@ register(
         ("score", "top_fixes"),
         page="/cv-review",
         flag="cv_review_enabled",
+        mcp=True,
     ),
     _cv_review_latest,
 )

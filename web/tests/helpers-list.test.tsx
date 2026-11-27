@@ -45,7 +45,7 @@ test('agents are cards: the Coach first with its chat tools, then each agent wit
   mocks.GET.mockImplementation(async (url: string) => ({
     data:
       url === '/api/v1/tools'
-        ? [tool('web_search', true), tool('send_email', false), tool('save_note', true)]
+        ? [tool('web_search', true), tool('send_email', false), tool('new_pack_tool', true)]
         : [
             {
               id: 'a1',
@@ -56,7 +56,7 @@ test('agents are cards: the Coach first with its chat tools, then each agent wit
               archived: false,
               created_at: '',
               updated_at: '',
-              tools: ['save_note'], // the list carries each agent's chat tools: one request
+              tools: ['new_pack_tool'], // the list carries each agent's chat tools: one request
             },
           ],
   }))
@@ -74,7 +74,7 @@ test('agents are cards: the Coach first with its chat tools, then each agent wit
       /^Search the web$/,
     ),
   )
-  expect(await within(mira).findByText('save_note')).toBeInTheDocument()
+  expect(await within(mira).findByText('new_pack_tool')).toBeInTheDocument()
   expect(within(mira).getByRole('link', { name: 'Chat: Mira' })).toHaveAttribute(
     'href',
     '/chat?agent=a1',

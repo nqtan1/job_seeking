@@ -123,6 +123,28 @@ export const useTrial = () =>
       ),
   })
 
+// tools (ADR 0043)
+/** Is the tools service alive? Asked when the Tools page opens or on "Check again", never on a
+ *  timer: an idle service must be allowed to scale to zero. */
+export const useToolsStatus = () =>
+  useQuery({
+    queryKey: ['tools-status'],
+    staleTime: Infinity,
+    queryFn: async () => unwrap(await api.GET('/api/v1/tools/status')),
+  })
+
+/** One real run of a tool, as an agent would make it. */
+export const useTryTool = () =>
+  useMutation({
+    mutationFn: async (v: { id: string; inputs: Record<string, string>; jobId: string | null }) =>
+      unwrap(
+        await api.POST('/api/v1/tools/{tool_id}/try', {
+          params: { path: { tool_id: v.id } },
+          body: { inputs: v.inputs, job_id: v.jobId },
+        }),
+      ),
+  })
+
 // flows
 
 export const useFlows = () =>
